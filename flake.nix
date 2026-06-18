@@ -1,5 +1,5 @@
 {
-  description = "Development environment for axon-gateway";
+  description = "Development environment for homelab-mcp-servers";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -43,13 +43,13 @@
           podman
           podman-compose
           rust
+          sqlx-cli
           tailwindcss_4
           trivy
           # keep-sorted end
         ];
         shellHook = ''
           lefthook install
-          cog install-hook
         '';
       };
     });
