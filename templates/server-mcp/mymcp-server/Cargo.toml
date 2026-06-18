@@ -1,0 +1,19 @@
+[package]
+name = "mymcp-server"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "TODO: <service> MCP — server binary"
+
+[[bin]]
+name = "mymcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# keep-sorted start
+color-eyre.workspace = true
+mymcp = { path = "../mymcp" }
+tokio.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
+# keep-sorted end
