@@ -30,13 +30,9 @@ test:
 test-pkg pkg:
     cargo test -p {{pkg}}
 
-# Watch mode via bacon
-watch:
-    bacon
-
-# Watch a specific package
+# Watch a specific package and re-run its binary (e.g. `just watch-pkg pbsmcp-server`)
 watch-pkg pkg:
-    bacon -p {{pkg}}
+    cargo watch -c -x "run -p {{pkg}}"
 
 # Clear terminal
 clear:
