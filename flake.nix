@@ -29,9 +29,9 @@
         buildInputs = with pkgs; [
           # keep-sorted start
           act
-          bacon
           cargo-audit
           cargo-deny
+          cargo-watch
           cargo-workspaces
           claude-code
           cocogitto

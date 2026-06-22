@@ -90,10 +90,13 @@ ignore = [
 # [possible values: any SPDX 3.11 short identifier (+ optional exception)].
 allow = [
     # keep-sorted start
-    "Apache-2.0",  # rmcp/rmcp-macros are Apache-only; ubiquitous elsewhere
-    "MIT",         # vast majority of the tree
-    "Unicode-3.0", # icu_* (via idna -> url -> reqwest/sqlx); unicode-ident AND
-    "Zlib",        # foldhash (via hashbrown)
+    "Apache-2.0",          # rmcp/rmcp-macros are Apache-only; ubiquitous elsewhere
+    "BSD-3-Clause",        # encoding_rs, aws-lc-sys (via reqwest rustls)
+    "CDLA-Permissive-2.0", # webpki-root-certs (via reqwest rustls -> platform-verifier)
+    "ISC",                 # rustls-webpki, aws-lc-rs (via reqwest rustls)
+    "MIT",                 # vast majority of the tree
+    "Unicode-3.0",         # icu_* (via idna -> url -> reqwest/sqlx); unicode-ident AND
+    "Zlib",                # foldhash (via hashbrown)
     # keep-sorted end
 ]
 # The confidence threshold for detecting a license from license text.

@@ -1,3 +1,7 @@
 /.direnv
 /.claude
 /target
+
+# Local environment files (keep .env.example tracked)
+.env
+!.env.example
