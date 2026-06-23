@@ -1,0 +1,37 @@
+# Local homelab stack. Build + run with:  podman-compose up --build
+#
+# Secrets are read from .env (copy .env.example -> .env and fill it in); they
+# are injected at runtime via env_file, never baked into the image.
+services:
+  pbsmcp:
+    build:
+      context: .
+      dockerfile: Containerfile
+      args:
+        BIN: pbsmcp-server
+    image: localhost/pbsmcp-server:dev
+    env_file: .env
+    environment:
+      # Default bind is loopback-only; override so the port is reachable.
+      PBS_BIND: 0.0.0.0:8080
+      RUST_LOG: info
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  # pgmcp-server is still a stub (prints "not yet implemented" and exits).
+  # Uncomment once it serves over streamable HTTP.
+  # pgmcp:
+  #   build:
+  #     context: .
+  #     dockerfile: Containerfile
+  #     args:
+  #       BIN: pgmcp-server
+  #   image: localhost/pgmcp-server:dev
+  #   env_file: .env
+  #   environment:
+  #     PG_BIND: 0.0.0.0:8081
+  #     RUST_LOG: info
+  #   ports:
+  #     - "8081:8081"
+  #   restart: unless-stopped

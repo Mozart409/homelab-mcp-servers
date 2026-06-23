@@ -1,0 +1,9 @@
+# Keep the build context small and secret-free.
+target/
+.direnv/
+.git/
+.claude/
+result
+result-*
+.env
+*.log

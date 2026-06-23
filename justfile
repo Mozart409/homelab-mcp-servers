@@ -86,6 +86,31 @@ pre-push:
     lefthook run pre-push
 
 # ------------------------------------------------------------------------------
+# OCI images (podman)
+# ------------------------------------------------------------------------------
+
+# Build a static-musl/distroless image for one server (e.g. `just image pbsmcp-server`)
+image bin tag="dev":
+    podman build --build-arg BIN={{bin}} -t {{bin}}:{{tag}} -f Containerfile .
+
+# Build images for every server binary
+image-all:
+    just image pbsmcp-server
+    just image pgmcp-server
+
+# Run a built image, loading env from .env (e.g. `just run-image pbsmcp-server`)
+run-image bin tag="dev" port="8080":
+    podman run --rm -it --env-file .env -e PBS_BIND=0.0.0.0:8080 -p {{port}}:8080 {{bin}}:{{tag}}
+
+# Bring the whole stack up with podman-compose
+up:
+    podman-compose up --build
+
+# Tear the stack down
+down:
+    podman-compose down
+
+# ------------------------------------------------------------------------------
 # Nix
 # ------------------------------------------------------------------------------
 

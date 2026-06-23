@@ -283,6 +283,25 @@ No publish step, no semver bookkeeping.
 
 > **Note:** if everything deploys to NixOS VMs internally, OCI images are optional — NixOS modules + systemd are the native path. Build images only for non-Nix consumers (k8s, Podman, public pulls). A self-hosted Nix binary cache (`attic`/`harmonia`) is worth standing up to keep CI and VM rebuilds fast at 10 servers.
 
+### OCI images today (podman / Containerfile)
+
+Ahead of the Nix `dockerTools` path, there's a working **podman** build for local dev — one image per `*-server` binary from a single parameterized [`Containerfile`](../Containerfile):
+
+```sh
+just image pbsmcp-server      # podman build --build-arg BIN=pbsmcp-server -t pbsmcp-server:dev .
+just run-image pbsmcp-server  # podman run with .env, PBS_BIND=0.0.0.0:8080
+just up                       # podman-compose up --build (whole stack)
+```
+
+Decisions baked in (validated end-to-end against live PBS — 13.2 MB image, rustls→HTTPS works):
+
+- **rustls everywhere, no OpenSSL/native-tls.** `reqwest` pins `default-features = false, features = ["json","query","rustls"]`; `sqlx` uses `tls-rustls-ring-webpki`. This is what makes a static, libc-free image possible. Per binary: `pbsmcp-server` carries the **aws-lc-rs** provider (via reqwest), `pgmcp-server` carries **ring** (via sqlx).
+- **Static musl → `distroless/static:nonroot`.** Built with `cargo-zigbuild` targeting `x86_64-unknown-linux-musl`; `cmake` is installed in the builder for aws-lc-rs. distroless/static (not `scratch`) because it bundles the CA cert bundle reqwest's platform-verifier needs, plus a non-root UID and tzdata.
+- **Builder toolchain pinned to 1.95.0** (matches `flake.nix`) — the `cargo-zigbuild` base image's bundled rustc (1.85) is too old for the dep tree.
+- **Config is runtime env only.** Secrets come from `.env` via `env_file`/`--env-file`, never baked into the image; bind must be `0.0.0.0` inside the container.
+
+`pgmcp-server` is still a stub, so it's commented out in [`compose.yaml`](../compose.yaml) until it serves over HTTP.
+
 ## Crates
 
 - ulid
