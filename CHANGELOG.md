@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.2.0 - 2026-06-23
+#### Features
+- v0.1.1 - (cf95176) - Amadeus Mader
+
+- - -
+
 ## 0.1.0 - 2026-06-23
 #### Features
 - (**flake**) update flake and project setup - (e3fca32) - Amadeus Mader
