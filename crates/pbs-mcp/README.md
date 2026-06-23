@@ -49,11 +49,37 @@ In the PBS UI: *Configuration → Access Control → API Tokens → Add*, or:
 proxmox-backup-manager user generate-token user@pbs mytoken
 ```
 
-Save the returned `value` (the secret is shown only once) and grant the token
-the needed ACLs (e.g. `DatastoreAudit` on `/datastore`, `Sys.Audit` on
-`/system` for task/node status). Set `PBS_API_KEY` to the token id and secret
-joined with a colon, e.g. `monitor@pbs!mcp:xxxxxxxx-...`; the auth header sent
-is `Authorization: PBSAPIToken=<tokenid>:<secret>`.
+Save the returned `value` (the secret is shown only once). Set `PBS_API_KEY` to
+the token id and secret joined with a colon, e.g. `monitor@pbs!mcp:xxxxxxxx-...`;
+the auth header sent is `Authorization: PBSAPIToken=<tokenid>:<secret>`.
+
+#### Required permissions
+
+A valid token still needs ACLs, or PBS silently returns empty lists (`[]`) and
+`403 Forbidden: permission check failed` instead of data. Grant the token (not
+just its user — see the note below) these two entries:
+
+| Path         | Role            | Unlocks                                                          |
+| ------------ | --------------- | --------------------------------------------------------------- |
+| `/datastore` | `DatastoreAudit` | `list_datastores`, `datastore_status`, `list_groups`, `list_snapshots`, `gc_status` |
+| `/system`    | `Sys.Audit`     | `node_status`, `list_tasks` (and per-task `task_status` / `task_log`) |
+
+In the PBS UI: *Configuration → Access Control → Permissions → Add → API Token
+Permission*, pick the token, choose the path + role, and leave **Propagate**
+checked. Or via CLI:
+
+```sh
+proxmox-backup-manager acl update /datastore DatastoreAudit --auth-id 'monitor@pbs!mcp'
+proxmox-backup-manager acl update /system    Sys.Audit      --auth-id 'monitor@pbs!mcp'
+```
+
+> **Privilege separation gotcha:** API tokens default to *privilege separation
+> enabled*, meaning the token only has privileges granted to the **token id**
+> directly — it does **not** inherit its user's permissions. Always target the
+> token id (`user@realm!tokenname`) in the ACL, not the bare user.
+
+If you only need backup/datastore status, the `/datastore` grant alone is
+enough; add `/system` only when you want node health and task history.
 
 ## Tools
 
