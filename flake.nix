@@ -31,6 +31,7 @@
           act
           cargo-audit
           cargo-deny
+          cargo-edit
           cargo-watch
           cargo-workspaces
           claude-code

@@ -1,0 +1,37 @@
+# cocogitto configuration — https://docs.cocogitto.io/reference/config
+#
+# Release flow:
+#   cog bump --auto      # pick the bump from conventional commits
+#   cog bump --minor     # or force a level
+#   ./push_harbor.sh     # build + push the tagged images to Harbor
+#
+# cog bumps the [workspace.package] version in Cargo.toml, refreshes
+# Cargo.lock, updates CHANGELOG.md, then creates the version commit + tag.
+
+# Only cut releases from main.
+branch_whitelist = ["main"]
+
+# Conventional-commit hygiene.
+ignore_merge_commits = true
+
+# Tags are bare semver (0.1.0, 0.2.1 …) — no "v" prefix. Keep it that way so
+# existing tags and push_harbor.sh stay consistent.
+tag_prefix = ""
+
+# cog itself does NOT edit Cargo.toml, so we do it here before the version
+# commit is created (cog stages and includes these changes in the bump commit):
+#   1. cargo set-version (cargo-edit) rewrites the [workspace.package] version
+#      and updates Cargo.lock,
+#   2. cargo check aborts the bump if the workspace no longer compiles.
+# {{version}} is templated by cog.
+pre_bump_hooks = [
+    "cargo set-version --workspace {{version}}",
+    "cargo check --workspace",
+]
+
+# No git remote is configured, so there are no push hooks here. Add them once a
+# remote exists, e.g.:
+#   post_bump_hooks = ["git push", "git push origin {{version}}"]
+
+[changelog]
+path = "CHANGELOG.md"
