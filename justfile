@@ -102,6 +102,10 @@ image-all:
 run-image bin tag="dev" port="8080":
     podman run --rm -it --env-file .env -e PBS_BIND=0.0.0.0:8080 -p {{port}}:8080 {{bin}}:{{tag}}
 
+# Build an image, then scan it for vulnerabilities with trivy (e.g. `just scan pbsmcp-server`)
+scan bin tag="dev": (image bin tag)
+    trivy image --skip-version-check {{bin}}:{{tag}}
+
 # Bring the whole stack up with podman-compose
 up:
     podman-compose up --build
