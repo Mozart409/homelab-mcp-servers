@@ -17,10 +17,6 @@ async fn main() -> Result<()> {
         )
         .init();
 
-    // `run` returns an `anyhow::Error`, which does not implement `std::error::Error`,
-    // so bridge it into color-eyre's report type explicitly.
-    pbsmcp::run()
-        .await
-        .map_err(|e| color_eyre::eyre::eyre!("{e:#}"))?;
+    pbsmcp::run().await?;
     Ok(())
 }
