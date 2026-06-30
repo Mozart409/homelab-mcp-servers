@@ -1,6 +1,6 @@
 //! Runtime configuration, sourced from environment variables.
 
-use anyhow::{Context, Result};
+use color_eyre::eyre::{Result, WrapErr};
 
 /// Connection settings for a Proxmox Backup Server instance.
 #[derive(Clone, Debug)]
@@ -34,9 +34,9 @@ impl Config {
     /// Returns an error if any required environment variable is unset.
     pub fn from_env() -> Result<Self> {
         let host = std::env::var("PBS_HOST")
-            .context("PBS_HOST must be set (e.g. https://pbs.lan:8007 or pbs.lan)")?;
+            .wrap_err("PBS_HOST must be set (e.g. https://pbs.lan:8007 or pbs.lan)")?;
         let api_key = std::env::var("PBS_API_KEY")
-            .context("PBS_API_KEY must be set (e.g. user@pbs!tokenname:secret)")?;
+            .wrap_err("PBS_API_KEY must be set (e.g. user@pbs!tokenname:secret)")?;
         let node = std::env::var("PBS_NODE").unwrap_or_else(|_| "localhost".to_string());
         let insecure = matches!(
             std::env::var("PBS_INSECURE").as_deref(),

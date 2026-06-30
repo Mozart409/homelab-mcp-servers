@@ -14,7 +14,7 @@ pub use server::PbsServer;
 
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use color_eyre::eyre::{Result, WrapErr};
 use rmcp::transport::streamable_http_server::{
     StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
 };
@@ -47,11 +47,11 @@ pub async fn run() -> Result<()> {
 
     let listener = tokio::net::TcpListener::bind(&config.bind)
         .await
-        .with_context(|| format!("failed to bind {}", config.bind))?;
+        .wrap_err_with(|| format!("failed to bind {}", config.bind))?;
     tracing::info!(bind = %config.bind, "pbsmcp listening on http://{}/mcp", config.bind);
 
     axum::serve(listener, app)
         .await
-        .context("streamable-HTTP server error")?;
+        .wrap_err("streamable-HTTP server error")?;
     Ok(())
 }
