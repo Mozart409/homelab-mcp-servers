@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.2.4 - 2026-06-30
+#### Documentation
+- (**pgmcp**) added pgmcp readme and link to main readme - (ba5ec8c) - Amadeus Mader
+- (**readme**) :memo: add README - (f66f7a8) - Amadeus Mader
+
+- - -
+
 ## 0.2.3 - 2026-06-30
 #### Features
 - (**compose**) add postgres 18 service - (48a9ee8) - Amadeus Mader
