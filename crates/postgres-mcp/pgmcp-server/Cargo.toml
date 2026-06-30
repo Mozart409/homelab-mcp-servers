@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 # keep-sorted start
 color-eyre.workspace = true
+dotenvy.workspace = true
 pgmcp = { path = "../pgmcp" }
 tokio.workspace = true
 tracing-subscriber.workspace = true
