@@ -2,6 +2,21 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.2.3 - 2026-06-30
+#### Features
+- (**compose**) add postgres 18 service - (48a9ee8) - Amadeus Mader
+- (**pgmcp**) implement read-only postgres mcp server - (d7958cd) - Amadeus Mader
+#### Tests
+- (**pgmcp**) add integration tests - (3c8e47e) - Amadeus Mader
+#### Refactoring
+- (**error**) drop anyhow for color-eyre - (0b59e12) - Amadeus Mader
+#### Miscellaneous Chores
+- (**just**) tidy recipes, detach compose up - (e56b010) - Amadeus Mader
+- (**toolchain**) bump rust to 1.96 - (7e2392e) - Amadeus Mader
+- ignore local dev files - (49cafbb) - Amadeus Mader
+
+- - -
+
 ## 0.2.2 - 2026-06-23
 #### Features
 - (**tools**) add cargo-edit for cog to automatically bump the version - (14176b1) - Amadeus Mader
