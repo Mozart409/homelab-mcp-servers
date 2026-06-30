@@ -2,6 +2,20 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.2.5 - 2026-06-30
+#### Features
+- (**lokimcp**) add read-only loki mcp server - (3f6e5a8) - Amadeus Mader
+- (**prommcp**) add read-only prometheus mcp server - (a2116fd) - Amadeus Mader
+#### Documentation
+- (**agents**) add AGENTS.md contributor guide - (99dfb70) - Amadeus Mader
+- (**readme**) document prometheus and loki servers - (41a2edd) - Amadeus Mader
+#### Continuous Integration
+- (**harbor**) also push prommcp image - (22ac582) - Amadeus Mader
+#### Miscellaneous Chores
+- (**just**) add prommcp and lokimcp to image-all - (3703aa4) - Amadeus Mader
+
+- - -
+
 ## 0.2.4 - 2026-06-30
 #### Documentation
 - (**pgmcp**) added pgmcp readme and link to main readme - (ba5ec8c) - Amadeus Mader
