@@ -86,9 +86,15 @@ Before considering a change done: `just ci` must pass. Clippy runs with
 ## Conventions
 
 - **Commits:** [Conventional Commits](https://www.conventionalcommits.org/)
-  (`feat(pgmcp): ...`, `docs(readme): ...`). Changelog/version via cocogitto
-  (`just bump`, `just changelog`); don't hand-edit `CHANGELOG.md` or bump
-  `version` manually. Git hooks run via lefthook.
+  (`feat(pgmcp): ...`, `docs(readme): ...`). Git hooks run via lefthook.
+- **Releases / version bumps:** cut releases with cocogitto, never by hand. The
+  workflow is `cog bump --patch` (or `--minor` / `--major` / `--auto`), wrapped
+  as `just bump patch` / `just bump minor` / `just bump major` / `just bump auto`.
+  This is the canonical way to release — it bumps `[workspace.package] version`,
+  regenerates the changelog, and creates the tag in one step. **Never** hand-edit
+  `CHANGELOG.md` or the `version` in `Cargo.toml`, and don't create a
+  `chore(version): ...` commit or git tag manually — `cog bump` owns all of that.
+  Use `just changelog` (`cog changelog`) to preview unreleased changes.
 - **Errors:** `color-eyre`'s `Result` in lib/`run()` code; map into
   `rmcp::ErrorData` (e.g. `ErrorData::internal_error(format!("{e:#}"), None)`)
   inside tool methods.
