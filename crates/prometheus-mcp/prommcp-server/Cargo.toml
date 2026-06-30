@@ -1,0 +1,20 @@
+[package]
+name = "prommcp-server"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Prometheus MCP — server binary"
+
+[[bin]]
+name = "prommcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# keep-sorted start
+color-eyre.workspace = true
+dotenvy.workspace = true
+prommcp = { path = "../prommcp" }
+tokio.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
+# keep-sorted end

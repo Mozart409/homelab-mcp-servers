@@ -1189,6 +1189,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
+name = "lokimcp"
+version = "0.2.4"
+dependencies = [
+ "axum",
+ "color-eyre",
+ "reqwest",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "lokimcp-server"
+version = "0.2.4"
+dependencies = [
+ "color-eyre",
+ "dotenvy",
+ "lokimcp",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "lru-slab"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1427,6 +1454,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "prommcp"
+version = "0.2.4"
+dependencies = [
+ "axum",
+ "color-eyre",
+ "reqwest",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "prommcp-server"
+version = "0.2.4"
+dependencies = [
+ "color-eyre",
+ "dotenvy",
+ "prommcp",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
