@@ -28,11 +28,11 @@ test:
 
 # Test a specific package (e.g. `just test-pkg pgmcp`)
 test-pkg pkg:
-    cargo test -p {{pkg}}
+    cargo test -p {{ pkg }}
 
 # Watch a specific package and re-run its binary (e.g. `just watch-pkg pbsmcp-server`)
 watch-pkg pkg:
-    cargo watch -c -x "run -p {{pkg}}"
+    cargo watch -c -x "run -p {{ pkg }}"
 
 # Clear terminal
 clear:
@@ -91,7 +91,7 @@ pre-push:
 
 # Build a static-musl/distroless image for one server (e.g. `just image pbsmcp-server`)
 image bin tag="dev":
-    podman build --build-arg BIN={{bin}} -t {{bin}}:{{tag}} -f Containerfile .
+    podman build --build-arg BIN={{ bin }} -t {{ bin }}:{{ tag }} -f Containerfile .
 
 # Build images for every server binary
 image-all:
@@ -100,15 +100,15 @@ image-all:
 
 # Run a built image, loading env from .env (e.g. `just run-image pbsmcp-server`)
 run-image bin tag="dev" port="8080":
-    podman run --rm -it --env-file .env -e PBS_BIND=0.0.0.0:8080 -p {{port}}:8080 {{bin}}:{{tag}}
+    podman run --rm -it --env-file .env -e PBS_BIND=0.0.0.0:8080 -p {{ port }}:8080 {{ bin }}:{{ tag }}
 
 # Build an image, then scan it for vulnerabilities with trivy (e.g. `just scan pbsmcp-server`)
 scan bin tag="dev": (image bin tag)
-    trivy image --skip-version-check {{bin}}:{{tag}}
+    trivy image --skip-version-check {{ bin }}:{{ tag }}
 
 # Bring the whole stack up with podman-compose
 up:
-    podman-compose up --build
+    podman-compose up --build -d
 
 # Tear the stack down
 down:
@@ -149,4 +149,4 @@ changelog:
 
 # Bump version using conventional commits (e.g. `just bump auto`)
 bump version:
-    cog bump --{{version}}
+    cog bump --{{ version }}
