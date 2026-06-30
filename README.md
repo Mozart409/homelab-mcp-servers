@@ -14,8 +14,10 @@ Built in Rust on [`rmcp`](https://github.com/modelcontextprotocol/rust-sdk)
 
 | Server                                  | Target                | Crates                       | Status      |
 | --------------------------------------- | --------------------- | ---------------------------- | ----------- |
-| [`pbs-mcp`](crates/pbs-mcp/README.md)            | Proxmox Backup Server | `pbsmcp`, `pbsmcp-server` | implemented |
-| [`postgres-mcp`](crates/postgres-mcp/README.md)  | PostgreSQL            | `pgmcp`, `pgmcp-server`   | implemented |
+| [`pbs-mcp`](crates/pbs-mcp/README.md)            | Proxmox Backup Server | `pbsmcp`, `pbsmcp-server`   | implemented |
+| [`postgres-mcp`](crates/postgres-mcp/README.md)  | PostgreSQL            | `pgmcp`, `pgmcp-server`     | implemented |
+| [`prometheus-mcp`](crates/prometheus-mcp/README.md) | Prometheus         | `prommcp`, `prommcp-server` | implemented |
+| [`loki-mcp`](crates/loki-mcp/README.md)          | Grafana Loki          | `lokimcp`, `lokimcp-server` | implemented |
 
 Each server is split into a **library** crate (REST/DB client + MCP tool
 definitions and wiring) and a thin **`-server`** binary that serves the tools
@@ -37,6 +39,22 @@ Introspect schema and run read-only queries. Tools: `list_schemas`,
 in a `READ ONLY` transaction, statement-timed and row-capped). Full
 configuration, read-only guarantees, and tool details are in the
 [crate README](crates/postgres-mcp/README.md).
+
+### prometheus-mcp — Prometheus
+
+Run PromQL and inspect monitoring state. Tools: `query`, `query_range`,
+`series`, `labels`, `label_values`, `targets`, `alerts`, `rules`, `metadata`,
+`tsdb_status`, `build_info` — all read-only GETs against the Prometheus HTTP
+API. Full configuration and tool/endpoint mapping are in the
+[crate README](crates/prometheus-mcp/README.md).
+
+### loki-mcp — Grafana Loki
+
+Search logs with LogQL and inspect labels. Tools: `query`, `query_range`
+(the workhorse for log search), `labels`, `label_values`, `series`,
+`index_stats` — all read-only GETs against the Loki HTTP API. Supports
+multi-tenant `X-Scope-OrgID`. Full configuration and tool details are in the
+[crate README](crates/loki-mcp/README.md).
 
 ## Quick start
 
@@ -63,8 +81,10 @@ $EDITOR .env
 Then run a server:
 
 ```sh
-cargo run -p pbsmcp-server   # PBS,      default endpoint http://127.0.0.1:8080/mcp
-cargo run -p pgmcp-server    # Postgres, default endpoint http://127.0.0.1:8081/mcp
+cargo run -p pbsmcp-server    # PBS,        default endpoint http://127.0.0.1:8080/mcp
+cargo run -p pgmcp-server     # Postgres,   default endpoint http://127.0.0.1:8081/mcp
+cargo run -p prommcp-server   # Prometheus, default endpoint http://127.0.0.1:8082/mcp
+cargo run -p lokimcp-server   # Loki,       default endpoint http://127.0.0.1:8083/mcp
 ```
 
 Both bind loopback-only by default and reject non-loopback `Host` headers
@@ -80,7 +100,9 @@ The servers use the streamable-HTTP transport, so point the client at the URL:
 {
   "mcpServers": {
     "pbs": { "type": "http", "url": "http://127.0.0.1:8080/mcp" },
-    "postgres": { "type": "http", "url": "http://127.0.0.1:8081/mcp" }
+    "postgres": { "type": "http", "url": "http://127.0.0.1:8081/mcp" },
+    "prometheus": { "type": "http", "url": "http://127.0.0.1:8082/mcp" },
+    "loki": { "type": "http", "url": "http://127.0.0.1:8083/mcp" }
   }
 }
 ```
