@@ -5,3 +5,6 @@
 # Local environment files (keep .env.example tracked)
 .env
 !.env.example
+/.bash_profile
+/.zsh_rc
+/mcp.json
