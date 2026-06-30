@@ -19,6 +19,35 @@ services:
       - "8080:8080"
     restart: unless-stopped
 
+  # Postgres 18 instance the pgmcp-server will introspect/query.
+  postgres:
+    image: docker.io/library/postgres:18-alpine
+    # Credentials come from .env (with safe local defaults). POSTGRES_PASSWORD is
+    # required by the image; the others fall back when unset.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pgmcp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-pgmcp}
+      # Tighten default auth for new connections instead of the laxer "trust".
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      # postgres:18 stores data under /var/lib/postgresql/18/docker by default;
+      # pin PGDATA so the named volume below maps to the right directory.
+      PGDATA: /var/lib/postgresql/data/pgdata
+      TZ: ${TZ:-UTC}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # Loopback-only on the host; reachable as `postgres:5432` inside the network.
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pgmcp} -d ${POSTGRES_DB:-pgmcp}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
   # pgmcp-server is still a stub (prints "not yet implemented" and exits).
   # Uncomment once it serves over streamable HTTP.
   # pgmcp:
@@ -31,7 +60,15 @@ services:
   #   env_file: .env
   #   environment:
   #     PG_BIND: 0.0.0.0:8081
+  #     # Connect to the postgres service above over the compose network.
+  #     DATABASE_URL: postgres://${POSTGRES_USER:-pgmcp}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-pgmcp}
   #     RUST_LOG: info
   #   ports:
   #     - "8081:8081"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
   #   restart: unless-stopped
+
+volumes:
+  pgdata:
