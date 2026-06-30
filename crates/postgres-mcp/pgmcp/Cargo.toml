@@ -7,13 +7,18 @@ description = "Postgres MCP — server library (types, db, tools, wiring)"
 
 [dependencies]
 # keep-sorted start
-chrono.workspace = true
+axum.workspace = true
 color-eyre.workspace = true
 rmcp.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 sqlx.workspace = true
-thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+# keep-sorted end
+
+[dev-dependencies]
+# keep-sorted start
+serde_json.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
 # keep-sorted end
