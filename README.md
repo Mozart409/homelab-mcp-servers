@@ -14,8 +14,8 @@ Built in Rust on [`rmcp`](https://github.com/modelcontextprotocol/rust-sdk)
 
 | Server                                  | Target                | Crates                       | Status      |
 | --------------------------------------- | --------------------- | ---------------------------- | ----------- |
-| [`pbs-mcp`](crates/pbs-mcp/README.md)   | Proxmox Backup Server | `pbsmcp`, `pbsmcp-server`    | implemented |
-| `postgres-mcp`                          | PostgreSQL            | `pgmcp`, `pgmcp-server`      | implemented |
+| [`pbs-mcp`](crates/pbs-mcp/README.md)            | Proxmox Backup Server | `pbsmcp`, `pbsmcp-server` | implemented |
+| [`postgres-mcp`](crates/postgres-mcp/README.md)  | PostgreSQL            | `pgmcp`, `pgmcp-server`   | implemented |
 
 Each server is split into a **library** crate (REST/DB client + MCP tool
 definitions and wiring) and a thin **`-server`** binary that serves the tools
@@ -31,18 +31,12 @@ configuration, required PBS ACLs, and tool/endpoint mapping are in the
 
 ### postgres-mcp — PostgreSQL
 
-Introspect schema and run read-only queries. Tools:
-
-| Tool                | Description                                                                              |
-| ------------------- | --------------------------------------------------------------------------------------- |
-| `list_schemas`      | List user schemas (excludes system schemas).                                            |
-| `list_tables`       | List tables and views with schema and type; optionally restrict to one schema.          |
-| `describe_table`    | Column details: name, position, type, nullability, default, length/precision.           |
-| `list_indexes`      | Indexes on a table, with their definitions.                                              |
-| `list_foreign_keys` | Foreign keys: constraint name, local column, referenced table/column.                    |
-| `table_stats`       | Per-table stats: live/dead rows, scan counts, on-disk size, last (auto)vacuum/analyze.   |
-| `database_size`     | Current database name and total on-disk size.                                            |
-| `run_query`         | Run an arbitrary read-only `SELECT`. Executes in a `READ ONLY` transaction with a statement timeout and a row cap; writes, DDL, and long-running queries are rejected. |
+Introspect schema and run read-only queries. Tools: `list_schemas`,
+`list_tables`, `describe_table`, `list_indexes`, `list_foreign_keys`,
+`table_stats`, `database_size`, and `run_query` (arbitrary read-only `SELECT`
+in a `READ ONLY` transaction, statement-timed and row-capped). Full
+configuration, read-only guarantees, and tool details are in the
+[crate README](crates/postgres-mcp/README.md).
 
 ## Quick start
 
