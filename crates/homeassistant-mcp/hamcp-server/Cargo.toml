@@ -1,0 +1,21 @@
+[package]
+name = "hamcp-server"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Home Assistant MCP — server binary"
+
+[[bin]]
+name = "hamcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# keep-sorted start
+color-eyre.workspace = true
+dotenvy.workspace = true
+hamcp = { path = "../hamcp" }
+mcp-common = { path = "../../common/mcp-common" }
+tokio.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
+# keep-sorted end
