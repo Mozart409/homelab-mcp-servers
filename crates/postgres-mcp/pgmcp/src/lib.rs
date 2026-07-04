@@ -15,6 +15,7 @@ pub use server::PgServer;
 use std::sync::Arc;
 
 use color_eyre::eyre::{Result, WrapErr};
+use mcp_common::health_router;
 use rmcp::transport::streamable_http_server::{
     StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
 };
@@ -44,7 +45,9 @@ pub async fn run() -> Result<()> {
         http_config,
     );
 
-    let app = axum::Router::new().nest_service("/mcp", service);
+    let app = axum::Router::new()
+        .nest_service("/mcp", service)
+        .merge(health_router());
 
     let listener = tokio::net::TcpListener::bind(&config.bind)
         .await

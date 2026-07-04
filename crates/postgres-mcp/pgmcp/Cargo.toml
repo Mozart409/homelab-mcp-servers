@@ -9,6 +9,7 @@ description = "Postgres MCP — server library (types, db, tools, wiring)"
 # keep-sorted start
 axum.workspace = true
 color-eyre.workspace = true
+mcp-common = { path = "../../common/mcp-common" }
 rmcp.workspace = true
 serde.workspace = true
 sqlx.workspace = true
