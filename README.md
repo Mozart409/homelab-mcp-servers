@@ -1,10 +1,12 @@
 # homelab-mcp-servers
 
-A Cargo workspace of read-only [Model Context Protocol](https://modelcontextprotocol.io)
-(MCP) servers for a personal homelab. Each server exposes a focused set of
-**read-only** tools over the streamable-HTTP transport so an MCP client (Claude,
-etc.) can answer operational questions — "did my backups verify?", "what's in
-this database?" — without being able to change anything.
+A Cargo workspace of [Model Context Protocol](https://modelcontextprotocol.io)
+(MCP) servers for a personal homelab. Most servers expose **read-only** tools
+over the streamable-HTTP transport so an MCP client (Claude, etc.) can answer
+operational questions — "did my backups verify?", "what's in this database?"
+— without being able to change anything. The Home Assistant server is the
+exception: it also supports mutating tools (`call_service`, `set_state`) because
+controlling smart-home devices is its primary purpose.
 
 Built in Rust on [`rmcp`](https://github.com/modelcontextprotocol/rust-sdk)
 (the official MCP Rust SDK) and [axum](https://github.com/tokio-rs/axum). See
@@ -18,6 +20,7 @@ Built in Rust on [`rmcp`](https://github.com/modelcontextprotocol/rust-sdk)
 | [`postgres-mcp`](crates/postgres-mcp/README.md)  | PostgreSQL            | `pgmcp`, `pgmcp-server`     | implemented |
 | [`prometheus-mcp`](crates/prometheus-mcp/README.md) | Prometheus         | `prommcp`, `prommcp-server` | implemented |
 | [`loki-mcp`](crates/loki-mcp/README.md)          | Grafana Loki          | `lokimcp`, `lokimcp-server` | implemented |
+| [`homeassistant-mcp`](crates/homeassistant-mcp/README.md) | Home Assistant | `hamcp`, `hamcp-server` | implemented |
 
 Each server is split into a **library** crate (REST/DB client + MCP tool
 definitions and wiring) and a thin **`-server`** binary that serves the tools
@@ -55,6 +58,15 @@ Search logs with LogQL and inspect labels. Tools: `query`, `query_range`
 `index_stats` — all read-only GETs against the Loki HTTP API. Supports
 multi-tenant `X-Scope-OrgID`. Full configuration and tool details are in the
 [crate README](crates/loki-mcp/README.md).
+
+### homeassistant-mcp — Home Assistant
+
+Query and control a Home Assistant instance. Tools: `health_check`,
+`get_config`, `get_states`, `get_entity`, `call_service` (mutating),
+`set_state` (mutating), `get_services`, `render_template`, `get_calendars`,
+`get_calendar_events`, `check_config`, `get_history`. Full configuration,
+required token setup, and tool details are in the
+[crate README](crates/homeassistant-mcp/README.md).
 
 ## Quick start
 

@@ -99,6 +99,7 @@ image-all:
     just image pgmcp-server
     just image prommcp-server
     just image lokimcp-server
+    just image hamcp-server
 
 # Run a built image, loading env from .env (e.g. `just run-image pbsmcp-server`)
 run-image bin tag="dev" port="8080":

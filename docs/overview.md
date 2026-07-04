@@ -214,7 +214,7 @@ homelab-mcp-core = { path = "../homelab-mcp-core" }
 
 ## Releases & Artifacts
 
-**Decision: no crates.io.** Ship complete source + built artifacts (OCI images, NixOS modules) from GitHub/Forgejo Releases, versioned with **date-based tags** (CalVer), e.g. `2026-06-23`. One tag covers the whole workspace — every artifact released together.
+**Decision: no crates.io.** Ship complete source + built artifacts (OCI images, NixOS modules) from Harbor registry, versioned with **semver tags** (e.g. `0.2.5`, `v0.2.5`). One tag covers the whole workspace — every artifact released together. The git tag must match `[workspace.package].version` in `Cargo.toml`.
 
 This vindicates the original unified-versioning instinct. Because nobody depends on individual crates through Cargo's registry, the per-crate semver burden disappears: internal crate splits (`hamcp-core`, `hamcp-util`, `pgmcp-core`, …) are pure organization and can be refactored freely, with no namespacing, per-crate metadata, or `release-plz` machinery needed.
 
@@ -253,33 +253,29 @@ workspace source
 
 Define the server list **once** and `genAttrs`/fold over it (ideally with `flake-parts`) so the same list drives `packages.*`, `dockerImages.*`, and `nixosModules.*`. Adding a server is one list entry that lands in every artifact type.
 
-### CalVer in `Cargo.toml`
+### Semver in `Cargo.toml`
 
-Cargo's `version` must be valid semver — numeric `major.minor.patch`, **no leading zeros**:
+Cargo's `version` must be valid semver — `major.minor.patch`. The `[workspace.package]` version is the single source of truth for the entire workspace, inherited by every crate via `version.workspace = true`.
 
-- `version = "2026.6.23"` ✅
-- `version = "2026.06.23"` ❌ (leading zero on `06`)
-
-Set `[workspace.package] version = "2026.6.23"` inherited via `version.workspace = true`, or just leave it `"0.0.0"` and treat the **git tag as the only real version**. The tag is the source of truth either way.
+Set `[workspace.package] version = "0.2.5"` and bump it with `cog bump --auto` (reads conventional commits) or `cog bump --minor`/`--major`. The version commit is tagged by cog with a bare semver tag (no `v` prefix: `0.2.5`). `push_harbor.sh` strips a leading `v` if present and validates the tag matches the workspace version before pushing images.
 
 ### How consumers pull a release (no registry)
 
 All paths key off the same tag:
 
-| Consumer | How they pin `2026-06-23` |
+| Consumer | How they pin `0.2.5` |
 |---|---|
-| **Nix / NixOS** | `inputs.homelab-mcp.url = "github:you/homelab-mcp/2026-06-23";` → gets `nixosModules.*` and `packages.*` |
-| **OCI** | `ghcr.io/you/hamcp:2026-06-23` (CI also pushes `:latest`) |
-| **Rust devs** | git dependency: `hamcp-core = { git = "https://github.com/you/homelab-mcp", tag = "2026-06-23" }` |
-| **Anyone** | source tarball auto-attached to the Release |
+| **Nix / NixOS** | `inputs.homelab-mcp.url = "github:you/homelab-mcp/0.2.5";` → gets `nixosModules.*` and `packages.*` |
+| **OCI** | `homelab-harbor.dropbear-butterfly.ts.net/mcp-servers/hamcp-server:0.2.5` (also `:latest`) |
+| **Rust devs** | git dependency: `hamcp = { git = "https://github.com/you/homelab-mcp", tag = "0.2.5" }` |
+| **Anyone** | `git clone` + `nix build` or `cargo build --release` from source |
 
-### Release flow (CI on tag push)
+### Release flow (manual via `push_harbor.sh`)
 
-1. `nix build .#all` → binaries + `dockerImages.*`
-2. push images to `ghcr.io` (or Forgejo registry), tagged with the git tag + `latest`
-3. `gh release create 2026-06-23` (or Forgejo equivalent), upload binaries / image digests / `flake.lock` snapshot
+1. `cog bump --auto` → bumps `[workspace.package].version`, tags the commit (e.g. `0.2.5`)
+2. `./push_harbor.sh` → validates tag matches workspace version, builds all server images with `podman build`, pushes to Harbor registry with the version tag + `latest`
 
-No publish step, no semver bookkeeping.
+No publish step to crates.io, no GitHub/Forgejo Releases, no FlakeHub. Harbor is the single artifact registry.
 
 > **Note:** if everything deploys to NixOS VMs internally, OCI images are optional — NixOS modules + systemd are the native path. Build images only for non-Nix consumers (k8s, Podman, public pulls). A self-hosted Nix binary cache (`attic`/`harmonia`) is worth standing up to keep CI and VM rebuilds fast at 10 servers.
 
@@ -328,7 +324,8 @@ Decisions baked in (validated end-to-end against live PBS — 13.2 MB image, rus
 
 **Resolved:**
 
-- No crates.io — release source + artifacts via GitHub/Forgejo Releases.
-- Versioning: date-based CalVer tags (e.g. `2026-06-23`), unified across the whole workspace.
+- No crates.io — release source + OCI images via Harbor registry only.
+- Versioning: **semver** tags (e.g. `0.2.5`), unified across the whole workspace via `cog bump`.
+- Harbor-only delivery; no GitHub Releases, no FlakeHub, no ghcr.
 - Internal sub-crate splits (`core`/`lib`/`util` per server) are free — no external semver cost.
 
