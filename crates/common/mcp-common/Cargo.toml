@@ -1,0 +1,20 @@
+[package]
+name = "mcp-common"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Shared MCP server plumbing — healthchecks, router wiring, and common helpers"
+
+[dependencies]
+# keep-sorted start
+axum.workspace = true
+color-eyre.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# keep-sorted end
+
+[dev-dependencies]
+# keep-sorted start
+tokio.workspace = true
+# keep-sorted end
