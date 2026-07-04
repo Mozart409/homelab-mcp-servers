@@ -746,6 +746,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
 
 [[package]]
+name = "hamcp"
+version = "0.2.5"
+dependencies = [
+ "axum",
+ "color-eyre",
+ "mcp-common",
+ "reqwest",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "hamcp-server"
+version = "0.2.5"
+dependencies = [
+ "color-eyre",
+ "dotenvy",
+ "hamcp",
+ "mcp-common",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1194,6 +1224,7 @@ version = "0.2.5"
 dependencies = [
  "axum",
  "color-eyre",
+ "mcp-common",
  "reqwest",
  "rmcp",
  "serde",
@@ -1210,6 +1241,7 @@ dependencies = [
  "color-eyre",
  "dotenvy",
  "lokimcp",
+ "mcp-common",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1235,6 +1267,18 @@ name = "matchit"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
+
+[[package]]
+name = "mcp-common"
+version = "0.2.5"
+dependencies = [
+ "axum",
+ "color-eyre",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "md-5"
@@ -1364,6 +1408,7 @@ version = "0.2.5"
 dependencies = [
  "axum",
  "color-eyre",
+ "mcp-common",
  "reqwest",
  "rmcp",
  "serde",
@@ -1379,6 +1424,7 @@ version = "0.2.5"
 dependencies = [
  "color-eyre",
  "dotenvy",
+ "mcp-common",
  "pbsmcp",
  "tokio",
  "tracing",
@@ -1397,6 +1443,7 @@ version = "0.2.5"
 dependencies = [
  "axum",
  "color-eyre",
+ "mcp-common",
  "rmcp",
  "serde",
  "serde_json",
@@ -1411,6 +1458,7 @@ version = "0.2.5"
 dependencies = [
  "color-eyre",
  "dotenvy",
+ "mcp-common",
  "pgmcp",
  "tokio",
  "tracing",
@@ -1462,6 +1510,7 @@ version = "0.2.5"
 dependencies = [
  "axum",
  "color-eyre",
+ "mcp-common",
  "reqwest",
  "rmcp",
  "serde",
@@ -1477,6 +1526,7 @@ version = "0.2.5"
 dependencies = [
  "color-eyre",
  "dotenvy",
+ "mcp-common",
  "prommcp",
  "tokio",
  "tracing",
