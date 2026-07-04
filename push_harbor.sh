@@ -11,7 +11,7 @@
 set -euo pipefail
 
 REGISTRY="homelab-harbor.dropbear-butterfly.ts.net/mcp-servers"
-SERVERS=(pbsmcp-server pgmcp-server prommcp-server)
+SERVERS=(pbsmcp-server pgmcp-server prommcp-server lokimcp-server hamcp-server)
 
 # Always operate from the repo root regardless of where we're invoked from.
 cd "$(git rev-parse --show-toplevel)"

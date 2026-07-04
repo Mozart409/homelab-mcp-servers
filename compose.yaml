@@ -17,6 +17,33 @@ services:
       RUST_LOG: info
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/server", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  hamcp:
+    build:
+      context: .
+      dockerfile: Containerfile
+      args:
+        BIN: hamcp-server
+    image: localhost/hamcp-server:dev
+    env_file: .env
+    environment:
+      HA_BIND: 0.0.0.0:8084
+      RUST_LOG: info
+    ports:
+      - "8084:8084"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/server", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 
   # Postgres 18 instance the pgmcp-server will introspect/query.
