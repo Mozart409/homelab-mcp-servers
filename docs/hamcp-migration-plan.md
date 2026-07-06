@@ -1,12 +1,20 @@
 ---
-status: plan
+status: complete
 date: 2026-07-04
+completed: 2026-07-06
 ---
 
 # Migration Plan: hamcp-rs → homelab-mcp-servers
 
 Fold the standalone `hamcp-rs` Home Assistant MCP server into the
 `homelab-mcp-servers` monorepo, conforming to its conventions.
+
+> **Status: executed (2026-07-06).** All eight phases landed across commits
+> `41b9b6a`→`95ee518`. Verified green: `cargo check --workspace`, `cargo clippy
+> -D warnings -D clippy::pedantic`, `cargo test --workspace`, `cargo fmt
+> --check`, `cargo deny check`, and `nix flake show` (packages
+> `{hamcp,lokimcp,pbsmcp,pgmcp,prommcp}-server` + `nixosModules.default`). This
+> document is retained as the implementation record.
 
 ## Decisions (locked)
 
