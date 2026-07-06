@@ -117,17 +117,25 @@
       }: let
         cfg = config.services.homelab-mcp;
 
-        # Known server defaults: name -> { prefix, port, hasToken }
+        # Known server defaults: name -> { prefix, port, hasToken, tokenVar? }
+        # tokenVar overrides the env var the secret is exported as (defaults
+        # to "<prefix>_TOKEN") for servers whose config reads a different name.
         knownServers = {
           pbsmcp-server = {
             prefix = "PBS";
             port = 8080;
             hasToken = true;
+            # pbsmcp reads PBS_API_KEY, not PBS_TOKEN
+            tokenVar = "PBS_API_KEY";
           };
           pgmcp-server = {
             prefix = "PG";
             port = 8081;
-            hasToken = false;
+            # The "token" here is the full connection URL — it embeds the
+            # password, so it must travel via tokenFile/LoadCredential and
+            # never through the world-readable systemd environment.
+            hasToken = true;
+            tokenVar = "PG_DATABASE_URL";
           };
           prommcp-server = {
             prefix = "PROM";
@@ -170,9 +178,6 @@
               "${p}_INSECURE" = lib.boolToString srv.insecure;
             }
             // (lib.optionalAttrs (srv.host != null) {"${p}_HOST" = srv.host;})
-            // (lib.optionalAttrs (defaults.hasToken && srv.tokenFile != null) {
-              "${p}_TOKEN_FILE" = "${srv.tokenFile}";
-            })
             // (lib.optionalAttrs (srv.allowedHosts != []) {
               "${p}_ALLOWED_HOSTS" = mkAllowedHosts srv.allowedHosts;
             })
@@ -218,9 +223,12 @@
           };
 
           script = let
+            tokenVar =
+              knownServers.${name}.tokenVar
+              or "${knownServers.${name}.prefix or (lib.toUpper name)}_TOKEN";
             tokenExport =
               lib.optionalString hasTokenFile
-              ''export ${knownServers.${name}.prefix}_TOKEN="$(< "$CREDENTIALS_DIRECTORY/${tokenCredentialName}")"''
+              ''export ${tokenVar}="$(< "$CREDENTIALS_DIRECTORY/${tokenCredentialName}")"''
               + "\n";
           in
             tokenExport
@@ -246,7 +254,7 @@
 
                 package = lib.mkOption {
                   type = lib.types.package;
-                  defaultText = lib.literalExpression "self.packages.\${pkgs.system}.<server>";
+                  defaultText = lib.literalExpression "self.packages.\${pkgs.stdenv.hostPlatform.system}.<server>";
                   description = "The package to use for this server.";
                 };
 
