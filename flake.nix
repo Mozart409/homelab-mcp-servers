@@ -63,16 +63,18 @@
         hamcp-server = mkServer "hamcp-server";
       };
     in {
-      packages = serverPkgs // {
-        default = serverPkgs.pbsmcp-server;
-        all = pkgs.linkFarm "all-mcp-servers" (
-          pkgs.lib.mapAttrsToList (name: pkg: {
-            inherit name;
-            path = "${pkg}/bin/${name}";
-          })
-          serverPkgs
-        );
-      };
+      packages =
+        serverPkgs
+        // {
+          default = serverPkgs.pbsmcp-server;
+          all = pkgs.linkFarm "all-mcp-servers" (
+            pkgs.lib.mapAttrsToList (name: pkg: {
+              inherit name;
+              path = "${pkg}/bin/${name}";
+            })
+            serverPkgs
+          );
+        };
 
       # to use other shells, run:
       # nix develop . --command fish
@@ -85,7 +87,6 @@
           cargo-edit
           cargo-watch
           cargo-workspaces
-          claude-code
           cocogitto
           just
           keep-sorted
@@ -153,25 +154,29 @@
 
         # Build the environment attrset for one server instance.
         mkServerEnv = name: srv: let
-          defaults = knownServers.${name} or {
-            prefix = lib.toUpper name;
-            port = 8080;
-            hasToken = true;
-          };
+          defaults =
+            knownServers.${
+              name
+            } or {
+              prefix = lib.toUpper name;
+              port = 8080;
+              hasToken = true;
+            };
           p = defaults.prefix;
           bind = srv.bind;
-          env = {
-            "${p}_BIND" = bind;
-            "${p}_INSECURE" = lib.boolToString srv.insecure;
-          }
-          // (lib.optionalAttrs (srv.host != null) {"${p}_HOST" = srv.host;})
-          // (lib.optionalAttrs (defaults.hasToken && srv.tokenFile != null) {
-            "${p}_TOKEN_FILE" = "${srv.tokenFile}";
-          })
-          // (lib.optionalAttrs (srv.allowedHosts != []) {
-            "${p}_ALLOWED_HOSTS" = mkAllowedHosts srv.allowedHosts;
-          })
-          // srv.extraEnv;
+          env =
+            {
+              "${p}_BIND" = bind;
+              "${p}_INSECURE" = lib.boolToString srv.insecure;
+            }
+            // (lib.optionalAttrs (srv.host != null) {"${p}_HOST" = srv.host;})
+            // (lib.optionalAttrs (defaults.hasToken && srv.tokenFile != null) {
+              "${p}_TOKEN_FILE" = "${srv.tokenFile}";
+            })
+            // (lib.optionalAttrs (srv.allowedHosts != []) {
+              "${p}_ALLOWED_HOSTS" = mkAllowedHosts srv.allowedHosts;
+            })
+            // srv.extraEnv;
         in
           lib.filterAttrs (_: v: v != null) env;
 
@@ -228,7 +233,8 @@
             if srv.openFirewall
             then let
               portStr = lib.last (lib.splitString ":" srv.bind);
-            in lib.toInt portStr
+            in
+              lib.toInt portStr
             else null
         ) (lib.filterAttrs (_: srv: srv.enable) cfg.servers);
       in {
@@ -314,10 +320,12 @@
         };
 
         config = lib.mkIf (cfg.servers != {}) {
-          systemd.services = lib.mapAttrs (
-            name: srv:
-              lib.mkIf srv.enable (mkService name srv)
-          ) cfg.servers;
+          systemd.services =
+            lib.mapAttrs (
+              name: srv:
+                lib.mkIf srv.enable (mkService name srv)
+            )
+            cfg.servers;
 
           networking.firewall.allowedTCPPorts = lib.filter (x: x != null) firewallPorts;
         };
