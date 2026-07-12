@@ -99,3 +99,13 @@ The server uses the streamable-HTTP transport, so point the client at its URL:
   }
 }
 ```
+
+### Multiple databases (one MCP per database)
+
+The binary reads a single `PG_DATABASE_URL`, so to expose several Postgres
+databases you run one `pgmcp-server` instance per database — each with its own
+`PG_DATABASE_URL` and `PG_BIND`. The NixOS module supports this via
+`serverType` (see the root
+[README](../../README.md#multiple-instances--several-postgres-databases)), and
+[`compose.yaml`](../../compose.yaml) ships a commented second
+`postgres`/`pgmcp` pair as a template.

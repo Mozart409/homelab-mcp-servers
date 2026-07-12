@@ -296,7 +296,7 @@ Decisions baked in (validated end-to-end against live PBS — 13.2 MB image, rus
 - **Builder toolchain pinned to 1.95.0** (matches `flake.nix`) — the `cargo-zigbuild` base image's bundled rustc (1.85) is too old for the dep tree.
 - **Config is runtime env only.** Secrets come from `.env` via `env_file`/`--env-file`, never baked into the image; bind must be `0.0.0.0` inside the container.
 
-`pgmcp-server` is still a stub, so it's commented out in [`compose.yaml`](../compose.yaml) until it serves over HTTP.
+`pgmcp-server` serves over streamable HTTP in [`compose.yaml`](../compose.yaml), which also includes a commented second `postgres`/`pgmcp` pair as a template for one-MCP-per-database deployments.
 
 ## Crates
 
