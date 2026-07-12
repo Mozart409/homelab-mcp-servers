@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.3.1 - 2026-07-12
+#### Bug Fixes
+- (**version**) flake uses version from cargo.toml - (618d6e0) - Amadeus Mader
+
+- - -
+
 ## 0.3.0 - 2026-07-12
 #### Features
 - (**compose**) enable pgmcp and template multi-instance postgres - (9a9f073) - Amadeus Mader
