@@ -2,6 +2,30 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.3.0 - 2026-07-12
+#### Features
+- (**compose**) enable pgmcp and template multi-instance postgres - (9a9f073) - Amadeus Mader
+- (**nixos**) add serverType option for multi-instance servers - (1704019) - Amadeus Mader
+- add homeassistant-mcp server - (95ee518) - Amadeus Mader
+- crane builds and nixos module - (2071e5c) - Amadeus Mader
+- add hamcp homeassistant mcp server - (c5ccc7d) - Amadeus Mader
+- add mcp-common shared crate - (41b9b6a) - Amadeus Mader
+#### Bug Fixes
+- (**nix**) correct secret env vars in NixOS module - (4fe4af5) - Amadeus Mader
+#### Documentation
+- (**agents**) update agents - (1cdfa8e) - Amadeus Mader
+- (**hamcp**) mark migration plan as executed - (7fca73f) - Amadeus Mader
+- document multi-instance pgmcp deployment - (725af4c) - Amadeus Mader
+#### Continuous Integration
+- add github actions workflows - (1d0d59e) - Amadeus Mader
+#### Refactoring
+- healthchecks via mcp-common in all servers - (9d7f460) - Amadeus Mader
+#### Miscellaneous Chores
+- (**container**) upgrade rust v - (e0b4dc1) - Amadeus Mader
+- (**deps**) upgrade flake and cargo - (81fbb5c) - Amadeus Mader
+
+- - -
+
 ## 0.2.5 - 2026-06-30
 #### Features
 - (**lokimcp**) add read-only loki mcp server - (3f6e5a8) - Amadeus Mader
