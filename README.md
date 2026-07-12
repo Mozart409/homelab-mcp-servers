@@ -154,7 +154,7 @@ just run-image pbsmcp-server      # run it, loading env from .env
 just scan pbsmcp-server           # build, then scan with trivy
 ```
 
-The local stack (PBS MCP server + a Postgres 18 instance) runs via
+The local stack (the MCP servers + a Postgres 18 instance) runs via
 [`compose.yaml`](compose.yaml):
 
 ```sh
@@ -165,6 +165,38 @@ just down
 Secrets are read from `.env` and injected at runtime via `env_file` — never
 baked into images. [`push_harbor.sh`](push_harbor.sh) pushes images to a Harbor
 registry.
+
+### Multiple instances — several Postgres databases
+
+The NixOS module supports running more than one instance of the same server:
+each `services.homelab-mcp.servers.<name>` entry is a separate systemd service
+with its own environment. Because every pgmcp binary reads `PG_*` env vars, set
+`serverType = "pgmcp-server"` on each instance so the module generates `PG_*`
+variables (rather than deriving a prefix from the instance name):
+
+```nix
+services.homelab-mcp.servers = {
+  pg-main = {
+    enable = true;
+    serverType = "pgmcp-server";
+    package = homelab-mcp.packages.${system}.pgmcp-server;
+    bind = "127.0.0.1:8081";
+    tokenFile = "/run/secrets/pg-main-url";   # -> PG_DATABASE_URL
+  };
+  pg-warehouse = {
+    enable = true;
+    serverType = "pgmcp-server";
+    package = homelab-mcp.packages.${system}.pgmcp-server;
+    bind = "127.0.0.1:8085";
+    tokenFile = "/run/secrets/pg-warehouse-url";
+  };
+};
+```
+
+Each `tokenFile` holds that database's connection string (loaded via systemd
+`LoadCredential` as `PG_DATABASE_URL`). Give every instance a distinct `bind`
+port. For the local compose stack, [`compose.yaml`](compose.yaml) has a
+commented `postgres2`/`pgmcp2` pair showing the same one-per-database pattern.
 
 ## License
 
