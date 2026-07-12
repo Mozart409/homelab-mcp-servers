@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.4.0 - 2026-07-12
+#### Features
+- (**harbor**) verify registry login before pushing images - (acc5e4f) - Amadeus Mader
+
+- - -
+
 ## 0.3.1 - 2026-07-12
 #### Bug Fixes
 - (**version**) flake uses version from cargo.toml - (618d6e0) - Amadeus Mader
