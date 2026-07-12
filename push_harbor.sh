@@ -3,6 +3,7 @@
 # Build every MCP server image and push it to the homelab Harbor registry.
 #
 # Safety checks before anything is built or pushed:
+#   * the current session must be logged in to the Harbor registry
 #   * the git working tree must be clean
 #   * HEAD must point at an annotated/lightweight git tag
 #   * that tag must match the workspace version in Cargo.toml
@@ -20,6 +21,12 @@ die() {
     echo "error: $*" >&2
     exit 1
 }
+
+# --- must be logged in to the Harbor registry -----------------------------
+REGISTRY_HOST="${REGISTRY%%/*}"
+if ! podman login --get-login "$REGISTRY_HOST" &>/dev/null; then
+    die "not logged in to $REGISTRY_HOST — run 'podman login $REGISTRY_HOST' first."
+fi
 
 # --- the working tree must be clean ---------------------------------------
 if [[ -n "$(git status --porcelain)" ]]; then
