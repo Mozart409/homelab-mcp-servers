@@ -160,16 +160,22 @@
           then null
           else lib.concatStringsSep "," hosts;
 
+        # Resolve the known-server defaults (prefix, port, token handling) for
+        # an instance, keyed on its `serverType` (which defaults to the
+        # instance name). Keying on serverType — not the instance name — is
+        # what lets you run several instances of the same binary: a second
+        # Postgres MCP named `pg-warehouse` with `serverType = "pgmcp-server"`
+        # picks up the `PG` prefix instead of a nonsensical `PG-WAREHOUSE` one.
+        serverDefaults = type:
+          knownServers.${type} or {
+            prefix = lib.toUpper type;
+            port = 8080;
+            hasToken = true;
+          };
+
         # Build the environment attrset for one server instance.
-        mkServerEnv = name: srv: let
-          defaults =
-            knownServers.${
-              name
-            } or {
-              prefix = lib.toUpper name;
-              port = 8080;
-              hasToken = true;
-            };
+        mkServerEnv = srv: let
+          defaults = serverDefaults srv.serverType;
           p = defaults.prefix;
           bind = srv.bind;
           env =
@@ -187,8 +193,9 @@
 
         # Build the systemd service for one server.
         mkService = name: srv: let
-          env = mkServerEnv name srv;
-          hasTokenFile = (knownServers.${name}.hasToken or true) && srv.tokenFile != null;
+          defaults = serverDefaults srv.serverType;
+          env = mkServerEnv srv;
+          hasTokenFile = (defaults.hasToken or true) && srv.tokenFile != null;
           tokenCredentialName = "${name}-token";
         in {
           description = "${name} — MCP server";
@@ -223,16 +230,14 @@
           };
 
           script = let
-            tokenVar =
-              knownServers.${name}.tokenVar
-              or "${knownServers.${name}.prefix or (lib.toUpper name)}_TOKEN";
+            tokenVar = defaults.tokenVar or "${defaults.prefix}_TOKEN";
             tokenExport =
               lib.optionalString hasTokenFile
               ''export ${tokenVar}="$(< "$CREDENTIALS_DIRECTORY/${tokenCredentialName}")"''
               + "\n";
           in
             tokenExport
-            + ''exec ${srv.package}/bin/${name}'';
+            + ''exec ${srv.package}/bin/${srv.serverType}'';
         };
 
         # Build firewall ports for enabled servers that request it.
@@ -248,9 +253,27 @@
       in {
         options.services.homelab-mcp = {
           servers = lib.mkOption {
-            type = lib.types.attrsOf (lib.types.submodule {
+            type = lib.types.attrsOf (lib.types.submodule ({name, ...}: {
               options = {
                 enable = lib.mkEnableOption "this MCP server";
+
+                serverType = lib.mkOption {
+                  type = lib.types.str;
+                  default = name;
+                  description = ''
+                    Known-server entry this instance is based on (e.g.
+                    `"pgmcp-server"`), used to pick the env-var prefix, default
+                    port, and token env var. Defaults to the instance name, so
+                    existing configs that already name a known server need not
+                    set this.
+
+                    Set it when running several instances of the same binary
+                    under different names — e.g. a second Postgres MCP named
+                    `pg-warehouse` would set `serverType = "pgmcp-server"` so it
+                    reads `PG_*` env vars instead of the (wrong) `PG_WAREHOUSE`
+                    prefix derived from its name.
+                  '';
+                };
 
                 package = lib.mkOption {
                   type = lib.types.package;
@@ -321,7 +344,7 @@
                   '';
                 };
               };
-            });
+            }));
             default = {};
             description = "MCP server instances to run.";
           };

@@ -2,6 +2,43 @@
 #
 # Secrets are read from .env (copy .env.example -> .env and fill it in); they
 # are injected at runtime via env_file, never baked into the image.
+#
+# Multiple Postgres databases: run one pgmcp-server per database. Each pair
+# below is a postgres container + a pgmcp-server container pointing at it.
+# Copy a pair, give the copies distinct service names / ports / volumes / env
+# vars, and set the credentials in .env (see the commented postgres2/pgmcp2
+# pair). The x-* anchors are reusable skeletons — they are not started.
+
+# Reusable pgmcp-server skeleton. Per-instance: environment, ports, depends_on.
+x-pgmcp-base: &pgmcp-base
+  build:
+    context: .
+    dockerfile: Containerfile
+    args:
+      BIN: pgmcp-server
+  image: localhost/pgmcp-server:dev
+  env_file: .env
+  healthcheck:
+    test: ["CMD", "/usr/local/bin/server", "--healthcheck"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 10s
+  restart: unless-stopped
+
+# Reusable Postgres 18 skeleton. Per-instance: environment, volumes, ports.
+# The healthcheck uses $$ so the shell inside the container expands
+# POSTGRES_USER/DB from that service's own environment (not compose vars).
+x-postgres-base: &postgres-base
+  image: docker.io/library/postgres:18-alpine
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+    start_period: 30s
+  restart: unless-stopped
+
 services:
   pbsmcp:
     build:
@@ -46,11 +83,12 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  # Postgres 18 instance the pgmcp-server will introspect/query.
+  # --- Postgres MCP instance #1 -----------------------------------------------
+  # Credentials come from .env (POSTGRES_PASSWORD is required; user/db default
+  # to `pgmcp`). Loopback-only on the host; reachable as `postgres:5432` inside
+  # the compose network.
   postgres:
-    image: docker.io/library/postgres:18-alpine
-    # Credentials come from .env (with safe local defaults). POSTGRES_PASSWORD is
-    # required by the image; the others fall back when unset.
+    <<: *postgres-base
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-pgmcp}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
@@ -65,37 +103,49 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      # Loopback-only on the host; reachable as `postgres:5432` inside the network.
       - "127.0.0.1:5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pgmcp} -d ${POSTGRES_DB:-pgmcp}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    restart: unless-stopped
 
-  # pgmcp-server is still a stub (prints "not yet implemented" and exits).
-  # Uncomment once it serves over streamable HTTP.
-  # pgmcp:
-  #   build:
-  #     context: .
-  #     dockerfile: Containerfile
-  #     args:
-  #       BIN: pgmcp-server
-  #   image: localhost/pgmcp-server:dev
-  #   env_file: .env
+  pgmcp:
+    <<: *pgmcp-base
+    environment:
+      PG_BIND: 0.0.0.0:8081
+      # Connect to the postgres service above over the compose network.
+      PG_DATABASE_URL: postgres://${POSTGRES_USER:-pgmcp}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-pgmcp}
+      RUST_LOG: info
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # --- Postgres MCP instance #2 (copy for each extra database) ----------------
+  # Uncomment, give distinct credentials in .env (PG2_*), and pick free ports.
+  # postgres2:
+  #   <<: *postgres-base
   #   environment:
-  #     PG_BIND: 0.0.0.0:8081
-  #     # Connect to the postgres service above over the compose network.
-  #     DATABASE_URL: postgres://${POSTGRES_USER:-pgmcp}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-pgmcp}
+  #     POSTGRES_USER: ${PG2_USER:-pgmcp}
+  #     POSTGRES_PASSWORD: ${PG2_PASSWORD:?set PG2_PASSWORD in .env}
+  #     POSTGRES_DB: ${PG2_DB:-pgmcp}
+  #     POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+  #     POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+  #     PGDATA: /var/lib/postgresql/data/pgdata
+  #     TZ: ${TZ:-UTC}
+  #   volumes:
+  #     - pgdata2:/var/lib/postgresql/data
+  #   ports:
+  #     - "127.0.0.1:5433:5432"
+  # pgmcp2:
+  #   <<: *pgmcp-base
+  #   environment:
+  #     PG_BIND: 0.0.0.0:8085
+  #     PG_DATABASE_URL: postgres://${PG2_USER:-pgmcp}:${PG2_PASSWORD}@postgres2:5432/${PG2_DB:-pgmcp}
   #     RUST_LOG: info
   #   ports:
-  #     - "8081:8081"
+  #     - "8085:8085"
   #   depends_on:
-  #     postgres:
+  #     postgres2:
   #       condition: service_healthy
-  #   restart: unless-stopped
 
 volumes:
   pgdata:
+  # pgdata2:  # uncomment for the postgres2 instance above
