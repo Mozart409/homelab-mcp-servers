@@ -7,6 +7,8 @@
 #
 # cog bumps the [workspace.package] version in Cargo.toml, refreshes
 # Cargo.lock, updates CHANGELOG.md, then creates the version commit + tag.
+# flake.nix reads the version from Cargo.toml at eval time, so it stays
+# in sync automatically — no hook needed.
 
 # Only cut releases from main.
 branch_whitelist = ["main"]

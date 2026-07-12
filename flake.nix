@@ -32,7 +32,7 @@
       commonArgs = {
         inherit src;
         pname = "homelab-mcp-servers";
-        version = "0.2.5";
+        version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).workspace.package.version;
         strictDeps = true;
         buildInputs =
           [pkgs.openssl]
