@@ -13,7 +13,7 @@ ARG RUNTIME_IMAGE=gcr.io/distroless/static-debian12:nonroot
 ARG TARGET=x86_64-unknown-linux-musl
 # Keep in sync with the toolchain in flake.nix; the base image's bundled rustc
 # is too old for the dependency tree (edition 2024 + recent deps).
-ARG RUST_VERSION=1.96.0
+ARG RUST_VERSION=1.96.1
 
 # ---- build ------------------------------------------------------------------
 FROM ${BUILDER_IMAGE} AS build

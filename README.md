@@ -70,7 +70,7 @@ required token setup, and tool details are in the
 
 ## Quick start
 
-This repo ships a [Nix flake](flake.nix) that pins the Rust toolchain (1.96)
+This repo ships a [Nix flake](flake.nix) that pins the Rust toolchain (1.96.1)
 and every dev tool. With [Nix](https://nixos.org) + flakes (and optionally
 [direnv](https://direnv.net)):
 
