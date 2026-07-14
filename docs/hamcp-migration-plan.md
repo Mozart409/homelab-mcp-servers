@@ -287,7 +287,7 @@ but generalized over the server list:
   server with `cargoExtraArgs = "--bin <name>"` and matching `pname`.
 - `packages.<system>.{hamcp-server, pbsmcp-server, pgmcp-server,
   prommcp-server, lokimcp-server}` + a sensible `default`.
-- Keep the toolchain at the monorepo's **stable 1.96.0** (NOT hamcp-rs's
+- Keep the toolchain at the monorepo's **stable 1.96.1** (NOT hamcp-rs's
   nightly — verify hamcp compiles on stable; nothing observed requires nightly).
 - Optionally add `dockerTools.buildLayeredImage` OCI outputs per
   `docs/overview.md`.
@@ -350,7 +350,7 @@ nix flake check               # after Phase 5/6
   `just watch-pkg`. Dropped.
 - **hamcp-rs `websocket/` module** — **removed** (O5); non-functional placeholder.
 - **Independent version `0.1.3`** — collapses into workspace `0.2.5`.
-- **Toolchain nightly 2026-02-15** → **stable 1.96.0**.
+- **Toolchain nightly 2026-02-15** → **stable 1.96.1**.
 - **`MCP_ADDR` / `HA_URL`** env vars → `HA_BIND` / `HA_HOST`. **Breaking** for
   any existing hamcp-rs deployment.
 - **`#![warn(clippy::pedantic)]` crate attribute** — monorepo enforces pedantic
