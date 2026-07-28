@@ -59,11 +59,51 @@ impl PbsClient {
     /// `GET /api2/json{path}` with optional query params, returning the
     /// unwrapped `data` field of the PBS response envelope.
     ///
+    /// This is what most tools want: PBS wraps payloads as `{ "data": ... }`,
+    /// and the wrapper carries nothing they need. Use
+    /// [`get_envelope`](Self::get_envelope) instead when an endpoint puts
+    /// meaningful metadata next to `data` (e.g. the task-log endpoint reports
+    /// the whole log's line count as `total`).
+    ///
     /// # Errors
     ///
     /// Returns an error if the request fails, the response status is not
     /// success, or the body is not valid JSON.
     pub async fn get(&self, path: &str, query: &[(&str, String)]) -> Result<Value> {
+        let mut json = self.get_json(path, query).await?;
+        // PBS wraps payloads as `{ "data": ... }`; unwrap when present.
+        Ok(json.get_mut("data").map(Value::take).unwrap_or(json))
+    }
+
+    /// `GET /api2/json{path}` with optional query params, returning the FULL
+    /// PBS response envelope rather than just its `data` field.
+    ///
+    /// PBS responses are shaped `{ "data": ..., "total": N, ... }`; the
+    /// envelope siblings are endpoint-specific. Only paging-aware tools (e.g.
+    /// `task_log`) should call this — everything else should use
+    /// [`get`](Self::get) so their output shape stays the bare payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails, the response status is not
+    /// success, or the body is not valid JSON.
+    pub async fn get_envelope(&self, path: &str, query: &[(&str, String)]) -> Result<Value> {
+        self.get_json(path, query).await
+    }
+
+    /// Perform the actual `GET /api2/json{path}` request and parse the body
+    /// as JSON, returning the full response envelope untouched.
+    ///
+    /// This is the single place that builds the URL, sends the request, and
+    /// validates/parses the response; [`get`](Self::get) and
+    /// [`get_envelope`](Self::get_envelope) only differ in how much of the
+    /// envelope they hand back to the caller.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails, the response status is not
+    /// success, or the body is not valid JSON.
+    async fn get_json(&self, path: &str, query: &[(&str, String)]) -> Result<Value> {
         let url = format!("{}/api2/json{}", self.base_url, path);
         let mut req = self.http.get(&url);
         if !query.is_empty() {
@@ -84,9 +124,31 @@ impl PbsClient {
             bail!("PBS API {url} returned {status}: {}", body.trim());
         }
 
-        let mut json: Value =
-            serde_json::from_str(&body).wrap_err_with(|| format!("invalid JSON from {url}"))?;
-        // PBS wraps payloads as `{ "data": ... }`; unwrap when present.
-        Ok(json.get_mut("data").map(Value::take).unwrap_or(json))
+        serde_json::from_str(&body).wrap_err_with(|| format!("invalid JSON from {url}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::seg;
+
+    #[test]
+    fn seg_encodes_upid_escapes() {
+        // Real-world UPID worker-id: PBS escapes `-`/`:` as `\x2d`/`\x3a`; the
+        // raw backslashes must not survive into the URL.
+        assert_eq!(
+            seg(r"backup:r2\x2dstore\x3act-104").to_string(),
+            "backup%3Ar2%5Cx2dstore%5Cx3act%2D104"
+        );
+    }
+
+    #[test]
+    fn seg_encodes_datastore_name() {
+        assert_eq!(seg("r2-store:ct").to_string(), "r2%2Dstore%3Act");
+    }
+
+    #[test]
+    fn seg_passes_alphanumeric_through() {
+        assert_eq!(seg("pbs01").to_string(), "pbs01");
     }
 }
