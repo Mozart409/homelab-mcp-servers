@@ -97,6 +97,7 @@ cargo run -p pbsmcp-server    # PBS,        default endpoint http://127.0.0.1:80
 cargo run -p pgmcp-server     # Postgres,   default endpoint http://127.0.0.1:8081/mcp
 cargo run -p prommcp-server   # Prometheus, default endpoint http://127.0.0.1:8082/mcp
 cargo run -p lokimcp-server   # Loki,       default endpoint http://127.0.0.1:8083/mcp
+cargo run -p hamcp-server     # Home Assistant, default endpoint http://127.0.0.1:8084/mcp
 ```
 
 Both bind loopback-only by default and reject non-loopback `Host` headers
@@ -114,7 +115,8 @@ The servers use the streamable-HTTP transport, so point the client at the URL:
     "pbs": { "type": "http", "url": "http://127.0.0.1:8080/mcp" },
     "postgres": { "type": "http", "url": "http://127.0.0.1:8081/mcp" },
     "prometheus": { "type": "http", "url": "http://127.0.0.1:8082/mcp" },
-    "loki": { "type": "http", "url": "http://127.0.0.1:8083/mcp" }
+    "loki": { "type": "http", "url": "http://127.0.0.1:8083/mcp" },
+    "homeassistant": { "type": "http", "url": "http://127.0.0.1:8084/mcp" }
   }
 }
 ```
