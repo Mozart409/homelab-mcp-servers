@@ -97,9 +97,42 @@ struct TaskParams {
 struct TaskLogParams {
     /// Task UPID, as returned by `list_tasks`.
     upid: String,
+    /// Line offset to start at (PBS `start` parameter; `0` = the beginning).
+    /// Omit to start at the beginning.
+    #[serde(default)]
+    start: Option<u64>,
     /// Maximum number of log lines to return (default: 100).
     #[serde(default)]
     limit: Option<u64>,
+    /// Return the LAST N lines instead of reading from the beginning; use this
+    /// for long-running tasks. Mutually exclusive with `start`.
+    #[serde(default)]
+    tail: Option<u64>,
+}
+
+// ---- Tool helpers -----------------------------------------------------------
+
+/// Compute the `start` offset that makes a log fetch return the last `tail`
+/// lines of a log known to be `total` lines long.
+///
+/// Saturates at 0 when `tail >= total` — fetch the whole log from the
+/// beginning rather than underflowing the offset.
+fn tail_start(total: u64, tail: u64) -> u64 {
+    total.saturating_sub(tail)
+}
+
+/// Extract the numeric `total` field from a PBS task-log response envelope,
+/// erroring clearly when it is absent or not a non-negative integer.
+fn envelope_total(envelope: &serde_json::Value) -> Result<u64, ErrorData> {
+    envelope
+        .get("total")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| {
+            ErrorData::internal_error(
+                "PBS task-log response envelope missing numeric `total` field",
+                None,
+            )
+        })
 }
 
 // ---- Tools ------------------------------------------------------------------
@@ -197,19 +230,69 @@ impl PbsServer {
         Parameters(TaskParams { upid }): Parameters<TaskParams>,
     ) -> Result<String, ErrorData> {
         let node = self.client.node.clone();
-        self.call(&format!("/nodes/{node}/tasks/{upid}/status"), &[])
-            .await
+        self.call(
+            &format!("/nodes/{}/tasks/{}/status", seg(&node), seg(&upid)),
+            &[],
+        )
+        .await
     }
 
-    #[tool(description = "Read the log output of a task by its UPID.")]
+    #[tool(
+        description = "Read the log output of a task by its UPID. Returns lines from the start of the log by default; use `start` and `limit` together to page through it, or set `tail` to fetch the last N lines (the right choice for long-running tasks, where the interesting output is at the end). The response includes the log's `total` line count so you can page."
+    )]
     async fn task_log(
         &self,
-        Parameters(TaskLogParams { upid, limit }): Parameters<TaskLogParams>,
+        Parameters(TaskLogParams {
+            upid,
+            start,
+            limit,
+            tail,
+        }): Parameters<TaskLogParams>,
     ) -> Result<String, ErrorData> {
+        if tail.is_some() && start.is_some() {
+            return Err(ErrorData::invalid_params(
+                "`tail` and `start` are mutually exclusive: omit `start` to fetch the last N lines",
+                None,
+            ));
+        }
+
         let node = self.client.node.clone();
-        let q = vec![("limit", limit.unwrap_or(100).to_string())];
-        self.call(&format!("/nodes/{node}/tasks/{upid}/log"), &q)
+        let path = format!("/nodes/{}/tasks/{}/log", seg(&node), seg(&upid));
+
+        // Resolve the (start, limit) window to fetch. Tailing first learns the
+        // total line count from a cheap one-line probe so the final fetch can
+        // start exactly `tail` lines before the end.
+        let (start, limit) = if let Some(n) = tail {
+            let probe = self
+                .client
+                .get_envelope(
+                    &path,
+                    &[("start", "0".to_string()), ("limit", "1".to_string())],
+                )
+                .await
+                .map_err(|e| ErrorData::internal_error(format!("{e:#}"), None))?;
+            (tail_start(envelope_total(&probe)?, n), n)
+        } else {
+            (start.unwrap_or(0), limit.unwrap_or(100))
+        };
+
+        let envelope = self
+            .client
+            .get_envelope(
+                &path,
+                &[("start", start.to_string()), ("limit", limit.to_string())],
+            )
             .await
+            .map_err(|e| ErrorData::internal_error(format!("{e:#}"), None))?;
+
+        // Take `total` from the final fetch — for a running task it may have
+        // grown since the probe, so it is the freshest value available.
+        let total = envelope_total(&envelope)?;
+        let lines = envelope.get("data").cloned().unwrap_or_default();
+        let out = serde_json::json!({ "total": total, "start": start, "lines": lines });
+        serde_json::to_string_pretty(&out).map_err(|e| {
+            ErrorData::internal_error(format!("failed to serialize response: {e}"), None)
+        })
     }
 
     #[tool(
@@ -247,5 +330,26 @@ impl ServerHandler for PbsServer {
         info.server_info = server_info;
 
         info
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tail_start;
+
+    #[test]
+    fn tail_start_when_tail_less_than_total() {
+        assert_eq!(tail_start(1000, 12), 988);
+    }
+
+    #[test]
+    fn tail_start_when_tail_greater_than_total_saturates() {
+        // Must not underflow: fetch the whole log from the beginning.
+        assert_eq!(tail_start(5, 100), 0);
+    }
+
+    #[test]
+    fn tail_start_when_tail_equals_total() {
+        assert_eq!(tail_start(100, 100), 0);
     }
 }
