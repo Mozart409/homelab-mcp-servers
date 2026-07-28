@@ -23,6 +23,15 @@ use crate::models::{
 /// Default request timeout in seconds.
 const DEFAULT_TIMEOUT_SECS: u64 = 10;
 
+/// Percent-encode a single URL path segment.
+///
+/// Entity IDs, service names, and timestamps are interpolated into request
+/// paths; encoding them keeps reserved characters (`/`, `?`, `#`, `%`, `\`)
+/// from changing the URL's structure.
+fn seg(s: &str) -> impl std::fmt::Display + '_ {
+    percent_encoding::utf8_percent_encode(s, percent_encoding::NON_ALPHANUMERIC)
+}
+
 /// HTTP client for interacting with the Home Assistant REST API.
 ///
 /// Cheap to clone due to internal `Arc` usage.
@@ -174,7 +183,7 @@ impl HaClient {
 
     /// Gets a specific entity's state.
     pub async fn get_entity(&self, entity_id: &str) -> Result<EntityState> {
-        let url = self.api_url(&format!("/api/states/{entity_id}"))?;
+        let url = self.api_url(&format!("/api/states/{}", seg(entity_id)))?;
         let response = self
             .client
             .get(url.as_str())
@@ -194,7 +203,7 @@ impl HaClient {
         entity_id: &str,
         state_update: &StateUpdate,
     ) -> Result<EntityState> {
-        let url = self.api_url(&format!("/api/states/{entity_id}"))?;
+        let url = self.api_url(&format!("/api/states/{}", seg(entity_id)))?;
         let response = self
             .client
             .post(url.as_str())
@@ -207,7 +216,7 @@ impl HaClient {
 
     /// Deletes an entity state.
     pub async fn delete_state(&self, entity_id: &str) -> Result<()> {
-        let url = self.api_url(&format!("/api/states/{entity_id}"))?;
+        let url = self.api_url(&format!("/api/states/{}", seg(entity_id)))?;
         let response = self
             .client
             .delete(url.as_str())
@@ -242,7 +251,7 @@ impl HaClient {
         entity_id: Option<&str>,
         return_response: bool,
     ) -> Result<ServiceResponse> {
-        let mut url = self.api_url(&format!("/api/services/{domain}/{service}"))?;
+        let mut url = self.api_url(&format!("/api/services/{}/{}", seg(domain), seg(service)))?;
         if return_response {
             url.set_query(Some("return_response"));
         }
@@ -301,7 +310,7 @@ impl HaClient {
         event_type: &str,
         event_data: Option<HashMap<String, serde_json::Value>>,
     ) -> Result<HashMap<String, String>> {
-        let url = self.api_url(&format!("/api/events/{event_type}"))?;
+        let url = self.api_url(&format!("/api/events/{}", seg(event_type)))?;
         let response = self
             .client
             .post(url.as_str())
@@ -355,7 +364,7 @@ impl HaClient {
         start: &str,
         end: &str,
     ) -> Result<Vec<CalendarEvent>> {
-        let mut url = self.api_url(&format!("/api/calendars/{entity_id}"))?;
+        let mut url = self.api_url(&format!("/api/calendars/{}", seg(entity_id)))?;
         url.query_pairs_mut()
             .append_pair("start", start)
             .append_pair("end", end);
@@ -391,7 +400,7 @@ impl HaClient {
         no_attributes: bool,
     ) -> Result<Vec<Vec<HistoryEntry>>> {
         let path = match start_time {
-            Some(start) => format!("/api/history/period/{start}"),
+            Some(start) => format!("/api/history/period/{}", seg(start)),
             None => "/api/history/period".to_string(),
         };
         let mut url = self.api_url(&path)?;
@@ -437,7 +446,7 @@ impl HaClient {
 
     /// Gets camera image data.
     pub async fn get_camera_image(&self, entity_id: &str) -> Result<Vec<u8>> {
-        let url = self.api_url(&format!("/api/camera_proxy/{entity_id}"))?;
+        let url = self.api_url(&format!("/api/camera_proxy/{}", seg(entity_id)))?;
         let response = self
             .client
             .get(url.as_str())
@@ -488,5 +497,43 @@ mod tests {
         let client = HaClient::new("http://localhost:8123/", "test_token").unwrap();
         let url = client.api_url("/api/states").unwrap();
         assert_eq!(url.as_str(), "http://localhost:8123/api/states");
+    }
+
+    #[test]
+    fn test_seg_encodes_reserved_characters() {
+        // A `/` in an entity ID must not split one path segment into two.
+        assert_eq!(seg("light/foo bar").to_string(), "light%2Ffoo%20bar");
+    }
+
+    #[test]
+    fn test_seg_encodes_iso_timestamp() {
+        // History period timestamps carry `:` and `+`; all must be encoded.
+        assert_eq!(
+            seg("2026-07-28T11:46:34+00:00").to_string(),
+            "2026%2D07%2D28T11%3A46%3A34%2B00%3A00"
+        );
+    }
+
+    #[test]
+    fn test_seg_encodes_plain_entity_id() {
+        // `.` and `_` are non-alphanumeric, so they are encoded too; Home
+        // Assistant decodes percent-encoded segments, so this is safe.
+        assert_eq!(
+            seg("light.living_room").to_string(),
+            "light%2Eliving%5Froom"
+        );
+    }
+
+    #[test]
+    fn test_seg_encoded_segment_enters_url_unchanged() {
+        // Url::join must not reinterpret the already-encoded segment.
+        let client = HaClient::new("http://localhost:8123", "test_token").unwrap();
+        let url = client
+            .api_url(&format!("/api/states/{}", seg("light/foo?bar#baz")))
+            .unwrap();
+        assert_eq!(
+            url.as_str(),
+            "http://localhost:8123/api/states/light%2Ffoo%3Fbar%23baz"
+        );
     }
 }
