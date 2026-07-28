@@ -6,10 +6,11 @@ follow to make changes that fit the codebase.
 
 ## What this is
 
-A Cargo workspace of **read-only** [MCP](https://modelcontextprotocol.io) servers
-for a personal homelab. Each server exposes a focused set of read-only tools over
+A Cargo workspace of [MCP](https://modelcontextprotocol.io) servers for a
+personal homelab. Each server exposes a focused set of **read-only** tools over
 the streamable-HTTP transport (mounted at `/mcp`) so an MCP client can answer
-operational questions without being able to change anything.
+operational questions without being able to change anything — with one
+deliberate exception (`homeassistant-mcp`; see Hard rules §1).
 
 - **Language/edition:** Rust, edition 2024, toolchain pinned via [`flake.nix`](flake.nix).
 - **Core deps:** [`rmcp`](https://github.com/modelcontextprotocol/rust-sdk) (MCP SDK),
@@ -28,10 +29,12 @@ templates/server-mcp/  scaffold for a new server (copy this to start)
 
 Existing servers: `crates/pbs-mcp` (Proxmox Backup Server, REST, port `8080`),
 `crates/postgres-mcp` (PostgreSQL, sqlx, `8081`), `crates/prometheus-mcp`
-(Prometheus, REST, `8082`), `crates/loki-mcp` (Grafana Loki, REST, `8083`). The
-library crate is the unit of substance; the `-server` binary is a near-empty
-`main` that calls `run()`. The Prometheus/Loki REST servers are the closest clone
-of `pbs-mcp` — copy that one when adding another REST-backed server.
+(Prometheus, REST, `8082`), `crates/loki-mcp` (Grafana Loki, REST, `8083`), and
+`crates/homeassistant-mcp` (Home Assistant, REST, `8084` — **not read-only**,
+see Hard rules §1). The library crate is the unit of substance; the `-server`
+binary is a near-empty `main` that calls `run()`. The Prometheus/Loki REST
+servers are the closest clone of `pbs-mcp` — copy that one when adding another
+REST-backed server.
 
 Within a library crate the module split is consistent:
 - `config.rs` — `Config` struct + `Config::from_env()`, all settings from env vars.
@@ -42,9 +45,15 @@ Within a library crate the module split is consistent:
 
 ## Hard rules
 
-1. **Read-only only.** Every tool must be incapable of mutating the target.
-   Postgres runs queries in a `READ ONLY` transaction, statement-timed and
-   row-capped; REST servers only issue GETs. Never add a write/DDL/mutating tool.
+1. **Read-only only — hamcp excepted.** Every tool must be incapable of
+   mutating the target. Postgres runs queries in a `READ ONLY` transaction,
+   statement-timed and row-capped; REST servers only issue GETs. Never add a
+   write/DDL/mutating tool. **Exception:** `homeassistant-mcp` deliberately
+   exposes mutating tools (`set_state`, `call_service` — POSTs) because
+   controlling smart-home devices is its primary purpose; the owner opted it
+   out of this rule on purpose. The exception is per-server, not a precedent:
+   don't add mutating tools to any other server, and don't add more to hamcp
+   unless explicitly asked.
 2. **Loopback by default.** Servers bind `127.0.0.1` and rely on rmcp's
    DNS-rebinding protection (`allowed_hosts`). Don't change defaults to bind
    non-loopback; that's opt-in via `*_BIND` / `*_ALLOWED_HOSTS` env vars.
@@ -112,7 +121,7 @@ Before considering a change done: `just ci` must pass. Clippy runs with
 1. Copy `templates/server-mcp/` to `crates/<service>-mcp/`, rename the
    `mymcp`/`mymcp-server` crates to `<svc>mcp`/`<svc>mcp-server`.
 2. Implement `config.rs` (env vars prefixed `<SVC>_`, pick the next free default
-   port — pbs `8080`, postgres `8081`, prometheus `8082`, loki `8083`),
+   port — pbs `8080`, postgres `8081`, prometheus `8082`, loki `8083`, ha `8084`),
    `client.rs`, `server.rs` (read-only tools), and `run()` in `lib.rs`.
 3. Register the crate (workspace `members` is `crates/*/*`, so it's automatic),
    add deps to `[workspace.dependencies]` if new.
