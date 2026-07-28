@@ -6,7 +6,7 @@ use rmcp::model::{Implementation, ServerCapabilities, ServerInfo};
 use rmcp::{ErrorData, ServerHandler, schemars, tool, tool_handler, tool_router};
 use serde::Deserialize;
 
-use crate::client::PbsClient;
+use crate::client::{PbsClient, seg};
 
 /// MCP server wrapping a [`PbsClient`].
 #[derive(Clone)]
@@ -118,7 +118,7 @@ impl PbsServer {
         &self,
         Parameters(StoreParams { store }): Parameters<StoreParams>,
     ) -> Result<String, ErrorData> {
-        self.call(&format!("/admin/datastore/{store}/status"), &[])
+        self.call(&format!("/admin/datastore/{}/status", seg(&store)), &[])
             .await
     }
 
@@ -133,7 +133,7 @@ impl PbsServer {
         if let Some(ns) = namespace {
             q.push(("ns", ns));
         }
-        self.call(&format!("/admin/datastore/{store}/groups"), &q)
+        self.call(&format!("/admin/datastore/{}/groups", seg(&store)), &q)
             .await
     }
 
@@ -159,7 +159,7 @@ impl PbsServer {
         if let Some(id) = backup_id {
             q.push(("backup-id", id));
         }
-        self.call(&format!("/admin/datastore/{store}/snapshots"), &q)
+        self.call(&format!("/admin/datastore/{}/snapshots", seg(&store)), &q)
             .await
     }
 
@@ -186,7 +186,7 @@ impl PbsServer {
         if let Some(s) = since {
             q.push(("since", s.to_string()));
         }
-        self.call(&format!("/nodes/{node}/tasks"), &q).await
+        self.call(&format!("/nodes/{}/tasks", seg(&node)), &q).await
     }
 
     #[tool(
@@ -224,7 +224,8 @@ impl PbsServer {
     )]
     async fn node_status(&self) -> Result<String, ErrorData> {
         let node = self.client.node.clone();
-        self.call(&format!("/nodes/{node}/status"), &[]).await
+        self.call(&format!("/nodes/{}/status", seg(&node)), &[])
+            .await
     }
 }
 
