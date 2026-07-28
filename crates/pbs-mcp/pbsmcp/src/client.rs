@@ -6,6 +6,14 @@ use serde_json::Value;
 
 use crate::config::Config;
 
+/// Percent-encode a single URL path segment.
+///
+/// PBS embeds `\xNN` escapes in UPIDs and permits reserved characters in
+/// datastore names; interpolating those raw would change the URL's structure.
+pub(crate) fn seg(s: &str) -> impl std::fmt::Display + '_ {
+    percent_encoding::utf8_percent_encode(s, percent_encoding::NON_ALPHANUMERIC)
+}
+
 /// Authenticated client for a single PBS instance.
 ///
 /// Cheap to clone (wraps an `Arc` internally via [`reqwest::Client`]).
