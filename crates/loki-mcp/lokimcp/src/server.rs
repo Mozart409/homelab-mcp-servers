@@ -7,7 +7,7 @@ use rmcp::model::{Implementation, ServerCapabilities, ServerInfo};
 use rmcp::{ErrorData, ServerHandler, schemars, tool, tool_handler, tool_router};
 use serde::Deserialize;
 
-use crate::client::LokiClient;
+use crate::client::{LokiClient, seg};
 
 /// MCP server wrapping a [`LokiClient`].
 #[derive(Clone)]
@@ -218,7 +218,7 @@ impl LokiServer {
         if let Some(e) = end {
             q.push(("end", e));
         }
-        self.call(&format!("/loki/api/v1/label/{label}/values"), &q)
+        self.call(&format!("/loki/api/v1/label/{}/values", seg(&label)), &q)
             .await
     }
 

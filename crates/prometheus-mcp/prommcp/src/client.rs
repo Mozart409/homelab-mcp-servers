@@ -6,6 +6,14 @@ use serde_json::Value;
 
 use crate::config::Config;
 
+/// Percent-encode a single URL path segment.
+///
+/// Interpolating caller-supplied label names raw would let reserved
+/// characters change the URL's structure.
+pub(crate) fn seg(s: &str) -> impl std::fmt::Display + '_ {
+    percent_encoding::utf8_percent_encode(s, percent_encoding::NON_ALPHANUMERIC)
+}
+
 /// Client for a single Prometheus instance.
 ///
 /// Cheap to clone (wraps an `Arc` internally via [`reqwest::Client`]).
@@ -93,5 +101,21 @@ impl PromClient {
 
         // Prometheus wraps payloads as `{ "status": "success", "data": ... }`.
         Ok(json.get_mut("data").map(Value::take).unwrap_or(json))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::seg;
+
+    #[test]
+    fn seg_encodes_reserved_char() {
+        // A label name containing `/` must not split into extra path segments.
+        assert_eq!(seg("foo/bar").to_string(), "foo%2Fbar");
+    }
+
+    #[test]
+    fn seg_passes_alphanumeric_through() {
+        assert_eq!(seg("job").to_string(), "job");
     }
 }

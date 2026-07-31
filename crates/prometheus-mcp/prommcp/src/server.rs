@@ -6,7 +6,7 @@ use rmcp::model::{Implementation, ServerCapabilities, ServerInfo};
 use rmcp::{ErrorData, ServerHandler, schemars, tool, tool_handler, tool_router};
 use serde::Deserialize;
 
-use crate::client::PromClient;
+use crate::client::{PromClient, seg};
 
 /// MCP server wrapping a [`PromClient`].
 #[derive(Clone)]
@@ -174,7 +174,7 @@ impl PromServer {
         &self,
         Parameters(LabelValuesParams { label }): Parameters<LabelValuesParams>,
     ) -> Result<String, ErrorData> {
-        self.call(&format!("/api/v1/label/{label}/values"), &[])
+        self.call(&format!("/api/v1/label/{}/values", seg(&label)), &[])
             .await
     }
 
