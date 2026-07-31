@@ -2,6 +2,27 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.5.0 - 2026-07-31
+#### Features
+- (**pbsmcp**) add start/tail paging with total to task_log - (25c3fd2) - Amadeus Mader
+#### Bug Fixes
+- (**hamcp**) percent-encode user-supplied URL path segments - (057cabf) - Amadeus Mader
+- (**lokimcp**) percent-encode label name in label_values path - (8c2a3f0) - Amadeus Mader
+- (**pbsmcp**) percent-encode user-supplied URL path segments - (20e059f) - Amadeus Mader
+- (**prommcp**) percent-encode label name in label_values path - (1b2dadb) - Amadeus Mader
+#### Documentation
+- (**agents**) document hamcp exception to the read-only rule - (4326c50) - Amadeus Mader
+- (**readme**) add hamcp 8084 to quick-start and client config - (00267b7) - Amadeus Mader
+- (**todos**) create todos to fix - (db43173) - Amadeus Mader
+#### Continuous Integration
+- (**action**) remove actions - (d12bcb2) - Amadeus Mader
+#### Miscellaneous Chores
+- (**deps**) add percent-encoding to workspace dependencies - (6e7c9e8) - Amadeus Mader
+- (**deps**) upgrade flake - (73893ed) - Amadeus Mader
+- (**deps**) upgrade to rust 1.96.1 - (de97c5b) - Amadeus Mader
+
+- - -
+
 ## 0.4.0 - 2026-07-12
 #### Features
 - (**harbor**) verify registry login before pushing images - (acc5e4f) - Amadeus Mader
