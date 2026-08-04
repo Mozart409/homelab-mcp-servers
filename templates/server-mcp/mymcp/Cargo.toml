@@ -15,3 +15,6 @@ thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 # keep-sorted end
+
+[lints]
+workspace = true

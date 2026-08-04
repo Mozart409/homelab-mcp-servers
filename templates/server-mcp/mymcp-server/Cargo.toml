@@ -17,3 +17,6 @@ tokio.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true
 # keep-sorted end
+
+[lints]
+workspace = true
