@@ -24,6 +24,7 @@ deliberate exception (`homeassistant-mcp`; see Hard rules §1).
 crates/<service>-mcp/
   <svc>mcp/         library crate: config + client + server (MCP tool wiring)
   <svc>mcp-server/  thin binary: calls the lib's run()
+crates/common/mcp-common/  shared plumbing every server depends on
 templates/server-mcp/  scaffold for a new server (copy this to start)
 ```
 
@@ -35,6 +36,16 @@ see Hard rules §1). The library crate is the unit of substance; the `-server`
 binary is a near-empty `main` that calls `run()`. The Prometheus/Loki REST
 servers are the closest clone of `pbs-mcp` — copy that one when adding another
 REST-backed server.
+
+Alongside the servers, `crates/common/mcp-common` (package `mcp-common`) holds
+the cross-server plumbing that would otherwise be copy-pasted into every crate:
+`health_router()` — an axum router mounting `GET /_healthcheck` and `GET /` —
+and `run_healthcheck(bind)`, the client-side probe behind every binary's
+`--healthcheck` flag. The distroless images have no shell and no `curl`, so the
+container healthcheck is the binary probing itself; that is why the probe must
+work without config or dotenv. A new server merges `health_router()` into its
+own router in `run()` and wires the `--healthcheck` flag in `main` — don't
+reimplement either.
 
 Within a library crate the module split is consistent:
 - `config.rs` — `Config` struct + `Config::from_env()`, all settings from env vars.
@@ -72,6 +83,18 @@ Within a library crate the module split is consistent:
    `anyhow`. IDs: `ulid` — **never** `uuid`. These are already in
    `[workspace.dependencies]`; reach for them rather than pulling in a parallel
    crate that does the same job.
+7. **No panicking shortcuts in production code.** `[workspace.lints.clippy]` in
+   the root `Cargo.toml` denies `unwrap_used`, `expect_used`, `panic`,
+   `unwrap_in_result`, and `indexing_slicing`; every member crate opts in with
+   `[lints] workspace = true`. These are long-running daemons — a panic kills
+   every in-flight MCP request, not just the one that tripped it. Propagate with
+   `color_eyre`'s `Result` + `WrapErr` in `run()`/lib code, and map into
+   `rmcp::ErrorData` inside tool methods. Tests are exempt via the root
+   [`clippy.toml`](clippy.toml) (`allow-unwrap-in-tests` et al.) — a failed
+   `unwrap()` in a test *is* the assertion — but note the exemption keys off the
+   enclosing `#[test]` function, so a free helper in `tests/` is still subject to
+   the lint. Reach for `#[allow]` only when there is genuinely no alternative,
+   at the narrowest possible scope, with a comment saying why.
 
 ## Build / test / lint
 
