@@ -79,6 +79,56 @@ pub enum ClientError {
     /// Error log endpoint not available.
     #[error("Error log endpoint not available - check that logger integration is enabled")]
     ErrorLogNotAvailable,
+
+    /// Home Assistant returned a non-success HTTP status.
+    #[error("Home Assistant returned {status}: {body}")]
+    UnexpectedStatus {
+        /// The HTTP status returned by Home Assistant.
+        status: StatusCode,
+        /// The response body, truncated to keep error messages readable.
+        body: String,
+    },
+}
+
+/// Maximum number of bytes of an error body to keep in [`ClientError::UnexpectedStatus`].
+const MAX_ERROR_BODY: usize = 512;
+
+/// Reject a non-2xx response before its body is parsed as if it were success.
+///
+/// Home Assistant answers failures with a JSON error envelope, and sometimes
+/// with an HTML page. Handing either to `serde_json` produced one of two bad
+/// outcomes, both of which were live bugs:
+///
+/// * an opaque `error decoding response body` that named neither the status nor
+///   the cause — what `get_calendars` reported on an instance whose calendar
+///   integration is not loaded, where the real answer is simply 404; or
+/// * worse, a body that *does* parse into a defaulted value, so a failure is
+///   reported as success — `call_service` treated a 500 as a successful no-op
+///   because only 400 was special-cased.
+///
+/// Checking the status first turns both into an error that says what happened.
+async fn ensure_success(response: reqwest::Response) -> Result<reqwest::Response> {
+    let status = response.status();
+    if status.is_success() {
+        return Ok(response);
+    }
+
+    // A body we cannot read must not mask the status, which is the useful part.
+    let body = response
+        .text()
+        .await
+        .unwrap_or_else(|e| format!("<failed to read body: {e}>"));
+
+    let mut body = body.trim().to_string();
+    if body.len() > MAX_ERROR_BODY {
+        body.truncate(MAX_ERROR_BODY);
+        body.push_str("... (truncated)");
+    }
+    if body.is_empty() {
+        body.push_str("<empty body>");
+    }
+
+    Err(ClientError::UnexpectedStatus { status, body })
 }
 
 /// Result type for REST client operations.
@@ -166,7 +216,11 @@ impl HaClient {
         if response.status() == StatusCode::NOT_FOUND {
             return Err(ClientError::ConfigNotFound);
         }
-        response.json().await.map_err(ClientError::Http)
+        ensure_success(response)
+            .await?
+            .json()
+            .await
+            .map_err(ClientError::Http)
     }
 
     /// Gets all entity states.
@@ -178,7 +232,11 @@ impl HaClient {
             .send()
             .await
             .map_err(ClientError::Http)?;
-        response.json().await.map_err(ClientError::Http)
+        ensure_success(response)
+            .await?
+            .json()
+            .await
+            .map_err(ClientError::Http)
     }
 
     /// Gets a specific entity's state.
@@ -194,7 +252,11 @@ impl HaClient {
         if response.status() == StatusCode::NOT_FOUND {
             return Err(ClientError::EntityNotFound(entity_id.to_string()));
         }
-        response.json().await.map_err(ClientError::Http)
+        ensure_success(response)
+            .await?
+            .json()
+            .await
+            .map_err(ClientError::Http)
     }
 
     /// Sets a state for an entity (creates or updates).
@@ -211,7 +273,11 @@ impl HaClient {
             .send()
             .await
             .map_err(ClientError::Http)?;
-        response.json().await.map_err(ClientError::Http)
+        ensure_success(response)
+            .await?
+            .json()
+            .await
+            .map_err(ClientError::Http)
     }
 
     /// Deletes an entity state.
@@ -239,7 +305,11 @@ impl HaClient {
             .send()
             .await
             .map_err(ClientError::Http)?;
-        response.json().await.map_err(ClientError::Http)
+        ensure_success(response)
+            .await?
+            .json()
+            .await
+            .map_err(ClientError::Http)
     }
 
     /// Calls a service.
@@ -276,6 +346,14 @@ impl HaClient {
             )));
         }
 
+        // Every other non-2xx must fail too. Previously only 400 was handled and
+        // anything else fell through to the parser below, whose
+        // `unwrap_or_default()` yields an empty `changed_states` — so a 500 from
+        // a *mutating* call was reported to the MCP client as a successful
+        // no-op. This is the one server allowed to change device state, which
+        // makes silently-swallowed write failures the worst case in the repo.
+        let response = ensure_success(response).await?;
+
         let response_data: serde_json::Value = response.json().await.map_err(ClientError::Http)?;
         let changed_states = response_data
             .get("changed_states")
@@ -301,7 +379,11 @@ impl HaClient {
             .send()
             .await
             .map_err(ClientError::Http)?;
-        response.json().await.map_err(ClientError::Http)
+        ensure_success(response)
+            .await?
+            .json()
+            .await
+            .map_err(ClientError::Http)
     }
 
     /// Fires an event.
@@ -318,7 +400,11 @@ impl HaClient {
             .send()
             .await
             .map_err(ClientError::Http)?;
-        response.json().await.map_err(ClientError::Http)
+        ensure_success(response)
+            .await?
+            .json()
+            .await
+            .map_err(ClientError::Http)
     }
 
     /// Renders a template.
@@ -354,7 +440,11 @@ impl HaClient {
             .send()
             .await
             .map_err(ClientError::Http)?;
-        response.json().await.map_err(ClientError::Http)
+        ensure_success(response)
+            .await?
+            .json()
+            .await
+            .map_err(ClientError::Http)
     }
 
     /// Gets calendar events for a specific calendar.
@@ -375,7 +465,11 @@ impl HaClient {
             .send()
             .await
             .map_err(ClientError::Http)?;
-        response.json().await.map_err(ClientError::Http)
+        ensure_success(response)
+            .await?
+            .json()
+            .await
+            .map_err(ClientError::Http)
     }
 
     /// Triggers a configuration check.
@@ -387,7 +481,11 @@ impl HaClient {
             .send()
             .await
             .map_err(ClientError::Http)?;
-        response.json().await.map_err(ClientError::Http)
+        ensure_success(response)
+            .await?
+            .json()
+            .await
+            .map_err(ClientError::Http)
     }
 
     /// Gets history for entities.
@@ -425,7 +523,11 @@ impl HaClient {
             .send()
             .await
             .map_err(ClientError::Http)?;
-        response.json().await.map_err(ClientError::Http)
+        ensure_success(response)
+            .await?
+            .json()
+            .await
+            .map_err(ClientError::Http)
     }
 
     /// Gets the error log.
