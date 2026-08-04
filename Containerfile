@@ -13,15 +13,25 @@ ARG RUNTIME_IMAGE=gcr.io/distroless/static-debian12:nonroot
 ARG TARGET=x86_64-unknown-linux-musl
 # Keep in sync with the toolchain in flake.nix; the base image's bundled rustc
 # is too old for the dependency tree (edition 2024 + recent deps).
-ARG RUST_VERSION=1.96.1
+#
+# Check the value with:  nix develop .#ci --command rustc --version
+#
+# Deliberately NOT named RUST_VERSION. The cargo-zigbuild base image sets
+# `ENV RUST_VERSION=1.85.0`, and an ENV inherited from the base image SHADOWS a
+# same-named ARG when `${...}` is expanded in a RUN instruction. So a build arg
+# called RUST_VERSION silently resolves to the image's 1.85.0 no matter what you
+# pass — which is why this file previously carried a hardcoded literal instead.
+ARG RUST_TOOLCHAIN=1.97.1
 
 # ---- build ------------------------------------------------------------------
 FROM ${BUILDER_IMAGE} AS build
 ARG BIN
 ARG TARGET
-# The base image pins an older rustc via RUSTUP_TOOLCHAIN; clear it and install
-# the toolchain we want (keep in sync with flake.nix). Hardcoded rather than via
-# ARG because the base image's env otherwise shadows it.
+# Re-declared because a global ARG (declared above the first FROM) is not
+# visible inside a build stage unless it is named again here.
+ARG RUST_TOOLCHAIN
+# The base image pins its bundled rustc via RUSTUP_TOOLCHAIN; clear it so the
+# `rustup default` below is what actually takes effect.
 ENV RUSTUP_TOOLCHAIN=
 WORKDIR /app
 
@@ -31,9 +41,15 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends cmake \
  && rm -rf /var/lib/apt/lists/*
 
-RUN rustup toolchain install 1.95.0 --profile minimal \
- && rustup default 1.95.0 \
- && rustup target add ${TARGET}
+# The `rustc --version` assertion is not redundant: if RUST_TOOLCHAIN is ever
+# shadowed or empty again, rustup silently falls back to the base image's own
+# toolchain and the build proceeds — surfacing much later as confusing MSRV
+# errors from unrelated dependencies rather than as a problem with this file.
+RUN rustup toolchain install ${RUST_TOOLCHAIN} --profile minimal \
+ && rustup default ${RUST_TOOLCHAIN} \
+ && rustup target add ${TARGET} \
+ && { rustc --version | grep -q "${RUST_TOOLCHAIN}" \
+      || { echo "error: active toolchain is not ${RUST_TOOLCHAIN} but $(rustc --version)"; exit 1; }; }
 
 COPY . .
 # Cache the cargo registry and target dir across local rebuilds.

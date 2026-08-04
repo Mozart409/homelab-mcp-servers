@@ -1,0 +1,101 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/woodpecker-ci/woodpecker/main/pipeline/frontend/yaml/linter/schema/schema.json
+#
+# Build and push one image per server binary to the homelab Harbor registry.
+# The CI equivalent of ./push_harbor.sh.
+#
+# ---------------------------------------------------------------------------
+# ONE-TIME SETUP REQUIRED -- this workflow cannot run until all three are done:
+#
+#   1. Repo secrets (Woodpecker -> repo -> Settings -> Secrets), both scoped to
+#      the `tag` event ONLY (never pull_request):
+#        HARBOR_USERNAME   Harbor robot account name
+#        HARBOR_PASSWORD   Harbor robot account token
+#
+#   2. Repo marked **Trusted** by a server admin. Required for `privileged`.
+#
+#   3. Server admin sets, with the tag pinned exactly as written below:
+#        WOODPECKER_PLUGINS_PRIVILEGED=woodpeckerci/plugin-docker-buildx:5
+#      Since Woodpecker 3.0 no plugin gets privileged by default; without this
+#      the step fails with an "insufficient privileges" error that looks like a
+#      YAML problem but is not.
+#
+# Why buildx and not kaniko: kaniko needs none of the above, which would make it
+# the obvious choice -- but it does not implement BuildKit's
+# `RUN --mount=type=cache`, which Containerfile relies on to share the cargo
+# registry and target dir across builds. Kaniko upstream was also archived in
+# June 2025. If you ever want to drop the privileged requirement, the move is to
+# delete the cache mounts from Containerfile and switch this to
+# woodpeckerci/plugin-kaniko -- at the cost of a cold cargo build per image.
+# ---------------------------------------------------------------------------
+
+# Only publish images for a commit whose tests already passed. `test` is the
+# workflow name, which Woodpecker derives from .woodpecker/test.yaml's filename.
+depends_on:
+  - test
+
+# Tags in this repo are UNPREFIXED -- cog.toml sets `tag_prefix = ""`, so they
+# look like `0.5.0`, not `v0.5.0`. A `refs/tags/v*` filter would match nothing
+# and releases would silently never build.
+when:
+  - event: tag
+
+matrix:
+  BIN:
+    # keep-sorted start
+    - hamcp-server
+    - lokimcp-server
+    - pbsmcp-server
+    - pgmcp-server
+    - prommcp-server
+    # keep-sorted end
+
+steps:
+  # Mirrors the guard in push_harbor.sh: refuse to publish if the git tag and
+  # the workspace version disagree. Without this, a mistagged commit produces
+  # images whose tag lies about the binary inside them -- and Harbor would
+  # happily accept them.
+  - name: verify-tag-matches-version
+    image: docker.io/library/alpine:3
+    commands:
+      - |
+        VERSION="$(awk '
+            /^\[/ { section = $0 }
+            section == "[workspace.package]" && /^[[:space:]]*version[[:space:]]*=/ {
+                gsub(/.*=[[:space:]]*"?/, ""); gsub(/".*/, ""); print; exit
+            }
+        ' Cargo.toml)"
+        [ -n "$VERSION" ] || { echo "error: no version in [workspace.package]"; exit 1; }
+        # Tolerate a leading v in case tag_prefix is ever changed.
+        TAG_VERSION="$${CI_COMMIT_TAG#v}"
+        echo "tag=$${CI_COMMIT_TAG} tag_version=$$TAG_VERSION cargo_version=$$VERSION"
+        [ "$$TAG_VERSION" = "$$VERSION" ] || {
+            echo "error: tag ($$TAG_VERSION) does not match Cargo version ($$VERSION)"
+            exit 1
+        }
+
+  - name: publish
+    image: woodpeckerci/plugin-docker-buildx:5
+    depends_on: [verify-tag-matches-version]
+    privileged: true
+    settings:
+      registry: homelab-harbor.dropbear-butterfly.ts.net
+      repo: homelab-harbor.dropbear-butterfly.ts.net/mcp-servers/${BIN}
+      dockerfile: Containerfile
+      # Containerfile cross-compiles to x86_64-unknown-linux-musl, so a second
+      # platform here would silently produce an amd64 binary in an arm64 image.
+      # Adding arm64 means parameterising TARGET, not just this list.
+      platforms: linux/amd64
+      build_args:
+        BIN: ${BIN}
+      tags:
+        - ${CI_COMMIT_TAG}
+        - latest
+      # Registry-backed layer cache. The `RUN --mount=type=cache` mounts inside
+      # Containerfile are daemon-local and do NOT travel here, so this caches the
+      # apt/rustup layers rather than the cargo build itself.
+      cache_from: type=registry,ref=homelab-harbor.dropbear-butterfly.ts.net/mcp-servers/${BIN}:buildcache
+      cache_to: type=registry,ref=homelab-harbor.dropbear-butterfly.ts.net/mcp-servers/${BIN}:buildcache,mode=max
+      username:
+        from_secret: HARBOR_USERNAME
+      password:
+        from_secret: HARBOR_PASSWORD

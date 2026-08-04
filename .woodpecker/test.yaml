@@ -1,0 +1,72 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/woodpecker-ci/woodpecker/main/pipeline/frontend/yaml/linter/schema/schema.json
+#
+# Lint + test the workspace.
+#
+# Why Nix rather than a `rust:1.x` image: the toolchain is pinned by
+# `flake.lock` (fenix), with no version literal anywhere in the repo. Naming a
+# rustc version in this file would create a second, hand-maintained pin that
+# drifts the moment anyone runs `nix flake update` — and because clippy runs
+# with `-D clippy::pedantic`, a CI toolchain even one minor ahead of the
+# workstation fails on lints that do not exist locally. Running the flake's own
+# `devShells.ci` makes that class of failure structurally impossible.
+#
+# The cost of that choice is closure realisation, which is what the Attic cache
+# below is for. Reads are public, so this works unauthenticated — including on
+# pull requests, where Woodpecker withholds secrets by default.
+
+when:
+  - event: [pull_request, manual]
+  - event: push
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+  - event: tag
+
+variables:
+  # `latest` is not reproducible; pin this to a released tag once you have
+  # confirmed which one your agent has cached.
+  - &nix_image 'nixos/nix:latest'
+  # Flakes are still gated behind experimental-features. `extra-substituters`
+  # (not `substituters`) appends to the image's defaults so cache.nixos.org is
+  # kept as a fallback when the homelab cache is unreachable.
+  - &nix_env
+    NIX_CONFIG: |
+      experimental-features = nix-command flakes
+      extra-substituters = https://cache.homelab.local/homelab
+      extra-trusted-public-keys = homelab:aswnRAo2zbP13gGnUTCINX78X/lURQgPAfrgNpHpQpY=
+      accept-flake-config = true
+
+steps:
+  # `just ci` is `lint-ci test` — fmt-check, clippy, cargo-deny, cargo test.
+  # It is deliberately the read-only variant: plain `just lint` runs `cargo fmt`,
+  # which rewrites files and would let unformatted code pass a pipeline.
+  - name: ci
+    image: *nix_image
+    environment: *nix_env
+    commands:
+      # Nix refuses to evaluate a flake in a repo it considers foreign-owned,
+      # and the clone step's uid does not match the step container's.
+      - git config --global --add safe.directory "$CI_WORKSPACE"
+      # --profile materialises the shell's closure as a GC root so the push
+      # step below has something concrete to upload. Without it the closure is
+      # only reachable through the eval cache and `attic push` has no path.
+      - nix develop --profile ./.ci-profile .#ci --command just ci
+
+  # Populate the cache so the next run skips closure realisation. Gated to
+  # trusted events: Woodpecker does not expose secrets to `pull_request` by
+  # default, and this must stay that way — a fork PR could otherwise exfiltrate
+  # the write token. Reads stay public, so PRs still get full cache benefit.
+  - name: cache-push
+    image: *nix_image
+    depends_on: [ci]
+    environment:
+      <<: *nix_env
+      ATTIC_PUSH_TOKEN:
+        from_secret: ATTIC_PUSH_TOKEN
+    commands:
+      - nix run nixpkgs#attic-client -- login homelab https://cache.homelab.local "$ATTIC_PUSH_TOKEN"
+      - nix run nixpkgs#attic-client -- push homelab:homelab ./.ci-profile
+    when:
+      - event: push
+        branch: ${CI_REPO_DEFAULT_BRANCH}
+      - event: tag
+    # A cache push failing must not fail a pipeline whose code is already green.
+    failure: ignore
