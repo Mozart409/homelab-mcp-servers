@@ -8,15 +8,32 @@
 //!   cargo test -p pgmcp --test integration
 //! ```
 //!
-//! When the variable is unset each test logs a skip notice and passes, so the
-//! suite stays green in environments without a database.
+//! or via the justfile: `just test-db`.
+//!
+//! Every test here is `#[ignore]`d, so a plain `cargo test` reports them as
+//! **ignored** rather than passed. They used to return early when
+//! `PGMCP_TEST_DATABASE_URL` was unset, which made a run that executed nothing
+//! look identical to a run that verified everything — including the read-only
+//! guarantee (AGENTS.md hard rule §1). `#[ignore]` makes the gap visible in the
+//! test output, and running with `--ignored` without the variable set now fails
+//! loudly instead of silently skipping.
 
 use pgmcp::{Config, PgClient};
 
-/// Connection string for the test database, or `None` to skip.
-fn test_url() -> Option<String> {
-    std::env::var("PGMCP_TEST_DATABASE_URL").ok()
+/// Connection string for the test database.
+///
+/// Returns the `VarError` rather than panicking: this helper lives outside any
+/// `#[test]` function, where the workspace's `clippy::unwrap_used` deny is not
+/// relaxed by `allow-unwrap-in-tests`. Callers unwrap it inside their test fn,
+/// where an unset variable is a genuine failure — reaching this code at all
+/// means someone explicitly asked for the `--ignored` DB suite.
+fn test_url() -> Result<String, std::env::VarError> {
+    std::env::var("PGMCP_TEST_DATABASE_URL")
 }
+
+/// Message shown when the DB suite is run without a database configured.
+const NO_URL: &str = "PGMCP_TEST_DATABASE_URL must be set to run the DB integration suite \
+     (see the module docs, or `just test-db`)";
 
 /// A [`Config`] pointing at `url` with small, test-friendly limits.
 fn test_config(url: String, statement_timeout_ms: u64) -> Config {
@@ -31,16 +48,18 @@ fn test_config(url: String, statement_timeout_ms: u64) -> Config {
 }
 
 /// Parse a [`PgClient::fetch_json`] result into a JSON value.
-fn parse(json: &str) -> serde_json::Value {
-    serde_json::from_str(json).expect("fetch_json must return valid JSON")
+///
+/// Returns the parse error instead of panicking: this helper lives outside any
+/// `#[test]` function, where the workspace's `clippy::expect_used` deny is not
+/// relaxed by `allow-expect-in-tests`. Callers unwrap it inside their test fn.
+fn parse(json: &str) -> serde_json::Result<serde_json::Value> {
+    serde_json::from_str(json)
 }
 
 #[tokio::test]
+#[ignore = "requires PGMCP_TEST_DATABASE_URL; run with --ignored (or `just test-db`)"]
 async fn basic_select_returns_json_rows() {
-    let Some(url) = test_url() else {
-        eprintln!("skip: PGMCP_TEST_DATABASE_URL unset");
-        return;
-    };
+    let url = test_url().expect(NO_URL);
     let client = PgClient::new(&test_config(url, 5_000)).unwrap();
 
     let json = client
@@ -49,17 +68,15 @@ async fn basic_select_returns_json_rows() {
         .unwrap();
 
     assert_eq!(
-        parse(&json),
+        parse(&json).unwrap(),
         serde_json::json!([{ "one": 1, "greeting": "hi" }])
     );
 }
 
 #[tokio::test]
+#[ignore = "requires PGMCP_TEST_DATABASE_URL; run with --ignored (or `just test-db`)"]
 async fn row_cap_limits_results() {
-    let Some(url) = test_url() else {
-        eprintln!("skip: PGMCP_TEST_DATABASE_URL unset");
-        return;
-    };
+    let url = test_url().expect(NO_URL);
     let client = PgClient::new(&test_config(url, 5_000)).unwrap();
 
     // generate_series yields 100 rows; the limit must trim it to 5.
@@ -68,16 +85,14 @@ async fn row_cap_limits_results() {
         .await
         .unwrap();
 
-    let rows = parse(&json);
+    let rows = parse(&json).unwrap();
     assert_eq!(rows.as_array().unwrap().len(), 5);
 }
 
 #[tokio::test]
+#[ignore = "requires PGMCP_TEST_DATABASE_URL; run with --ignored (or `just test-db`)"]
 async fn empty_result_is_an_empty_array() {
-    let Some(url) = test_url() else {
-        eprintln!("skip: PGMCP_TEST_DATABASE_URL unset");
-        return;
-    };
+    let url = test_url().expect(NO_URL);
     let client = PgClient::new(&test_config(url, 5_000)).unwrap();
 
     let json = client
@@ -85,15 +100,13 @@ async fn empty_result_is_an_empty_array() {
         .await
         .unwrap();
 
-    assert_eq!(parse(&json), serde_json::json!([]));
+    assert_eq!(parse(&json).unwrap(), serde_json::json!([]));
 }
 
 #[tokio::test]
+#[ignore = "requires PGMCP_TEST_DATABASE_URL; run with --ignored (or `just test-db`)"]
 async fn bind_params_are_passed_positionally() {
-    let Some(url) = test_url() else {
-        eprintln!("skip: PGMCP_TEST_DATABASE_URL unset");
-        return;
-    };
+    let url = test_url().expect(NO_URL);
     let client = PgClient::new(&test_config(url, 5_000)).unwrap();
 
     // The value arrives as text and is cast in SQL — proving it is bound, not
@@ -108,17 +121,15 @@ async fn bind_params_are_passed_positionally() {
         .unwrap();
 
     assert_eq!(
-        parse(&json),
+        parse(&json).unwrap(),
         serde_json::json!([{ "v": 42, "raw": "1; DROP TABLE x" }])
     );
 }
 
 #[tokio::test]
+#[ignore = "requires PGMCP_TEST_DATABASE_URL; run with --ignored (or `just test-db`)"]
 async fn statement_timeout_aborts_slow_queries() {
-    let Some(url) = test_url() else {
-        eprintln!("skip: PGMCP_TEST_DATABASE_URL unset");
-        return;
-    };
+    let url = test_url().expect(NO_URL);
     // 100ms budget vs a 2s sleep: must error rather than hang.
     let client = PgClient::new(&test_config(url, 100)).unwrap();
 
@@ -127,11 +138,9 @@ async fn statement_timeout_aborts_slow_queries() {
 }
 
 #[tokio::test]
+#[ignore = "requires PGMCP_TEST_DATABASE_URL; run with --ignored (or `just test-db`)"]
 async fn writes_are_rejected_in_read_only_transaction() {
-    let Some(url) = test_url() else {
-        eprintln!("skip: PGMCP_TEST_DATABASE_URL unset");
-        return;
-    };
+    let url = test_url().expect(NO_URL);
 
     // Set up a real table via a separate pool (the client is read-only and
     // cannot create one).
