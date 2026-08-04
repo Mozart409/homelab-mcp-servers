@@ -18,3 +18,6 @@ serde_json.workspace = true
 # keep-sorted start
 tokio.workspace = true
 # keep-sorted end
+
+[lints]
+workspace = true
