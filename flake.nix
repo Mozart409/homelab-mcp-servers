@@ -4,7 +4,10 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    rust-overlay.url = "github:oxalica/rust-overlay";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     crane.url = "github:ipetkov/crane";
   };
 
@@ -12,18 +15,23 @@
     self,
     nixpkgs,
     flake-utils,
-    rust-overlay,
+    fenix,
     crane,
   }:
     flake-utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {
         inherit system;
         config.allowUnfree = true;
-        overlays = [rust-overlay.overlays.default];
       };
-      rust = pkgs.rust-bin.stable."1.96.1".default.override {
-        extensions = ["rustfmt" "clippy" "rust-src"];
-      };
+
+      # Latest stable Rust, pinned by flake.lock rather than a literal version.
+      rust = fenix.packages.${system}.stable.withComponents [
+        "cargo"
+        "clippy"
+        "rust-src"
+        "rustc"
+        "rustfmt"
+      ];
 
       craneLib = (crane.mkLib pkgs).overrideToolchain rust;
 
@@ -87,6 +95,7 @@
           cargo-edit
           cargo-watch
           cargo-workspaces
+          claude-code
           cocogitto
           just
           keep-sorted
@@ -167,7 +176,9 @@
         # Postgres MCP named `pg-warehouse` with `serverType = "pgmcp-server"`
         # picks up the `PG` prefix instead of a nonsensical `PG-WAREHOUSE` one.
         serverDefaults = type:
-          knownServers.${type} or {
+          knownServers.${
+            type
+          } or {
             prefix = lib.toUpper type;
             port = 8080;
             hasToken = true;
