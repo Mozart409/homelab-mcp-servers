@@ -110,9 +110,36 @@
           trivy
           # keep-sorted end
         ];
+        # Installing the git hooks is a developer-workstation concern. In CI the
+        # checkout is throwaway and `.git/hooks` is never consulted, so skip it —
+        # it would only add noise (or fail) on a bare clone.
         shellHook = ''
-          lefthook install
+          if [ -z "''${CI:-}" ]; then
+            lefthook install
+          fi
         '';
+      };
+
+      # Minimal shell for CI: exactly what `just ci` (fmt + clippy + deny +
+      # test) invokes, and nothing else.
+      #
+      # This exists because `devShells.default` carries the whole workstation
+      # toolbox — editors' agents, podman, trivy, sqlx-cli, tailwind. A CI
+      # runner would have to realise that entire closure before it could run a
+      # single lint, and every one of those inputs is a cache miss waiting to
+      # happen on an unrelated version bump. Keeping the CI closure small is
+      # what makes a cold pipeline (empty binary cache) merely slow rather than
+      # unusable.
+      #
+      # `rust` is the same fenix derivation the default shell uses, so CI and
+      # the workstation run byte-identical rustc/clippy/rustfmt — which matters
+      # because clippy's pedantic set shifts between toolchain releases.
+      devShells.ci = pkgs.mkShell {
+        buildInputs = [
+          pkgs.cargo-deny
+          pkgs.just
+          rust
+        ];
       };
     })
     // {

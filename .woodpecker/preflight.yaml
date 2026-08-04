@@ -1,0 +1,66 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/woodpecker-ci/woodpecker/main/pipeline/frontend/yaml/linter/schema/schema.json
+#
+# One-off environment check. Run it from the Woodpecker UI ("Run pipeline" ->
+# manual) before trusting test.yaml, and again whenever CI starts behaving
+# oddly.
+#
+# Why this exists as a pipeline rather than a shell script: the question that
+# actually matters -- "can an agent container reach the Attic cache?" -- cannot
+# be answered from your workstation. The agent may sit on a different Docker
+# network, with different DNS, and without your host's CA bundle. The only
+# faithful test runs in the same place the real steps run.
+#
+# Nothing here fails the pipeline; every check reports and continues, so one
+# run gives you the full picture instead of stopping at the first problem.
+#
+# NOTE ON QUOTING: every command below is a quoted YAML scalar. An unquoted
+# command containing a colon-space (`foo: bar`) is parsed as a YAML *map*, not a
+# string, and Woodpecker rejects the workflow. Keep the quotes when editing.
+
+when:
+  - event: manual
+
+steps:
+  - name: attic-reachability
+    image: nixos/nix:latest
+    environment:
+      NIX_CONFIG: |
+        experimental-features = nix-command flakes
+        extra-substituters = https://cache.homelab.local/homelab
+        extra-trusted-public-keys = homelab:aswnRAo2zbP13gGnUTCINX78X/lURQgPAfrgNpHpQpY=
+    commands:
+      - 'echo "=== 1. DNS - does the agent resolve the cache host? ==="'
+      # `.local` is mDNS territory. If your workstation resolves this via Avahi
+      # or an /etc/hosts entry, a container very likely will NOT.
+      - 'getent hosts cache.homelab.local || echo "FAIL - cache.homelab.local does not resolve in this container"'
+
+      - 'echo "=== 2. TLS and HTTP - is it reachable and trusted? ==="'
+      # A real Nix binary cache serves /nix-cache-info. A certificate error here
+      # means the cache uses an internal CA the container does not trust -- the
+      # fix is mounting your CA bundle onto the agent, not editing this file.
+      - 'nix run nixpkgs#curl -- -fsS --max-time 15 https://cache.homelab.local/homelab/nix-cache-info || echo "FAIL - cannot fetch nix-cache-info (DNS, TLS trust, or cache down)"'
+
+      - 'echo "=== 3. Substitution - will Nix actually USE it? ==="'
+      # Reachability is not the same as being used. Ask Nix directly whether the
+      # configured substituter can serve a path.
+      - 'nix path-info --store https://cache.homelab.local/homelab nixpkgs#hello 2>&1 | head -c 400 || echo "NOTE - cache has no entry for this path yet (expected before the first push)"'
+
+      - 'echo "=== 4. Effective Nix config, as the step really sees it ==="'
+      - "nix config show | grep -Ei 'substituters|trusted-public-keys|experimental-features'"
+    failure: ignore
+
+  - name: flake-eval
+    image: nixos/nix:latest
+    depends_on: []
+    environment:
+      NIX_CONFIG: |
+        experimental-features = nix-command flakes
+    commands:
+      # `safe.directory` is the usual first failure -- the clone step's uid does
+      # not match this container's, so git refuses to read the repo and the
+      # flake evaluation fails with a confusing error.
+      - 'git config --global --add safe.directory "$CI_WORKSPACE"'
+      - 'nix flake metadata --no-write-lock-file'
+      - 'echo "=== toolchain this repo pins (must match Containerfile RUST_VERSION) ==="'
+      - 'nix develop .#ci --command rustc --version'
+    failure: ignore

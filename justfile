@@ -30,6 +30,10 @@ test:
 test-pkg pkg:
     cargo test -p {{ pkg }}
 
+# Run the pgmcp DB integration tests (needs PGMCP_TEST_DATABASE_URL; `just test` marks them ignored)
+test-db:
+    cargo test -p pgmcp --test integration -- --ignored
+
 # Watch a specific package and re-run its binary (e.g. `just watch-pkg pbsmcp-server`)
 watch-pkg pkg:
     cargo watch -c -x "run -p {{ pkg }}"
@@ -45,6 +49,10 @@ clear:
 # Format all Rust code
 fmt:
     cargo fmt
+
+# Verify formatting without touching the tree (fails on unformatted code)
+fmt-check:
+    cargo fmt --all --check
 
 # Run clippy with pedantic lints
 clippy:
@@ -63,8 +71,12 @@ deny:
 audit:
     cargo audit
 
-# Run all linting checks (format, clippy, deny)
+# Run all linting checks (format, clippy, deny) — reformats in place
 lint: fmt clippy deny
+
+# Same checks as `lint`, but read-only — this is the variant CI must use, since
+# `fmt` rewrites files and would let unformatted code pass a pipeline silently.
+lint-ci: fmt-check clippy deny
 
 # Run keep-sorted on staged files or all tracked files
 sort:
@@ -74,8 +86,9 @@ sort:
 # CI Simulation
 # ------------------------------------------------------------------------------
 
-# Run everything CI would run (pre-commit + pre-push)
-ci: lint test
+# Run everything CI would run. Read-only: never rewrites the working tree, so a
+# green local run means the same thing a green pipeline does.
+ci: lint-ci test
 
 # Run pre-commit hooks manually
 pre-commit:

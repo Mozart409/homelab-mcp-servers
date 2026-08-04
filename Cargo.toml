@@ -16,7 +16,7 @@ color-eyre = "0.6"
 dotenvy = "0.15"
 percent-encoding = "2"
 reqwest = { version = "0.13", default-features = false, features = ["json", "query", "rustls"] }
-rmcp = { version = "2.2", features = ["transport-streamable-http-server", "schemars"] }
+rmcp = { version = "3.1", features = ["transport-streamable-http-server", "schemars"] }
 schemars = "1.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -25,9 +25,24 @@ thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-ulid = "2"
+ulid = "3"
 url = "2.5"
 utoipa = "5"
 utoipa-axum = "0.2"
 utoipa-scalar = { version = "0.3", features = ["axum"] }
+wiremock = "0.6"
+# keep-sorted end
+
+# Panic-prone shortcuts are denied workspace-wide: these servers are long-running
+# daemons, so a panic takes down every in-flight MCP request, not just the one
+# that hit the bad path. Propagate errors with `color_eyre::eyre::Result` in
+# lib/`run()` code, or map into `rmcp::ErrorData` inside `#[tool]` methods.
+# Tests are exempt via `clippy.toml` (`allow-unwrap-in-tests` etc.).
+[workspace.lints.clippy]
+# keep-sorted start
+expect_used = "deny"
+indexing_slicing = "deny"
+panic = "deny"
+unwrap_in_result = "deny"
+unwrap_used = "deny"
 # keep-sorted end
