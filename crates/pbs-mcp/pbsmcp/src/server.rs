@@ -335,7 +335,19 @@ impl ServerHandler for PbsServer {
 
 #[cfg(test)]
 mod tests {
-    use super::tail_start;
+    use super::{
+        GroupsParams, Parameters, PbsServer, SnapshotParams, StoreParams, TaskLogParams,
+        TaskParams, TasksParams, envelope_total, tail_start,
+    };
+    use crate::client::PbsClient;
+    use crate::config::Config;
+    use serde_json::json;
+    use wiremock::matchers::{any, method, path};
+    use wiremock::{Mock, MockServer, Request, ResponseTemplate};
+
+    const API_KEY: &str = "mcp@pbs!homelab:2f9c-secret";
+
+    // ---- pure helpers -------------------------------------------------------
 
     #[test]
     fn tail_start_when_tail_less_than_total() {
@@ -351,5 +363,394 @@ mod tests {
     #[test]
     fn tail_start_when_tail_equals_total() {
         assert_eq!(tail_start(100, 100), 0);
+    }
+
+    #[test]
+    fn envelope_total_reads_the_total_field() {
+        let env = json!({ "data": ["line one", "line two"], "total": 2 });
+        assert_eq!(envelope_total(&env).unwrap(), 2);
+    }
+
+    #[test]
+    fn envelope_total_accepts_zero_and_an_empty_data_array() {
+        // A task that has not written any log lines yet: valid, total is 0.
+        let env = json!({ "data": [], "total": 0 });
+        assert_eq!(envelope_total(&env).unwrap(), 0);
+    }
+
+    #[test]
+    fn envelope_total_errors_instead_of_panicking() {
+        // Every failure mode must surface as `Err(ErrorData)` — these are
+        // long-running daemons, a panic would take out unrelated in-flight
+        // requests (AGENTS.md hard rule §7).
+        let bad = [
+            // Missing key entirely.
+            json!({ "data": [] }),
+            // Present but the wrong JSON type.
+            json!({ "data": [], "total": "12" }),
+            json!({ "data": [], "total": null }),
+            json!({ "data": [], "total": 12.5 }),
+            // Negative: `as_u64` refuses it rather than wrapping.
+            json!({ "data": [], "total": -1 }),
+            // Envelope is not an object at all.
+            json!([]),
+            json!("nope"),
+        ];
+
+        for env in &bad {
+            let err = envelope_total(env).unwrap_err();
+            assert!(
+                err.message.contains("total"),
+                "error for {env} should mention the missing field, got: {}",
+                err.message
+            );
+        }
+    }
+
+    // ---- wiremock-backed tool tests -----------------------------------------
+
+    /// Build a server pointed at a mock upstream.
+    ///
+    /// Returns `Result` rather than unwrapping: the clippy test exemption keys
+    /// off the enclosing `#[test]` fn, so a free helper is still subject to the
+    /// workspace `unwrap_used`/`expect_used` denials.
+    fn server_for(base_url: &str) -> color_eyre::eyre::Result<PbsServer> {
+        let config = Config {
+            base_url: base_url.to_string(),
+            api_key: API_KEY.to_string(),
+            node: "pbs01".to_string(),
+            insecure: false,
+            bind: "127.0.0.1:8080".to_string(),
+            allowed_hosts: None,
+        };
+        Ok(PbsServer::new(PbsClient::new(&config)?))
+    }
+
+    /// An upstream that answers anything with an empty PBS envelope.
+    fn ok_envelope() -> ResponseTemplate {
+        ResponseTemplate::new(200).set_body_json(json!({ "data": [], "total": 0 }))
+    }
+
+    /// Decode a recorded request's query string into sorted `(key, value)` pairs.
+    fn query_pairs(req: &Request) -> Vec<(String, String)> {
+        let mut pairs: Vec<(String, String)> = req
+            .url
+            .query_pairs()
+            .map(|(k, v)| (k.into_owned(), v.into_owned()))
+            .collect();
+        pairs.sort();
+        pairs
+    }
+
+    #[tokio::test]
+    async fn list_datastores_requests_the_admin_datastore_path() {
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api2/json/admin/datastore"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [] })))
+            .expect(1)
+            .mount(&mock)
+            .await;
+
+        let out = server_for(&mock.uri())
+            .unwrap()
+            .list_datastores()
+            .await
+            .unwrap();
+        assert_eq!(out, "[]");
+
+        let reqs = mock.received_requests().await.unwrap();
+        let [req] = reqs.as_slice() else {
+            panic!("expected exactly 1 request, got {}", reqs.len())
+        };
+        assert_eq!(req.url.path(), "/api2/json/admin/datastore");
+        // No optional params: no query string at all, not an empty `?`.
+        assert_eq!(req.url.query(), None);
+    }
+
+    #[tokio::test]
+    async fn authorization_header_uses_the_pbsapitoken_scheme() {
+        let mock = MockServer::start().await;
+        Mock::given(any())
+            .respond_with(ok_envelope())
+            .mount(&mock)
+            .await;
+
+        server_for(&mock.uri())
+            .unwrap()
+            .list_datastores()
+            .await
+            .unwrap();
+
+        let reqs = mock.received_requests().await.unwrap();
+        let auth = reqs.first().unwrap().headers.get("authorization").unwrap();
+        // Pin the exact wire format: PBS rejects `Bearer`/`PVEAPIToken` and any
+        // stray space around `=`. Easy to break silently, so assert byte-exact.
+        assert_eq!(auth.to_str().unwrap(), format!("PBSAPIToken={API_KEY}"));
+    }
+
+    #[tokio::test]
+    async fn list_snapshots_only_sends_provided_optional_params() {
+        let mock = MockServer::start().await;
+        Mock::given(any())
+            .respond_with(ok_envelope())
+            .mount(&mock)
+            .await;
+        let srv = server_for(&mock.uri()).unwrap();
+
+        // Nothing optional supplied -> bare path, no query string.
+        srv.list_snapshots(Parameters(SnapshotParams {
+            store: "r2-store".to_string(),
+            namespace: None,
+            backup_type: None,
+            backup_id: None,
+        }))
+        .await
+        .unwrap();
+
+        // All optionals supplied -> each appears under its PBS parameter name.
+        srv.list_snapshots(Parameters(SnapshotParams {
+            store: "r2-store".to_string(),
+            namespace: Some("tenants/a".to_string()),
+            backup_type: Some("ct".to_string()),
+            backup_id: Some("104".to_string()),
+        }))
+        .await
+        .unwrap();
+
+        let reqs = mock.received_requests().await.unwrap();
+        let [bare, filtered] = reqs.as_slice() else {
+            panic!("expected exactly 2 requests, got {}", reqs.len())
+        };
+
+        // The store name is percent-encoded into the path (`-` -> `%2D`).
+        assert_eq!(
+            bare.url.path(),
+            "/api2/json/admin/datastore/r2%2Dstore/snapshots"
+        );
+        assert_eq!(bare.url.query(), None);
+
+        assert_eq!(
+            query_pairs(filtered),
+            vec![
+                ("backup-id".to_string(), "104".to_string()),
+                ("backup-type".to_string(), "ct".to_string()),
+                ("ns".to_string(), "tenants/a".to_string()),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn list_tasks_defaults_limit_and_omits_unset_filters() {
+        let mock = MockServer::start().await;
+        Mock::given(any())
+            .respond_with(ok_envelope())
+            .mount(&mock)
+            .await;
+        let srv = server_for(&mock.uri()).unwrap();
+
+        // Nothing supplied -> only the default `limit=50`; the boolean filters
+        // are absent rather than sent as `0`.
+        srv.list_tasks(Parameters(TasksParams {
+            limit: None,
+            errors_only: None,
+            running: None,
+            since: None,
+        }))
+        .await
+        .unwrap();
+
+        // Explicit `false` is still an omission, not `errors=0`.
+        srv.list_tasks(Parameters(TasksParams {
+            limit: Some(5),
+            errors_only: Some(false),
+            running: Some(false),
+            since: None,
+        }))
+        .await
+        .unwrap();
+
+        // All filters on.
+        srv.list_tasks(Parameters(TasksParams {
+            limit: Some(5),
+            errors_only: Some(true),
+            running: Some(true),
+            since: Some(1_700_000_000),
+        }))
+        .await
+        .unwrap();
+
+        let reqs = mock.received_requests().await.unwrap();
+        let [defaults, explicit_false, all_on] = reqs.as_slice() else {
+            panic!("expected exactly 3 requests, got {}", reqs.len())
+        };
+        assert_eq!(defaults.url.path(), "/api2/json/nodes/pbs01/tasks");
+
+        assert_eq!(
+            query_pairs(defaults),
+            vec![("limit".to_string(), "50".to_string())]
+        );
+        assert_eq!(
+            query_pairs(explicit_false),
+            vec![("limit".to_string(), "5".to_string())]
+        );
+        assert_eq!(
+            query_pairs(all_on),
+            vec![
+                ("errors".to_string(), "1".to_string()),
+                ("limit".to_string(), "5".to_string()),
+                ("running".to_string(), "1".to_string()),
+                ("since".to_string(), "1700000000".to_string()),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn upstream_401_surfaces_as_an_error_not_a_panic() {
+        let mock = MockServer::start().await;
+        Mock::given(any())
+            .respond_with(ResponseTemplate::new(401).set_body_string("authentication failure"))
+            .mount(&mock)
+            .await;
+
+        let err = server_for(&mock.uri())
+            .unwrap()
+            .list_datastores()
+            .await
+            .unwrap_err();
+        assert!(
+            err.message.contains("401"),
+            "status should be surfaced, got: {}",
+            err.message
+        );
+        assert!(err.message.contains("authentication failure"));
+    }
+
+    #[tokio::test]
+    async fn upstream_500_surfaces_as_an_error_not_a_panic() {
+        let mock = MockServer::start().await;
+        Mock::given(any())
+            .respond_with(ResponseTemplate::new(500).set_body_string("internal error"))
+            .mount(&mock)
+            .await;
+
+        let err = server_for(&mock.uri())
+            .unwrap()
+            .node_status()
+            .await
+            .unwrap_err();
+        assert!(
+            err.message.contains("500"),
+            "status should be surfaced, got: {}",
+            err.message
+        );
+    }
+
+    #[tokio::test]
+    async fn task_log_rejects_tail_and_start_together() {
+        let mock = MockServer::start().await;
+        Mock::given(any())
+            .respond_with(ok_envelope())
+            .mount(&mock)
+            .await;
+
+        let err = server_for(&mock.uri())
+            .unwrap()
+            .task_log(Parameters(TaskLogParams {
+                upid: "UPID:pbs01:0000A1B2:00000000:66000000:backup:store:root@pam:".to_string(),
+                start: Some(10),
+                limit: None,
+                tail: Some(10),
+            }))
+            .await
+            .unwrap_err();
+        assert!(err.message.contains("mutually exclusive"));
+
+        // The guard must reject before touching the upstream.
+        assert!(mock.received_requests().await.unwrap().is_empty());
+    }
+
+    /// AGENTS.md hard rule §1, made executable: this server is read-only, so a
+    /// representative sweep of every tool must produce nothing but bodyless
+    /// `GET`s. The matcher accepts ANY method so a regression shows up as a
+    /// failed assertion here rather than as an unmatched-request 404.
+    #[tokio::test]
+    async fn every_tool_issues_only_get_requests() {
+        let mock = MockServer::start().await;
+        Mock::given(any())
+            .respond_with(ok_envelope())
+            .mount(&mock)
+            .await;
+        let srv = server_for(&mock.uri()).unwrap();
+        let upid = "UPID:pbs01:0000A1B2:00000000:66000000:backup:store:root@pam:".to_string();
+
+        srv.list_datastores().await.unwrap();
+        srv.datastore_status(Parameters(StoreParams {
+            store: "r2-store".to_string(),
+        }))
+        .await
+        .unwrap();
+        srv.list_groups(Parameters(GroupsParams {
+            store: "r2-store".to_string(),
+            namespace: Some("tenants/a".to_string()),
+        }))
+        .await
+        .unwrap();
+        srv.list_snapshots(Parameters(SnapshotParams {
+            store: "r2-store".to_string(),
+            namespace: None,
+            backup_type: Some("ct".to_string()),
+            backup_id: None,
+        }))
+        .await
+        .unwrap();
+        srv.list_tasks(Parameters(TasksParams {
+            limit: Some(5),
+            errors_only: Some(true),
+            running: Some(true),
+            since: Some(1),
+        }))
+        .await
+        .unwrap();
+        srv.task_status(Parameters(TaskParams { upid: upid.clone() }))
+            .await
+            .unwrap();
+        srv.task_log(Parameters(TaskLogParams {
+            upid: upid.clone(),
+            start: Some(0),
+            limit: Some(10),
+            tail: None,
+        }))
+        .await
+        .unwrap();
+        // The `tail` path issues an extra probe request; it must be a GET too.
+        srv.task_log(Parameters(TaskLogParams {
+            upid,
+            start: None,
+            limit: None,
+            tail: Some(10),
+        }))
+        .await
+        .unwrap();
+        srv.gc_status().await.unwrap();
+        srv.node_status().await.unwrap();
+
+        let reqs = mock.received_requests().await.unwrap();
+        // 10 tool calls, plus the tail probe.
+        assert_eq!(reqs.len(), 11);
+        for req in &reqs {
+            assert_eq!(
+                req.method.to_string(),
+                "GET",
+                "{} used a non-GET method — this server must be read-only",
+                req.url
+            );
+            assert!(
+                req.body.is_empty(),
+                "{} carried a request body — GETs here must be bodyless",
+                req.url
+            );
+            assert!(req.url.path().starts_with("/api2/json/"));
+        }
     }
 }
