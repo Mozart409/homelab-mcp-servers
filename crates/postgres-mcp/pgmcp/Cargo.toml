@@ -23,3 +23,6 @@ serde_json.workspace = true
 sqlx.workspace = true
 tokio.workspace = true
 # keep-sorted end
+
+[lints]
+workspace = true
