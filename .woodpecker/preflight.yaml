@@ -3,29 +3,33 @@
 # One-off environment check. Run it from the Woodpecker UI ("Run pipeline" ->
 # manual) before trusting test.yaml, and again whenever CI starts behaving oddly.
 #
-# The question that matters -- "can an agent container reach the things Nix
-# needs?" -- cannot be answered from a workstation. The agent may sit on a
-# different network, with different DNS, and without your CA bundle. The only
-# faithful test runs where the real steps run.
+# The question that matters -- "can an agent container reach what Nix needs?" --
+# cannot be answered from a workstation. The agent may sit on a different
+# network, with different DNS, and without your CA bundle.
 #
-# DESIGN NOTES (learned the hard way, from a run that hung for 7 minutes):
+# WHY SEVERAL IMAGES: running the same probe from different base images is what
+# separates "the agent cannot reach this" from "this one image does not trust
+# the certificate". Those two have completely different fixes, and a single-image
+# check cannot tell them apart. busybox answers DNS with no TLS involved at all;
+# curlimages/curl carries an independent, modern CA bundle; nixos/nix is the
+# image CI actually uses. If only the nixos/nix row fails, it is a CA-bundle
+# problem, not a network problem.
 #
-#   * Every check is wrapped in `timeout`. Without it an unreachable host burns
-#     the connect timeout on every retry, and a diagnostic step that takes seven
-#     minutes to say "no" is worse than useless.
-#   * Nothing here fetches from the network in order to *test* the network. The
-#     first version ran `nix run nixpkgs#curl`, which has to download nixpkgs
-#     before it can check connectivity -- so a connectivity failure surfaced as
-#     an unrelated fetch error. `nix store info` uses only what is already in
-#     the image.
-#   * Checks are ordered narrow-to-broad (DNS -> your cache -> public egress ->
-#     flake inputs) so the first failure localises the problem instead of just
-#     reporting that everything is broken.
-#   * Every step is `failure: ignore`, so ONE run reports ALL findings. That
-#     means a green tick here does NOT mean the checks passed -- read the log.
+# DESIGN NOTES (learned from a run that hung for 7 minutes and from a check that
+# reported a false DNS failure):
 #
-# QUOTING: commands are quoted YAML scalars. An unquoted command containing a
-# colon-space is parsed as a YAML map and Woodpecker rejects the workflow.
+#   * Every probe is time-bounded. A diagnostic that takes 7 minutes to say "no"
+#     is worse than useless.
+#   * `getent` is NOT in the nixos/nix image. An earlier version used it and
+#     reported "does not resolve" for every host, sending the reader after
+#     entirely the wrong problem. busybox `nslookup` is used instead.
+#   * Nothing fetches from the network in order to test the network.
+#   * Every step is `depends_on: []` (parallel) and `failure: ignore`, so ONE run
+#     reports ALL findings. A green tick therefore does NOT mean the checks
+#     passed -- read the log body.
+#
+# QUOTING: an unquoted command containing a colon-space is parsed as a YAML map
+# and Woodpecker rejects the workflow. Keep commands quoted or in block scalars.
 
 when:
   - event: manual
@@ -33,93 +37,166 @@ when:
 variables:
   - &nix_image 'nixos/nix:latest'
   - &nix_env
-    # connect-timeout keeps an unreachable substituter from stalling the step;
-    # without it Nix waits far longer than any of these checks should take.
     NIX_CONFIG: |
       experimental-features = nix-command flakes
       connect-timeout = 5
       stalled-download-timeout = 30
 
+  # Trust the homelab step-ca root inside the container.
+  #
+  # The workstation trusts it via NixOS `security.pki.certificates`; a container
+  # gets a stock bundle and therefore does not. That is why the Attic cache
+  # fails TLS here while the very same URL returns 200 from a shell on the host.
+  #
+  # The certificate is committed at .woodpecker/homelab-ca.crt. A ROOT CA
+  # CERTIFICATE IS PUBLIC -- it is handed to every client that talks to the
+  # homelab; the secret half is the CA private key, which lives only in step-ca.
+  # Committing it is what lets this work with no volume mounts, no `Volumes`
+  # trust level, and no custom agent image.
+  #
+  # Appending to the image's own bundle (rather than replacing it) keeps
+  # cache.nixos.org and github.com working.
+  - &ca_setup |
+    set -e
+    base=""
+    for c in /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-bundle.crt "$NIX_SSL_CERT_FILE"; do
+      if [ -n "$c" ] && [ -r "$c" ]; then base="$c"; break; fi
+    done
+    bundle=/tmp/homelab-ca-bundle.crt
+    { if [ -n "$base" ]; then cat "$base"; fi; cat .woodpecker/homelab-ca.crt; } > "$bundle"
+    # NIX_SSL_CERT_FILE for nix, CURL_CA_BUNDLE for curl, SSL_CERT_FILE for
+    # everything else linked against OpenSSL.
+    export NIX_SSL_CERT_FILE="$bundle"
+    export CURL_CA_BUNDLE="$bundle"
+    export SSL_CERT_FILE="$bundle"
+    echo "trust store: $bundle (base: ${base:-none}, +1 homelab root)"
+
+  # Shared probe, reused verbatim by every curl-capable image so the rows are
+  # genuinely comparable.
+  - &curl_probe |
+    # Woodpecker runs steps under `set -e`; disable it so every probe runs.
+    set +e
+
+    # curl's exit codes separate the failure modes precisely:
+    #   6  -> DNS could not resolve
+    #   7  -> resolved but could not connect (firewall / routing)
+    #   28 -> timed out
+    #   35/60/77 -> TLS: certificate not trusted by THIS container
+    # On a TLS failure the probe retries with --insecure. If that succeeds, the
+    # host is reachable and the only problem is trust -- which is a completely
+    # different fix from "unreachable", and worth stating outright.
+    probe() {
+      url="$1"; label="$2"
+      body=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "$url" 2>&1)
+      rc=$?
+      case "$rc" in
+        0)  echo "OK    $label -- HTTP $body" ;;
+        6)  echo "FAIL  $label -- DNS: could not resolve host" ;;
+        7)  echo "FAIL  $label -- connected nowhere (firewall or routing)" ;;
+        28) echo "FAIL  $label -- timed out" ;;
+        22) echo "WARN  $label -- reachable, HTTP error: $body" ;;
+        35|60|77)
+            insec=$(curl -sSk --max-time 15 -o /dev/null -w '%{http_code}' "$url" 2>&1)
+            if [ $? -eq 0 ]; then
+              echo "FAIL  $label -- TLS TRUST ONLY. Reachable (HTTP $insec with --insecure);"
+              echo "      this container does not trust the issuing CA. Fix the trust store,"
+              echo "      not the network."
+            else
+              echo "FAIL  $label -- TLS error and unreachable even with --insecure: $body"
+            fi ;;
+        *)  echo "FAIL  $label -- curl exit $rc: $body" ;;
+      esac
+    }
+
+    echo "--- internal ---"
+    probe https://cache.homelab.local/homelab/nix-cache-info "attic cache"
+    echo "--- external (needed to realise the CI shell on a cold cache) ---"
+    probe https://cache.nixos.org/nix-cache-info "cache.nixos.org"
+    probe https://github.com/ "github.com (flake inputs)"
+
 steps:
   # ---------------------------------------------------------------------------
-  # 1. DNS — narrowest check. Distinguishes "no DNS at all" from "internal DNS
-  #    only", which is the difference between a broken agent and a firewall.
+  # DNS only, no TLS in the picture. If a name fails here it fails everywhere,
+  # and nothing about certificates is worth reading until this passes.
   # ---------------------------------------------------------------------------
-  - name: reachability
-    image: *nix_image
+  - name: dns-busybox
+    image: docker.io/library/busybox:latest
     depends_on: []
     commands:
       - |
-        # Woodpecker runs steps under `set -e`; turn it off so every probe runs
-        # and one pass reports the full picture instead of stopping at the first
-        # failure.
         set +e
-
-        # `getent` is NOT in the nixos/nix image -- an earlier version of this
-        # file used it and reported a false "does not resolve" for every host,
-        # which is worse than no check at all. `curl` IS in the image, and its
-        # exit codes separate the failure modes precisely:
-        #   6  -> DNS could not resolve
-        #   7  -> resolved, but could not connect (firewall / routing)
-        #   28 -> timed out
-        #   35/60/77 -> TLS: an internal CA the container does not trust
-        probe() {
-          url="$1"; label="$2"
-          body=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "$url" 2>&1)
-          rc=$?
-          case "$rc" in
-            0)        echo "OK    $label -- HTTP $body" ;;
-            6)        echo "FAIL  $label -- DNS: could not resolve host" ;;
-            7)        echo "FAIL  $label -- connected nowhere (firewall or routing)" ;;
-            28)       echo "FAIL  $label -- timed out" ;;
-            35|60|77) echo "FAIL  $label -- TLS trust (internal CA not in the container's bundle): $body" ;;
-            22)       echo "WARN  $label -- reachable but returned an HTTP error: $body" ;;
-            *)        echo "FAIL  $label -- curl exit $rc: $body" ;;
-          esac
-        }
-
-        echo "--- internal ---"
-        probe https://cache.homelab.local/homelab/nix-cache-info "attic cache"
-        echo "--- external (needed to realise the CI shell on a cold cache) ---"
-        probe https://cache.nixos.org/nix-cache-info "cache.nixos.org"
-        probe https://github.com/ "github.com (flake inputs)"
+        for h in cache.homelab.local cache.nixos.org github.com; do
+          if timeout 10 nslookup "$h" >/dev/null 2>&1; then
+            echo "OK    $h resolves"
+          else
+            echo "FAIL  $h does NOT resolve"
+          fi
+        done
+        echo "--- resolver the agent handed this container ---"
+        cat /etc/resolv.conf
     failure: ignore
 
   # ---------------------------------------------------------------------------
-  # 2. Substituter reachability — `nix store info` speaks the binary-cache
-  #    protocol using only what the image already has. No downloads, so a
-  #    failure here is unambiguously about reachability.
+  # Independent, modern CA bundle. If this row trusts the Attic cert and the
+  # nixos/nix row does not, the fix is the image's trust store.
+  # ---------------------------------------------------------------------------
+  - name: reach-curl-image
+    image: docker.io/curlimages/curl:latest
+    depends_on: []
+    commands:
+      - *ca_setup
+      - *curl_probe
+    failure: ignore
+
+  # ---------------------------------------------------------------------------
+  # The image CI actually runs. This is the row that decides whether test.yaml
+  # can work as written.
+  # ---------------------------------------------------------------------------
+  - name: reach-nix-image
+    image: *nix_image
+    depends_on: []
+    commands:
+      - *ca_setup
+      - *curl_probe
+    failure: ignore
+
+  # ---------------------------------------------------------------------------
+  # Nix's own view. `nix store info` speaks the binary-cache protocol using only
+  # what the image already has -- no downloads, so a failure is unambiguously
+  # about reachability or trust rather than about fetching.
   # ---------------------------------------------------------------------------
   - name: substituters
     image: *nix_image
     depends_on: []
     environment: *nix_env
     commands:
-      - 'echo "--- your Attic cache ---"'
-      # `store info` is the modern spelling; `store ping` is the older one. Try
-      # both so this works across image versions.
-      - 'timeout 25 nix store info --store https://cache.homelab.local/homelab || timeout 25 nix store ping --store https://cache.homelab.local/homelab || echo "FAIL - Attic unreachable (DNS, TLS trust, or the cache is down). An internal CA the container does not trust shows up here as a certificate error."'
-      - 'echo "--- public cache (proves general egress) ---"'
-      - 'timeout 25 nix store info --store https://cache.nixos.org || timeout 25 nix store ping --store https://cache.nixos.org || echo "FAIL - no egress to cache.nixos.org; a cold pipeline cannot realise the CI shell at all"'
-      - 'echo "--- effective config, as this step really sees it ---"'
-      # `|| true` because grep exits non-zero when it matches nothing, which
-      # would fail the step for a purely informational line.
-      - "nix config show | grep -Ei 'substituters|trusted-public-keys|experimental-features|connect-timeout' || true"
+      - *ca_setup
+      - |
+        set +e
+        echo "--- your Attic cache ---"
+        timeout 25 nix store info --store https://cache.homelab.local/homelab \
+          || echo "FAIL - Nix cannot use the Attic cache (see the reach-* steps for whether it is trust or reachability)"
+        echo "--- public cache ---"
+        timeout 25 nix store info --store https://cache.nixos.org \
+          || echo "FAIL - no usable egress to cache.nixos.org; a cold pipeline cannot realise the CI shell at all"
+        echo "--- effective config, as this step really sees it ---"
+        nix config show | grep -Ei 'substituters|trusted-public-keys|experimental-features|connect-timeout' || true
     failure: ignore
 
   # ---------------------------------------------------------------------------
-  # 3. Flake evaluation — broadest check. Needs DNS + egress + a readable git
-  #    checkout, so it only makes sense once the two above pass.
+  # Broadest check: needs DNS, egress, and a readable checkout. Only meaningful
+  # once the rows above are green.
   # ---------------------------------------------------------------------------
   - name: flake-eval
     image: *nix_image
     depends_on: []
     environment: *nix_env
     commands:
+      - *ca_setup
       # The clone step's uid does not match this container's, so without this
       # git refuses to read the repo and the flake fails with a confusing error.
       - 'git config --global --add safe.directory "$CI_WORKSPACE"'
-      - 'timeout 120 nix flake metadata --no-write-lock-file || echo "FAIL - cannot evaluate the flake (usually unreachable flake inputs on github.com)"'
+      - 'timeout 120 nix flake metadata --no-write-lock-file || echo "FAIL - cannot evaluate the flake (usually unreachable inputs on github.com)"'
       - 'echo "--- toolchain this repo pins (must match Containerfile RUST_TOOLCHAIN) ---"'
       - 'timeout 600 nix develop .#ci --command rustc --version || echo "FAIL - could not realise devShells.ci"'
     failure: ignore
