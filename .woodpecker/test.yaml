@@ -14,8 +14,15 @@
 # below is for. Reads are public, so this works unauthenticated — including on
 # pull requests, where Woodpecker withholds secrets by default.
 
+# Deliberately NOT triggered by `manual`. A manual run is how preflight.yaml gets
+# invoked, and a manual trigger fires every matching workflow — so including it
+# here meant the diagnostic competed with a full Rust compile for the agent.
+# Preflight's later steps then expired in the queue with `queue: task expired`,
+# i.e. the workflow you reach for when CI is broken was starved by the thing it
+# was meant to diagnose. Push/PR/tag still cover every case that matters; use
+# "Restart" on a previous pipeline to re-run tests by hand.
 when:
-  - event: [pull_request, manual]
+  - event: pull_request
   - event: push
     branch: ${CI_REPO_DEFAULT_BRANCH}
   - event: tag
