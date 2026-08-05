@@ -86,9 +86,31 @@ sort:
 # CI Simulation
 # ------------------------------------------------------------------------------
 
-# Run everything CI would run. Read-only: never rewrites the working tree, so a
-# green local run means the same thing a green pipeline does.
+# Read-only: never rewrites the working tree, so a green local run means the
+# same thing a green pipeline does.
+#
+# This is the fast local path — plain cargo against your existing `target/`.
+# CI takes a different route (`just ci-nix`) for caching reasons; both use the
+# same fenix toolchain and the same lint flags, so they agree on outcomes.
+#
+# Run fmt-check, clippy, cargo-deny, and the test suite (fast local path)
 ci: lint-ci test
+
+# Runs fmt, clippy, and the test suite through crane, exactly as
+# .woodpecker/test.yaml does. Slower on a cold Nix store than `just ci`, because
+# it compiles dependencies into the Nix store rather than reusing `target/` —
+# but that is precisely what makes the result cacheable in Attic, and it is the
+# way to reproduce a CI result locally without pushing.
+#
+# cargo-deny is absent for the same reason it is absent in CI: it needs network
+# access to fetch the advisory DB, and Nix builds are sandboxed. Use `just deny`.
+#
+# Run the checks the pipeline runs (crane: fmt, clippy, test)
+ci-nix:
+    nix build --no-link --print-build-logs \
+        .#checks.x86_64-linux.fmt \
+        .#checks.x86_64-linux.clippy \
+        .#checks.x86_64-linux.test
 
 # Run pre-commit hooks manually
 pre-commit:
