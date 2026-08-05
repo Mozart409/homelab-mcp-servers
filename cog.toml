@@ -31,9 +31,11 @@ pre_bump_hooks = [
     "cargo check --workspace",
 ]
 
-# No git remote is configured, so there are no push hooks here. Add them once a
-# remote exists, e.g.:
-#   post_bump_hooks = ["git push", "git push origin {{version}}"]
+# Push the bump commit and its tag after every version bump.
+post_bump_hooks = [
+    "git push",
+    "git push origin {{version}}",
+]
 
 [changelog]
 path = "CHANGELOG.md"
