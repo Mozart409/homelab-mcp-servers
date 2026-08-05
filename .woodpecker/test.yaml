@@ -36,6 +36,36 @@ variables:
       connect-timeout = 5
       stalled-download-timeout = 60
 
+  # Trust the homelab step-ca root inside the container.
+  #
+  # The workstation trusts it via NixOS `security.pki.certificates`; a container
+  # gets a stock bundle and therefore does not. Without this the Attic cache
+  # fails TLS verification (`unable to get local issuer certificate`) even though
+  # the same URL returns 200 from a shell on the host — Nix then falls back to
+  # cache.nixos.org and every run pays full price for a cache that looks
+  # configured but is never used.
+  #
+  # The certificate is committed at .woodpecker/homelab-ca.crt. A ROOT CA
+  # CERTIFICATE IS PUBLIC — it is handed to every client that talks to the
+  # homelab; the secret half is the CA private key, which lives only in step-ca.
+  # Committing it is what lets this work with no volume mounts, no `Volumes`
+  # trust level, and no custom agent image.
+  #
+  # Appending to the image's own bundle (rather than replacing it) keeps
+  # cache.nixos.org and github.com working.
+  - &ca_setup |
+    set -e
+    base=""
+    for c in /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-bundle.crt "$NIX_SSL_CERT_FILE"; do
+      if [ -n "$c" ] && [ -r "$c" ]; then base="$c"; break; fi
+    done
+    bundle=/tmp/homelab-ca-bundle.crt
+    { if [ -n "$base" ]; then cat "$base"; fi; cat .woodpecker/homelab-ca.crt; } > "$bundle"
+    export NIX_SSL_CERT_FILE="$bundle"
+    export CURL_CA_BUNDLE="$bundle"
+    export SSL_CERT_FILE="$bundle"
+    echo "trust store: $bundle (base: ${base:-none}, +1 homelab root)"
+
 steps:
   # `just ci` is `lint-ci test` — fmt-check, clippy, cargo-deny, cargo test.
   # It is deliberately the read-only variant: plain `just lint` runs `cargo fmt`,
@@ -44,6 +74,7 @@ steps:
     image: *nix_image
     environment: *nix_env
     commands:
+      - *ca_setup
       # Nix refuses to evaluate a flake in a repo it considers foreign-owned,
       # and the clone step's uid does not match the step container's.
       - 'git config --global --add safe.directory "$CI_WORKSPACE"'
@@ -72,6 +103,7 @@ steps:
       ATTIC_PUSH_TOKEN:
         from_secret: ATTIC_PUSH_TOKEN
     commands:
+      - *ca_setup
       # Trailing slash is deliberate. Attic joins the API endpoint with the cache
       # name; without it the binary-cache URL can render as
       # `https://cache.homelab.localhomelab`. The slash is correct whether attic
