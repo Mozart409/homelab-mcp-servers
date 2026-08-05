@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/woodpecker-ci/woodpecker/main/pipeline/frontend/yaml/linter/schema/schema.json
 #
-# Lint + test the workspace.
+# Lint + test the workspace, then scan it with trivy.
 #
 # Why Nix rather than a `rust:1.x` image: the toolchain is pinned by
 # `flake.lock` (fenix), with no version literal anywhere in the repo. Naming a
@@ -200,4 +200,61 @@ steps:
         branch: ${CI_REPO_DEFAULT_BRANCH}
       - event: tag
     # A cache push failing must not fail a pipeline whose code is already green.
+    failure: ignore
+
+  # Vulnerability / secret / misconfiguration scan.
+  #
+  # WHY `fs` AND NOT `image`: `just scan` builds an OCI image and runs
+  # `trivy image` against it. The homelab does not deploy those images, so
+  # building one purely to scan it would mean reintroducing everything the
+  # deleted release.yaml needed -- a privileged buildx step, the repo's
+  # `Security` trust level, and a server-side `WOODPECKER_PLUGINS_PRIVILEGED`
+  # entry. `trivy fs` reads Cargo.lock and the tree directly, so this is an
+  # ordinary unprivileged step.
+  #
+  # WHAT THIS ACTUALLY ADDS: the `vuln` scanner resolves Cargo.lock against
+  # RustSec-derived advisories, which is very nearly what `cargo deny check
+  # advisories` already does in the ci step above -- treat it as a second
+  # opinion, not as the reason this step exists. The new coverage is `secret`
+  # (a credential committed by accident) and `misconfig` (Containerfile,
+  # compose.yaml), neither of which cargo-deny looks at.
+  #
+  # NETWORK: trivy downloads its vulnerability DB (and, for `misconfig`, its
+  # checks bundle) on every run -- the image ships without either, and the step
+  # container is destroyed afterwards so there is nothing to cache. As of trivy
+  # 0.73 those come from `mirror.gcr.io/aquasec/*` first, falling back to
+  # `ghcr.io/aquasecurity/*`. That is an egress target beyond the substituters,
+  # which is why preflight.yaml probes both hosts; a DB download failure
+  # otherwise surfaces as an opaque trivy error that says nothing about DNS.
+  - name: trivy
+    # Pinned, matching the workstation's trivy (see devShells.default in
+    # flake.nix) so `just scan` and CI report the same findings. Same rationale
+    # as the pinned nix image above: Woodpecker's `pull` defaults to false, so a
+    # floating tag leaves the agent on whatever it first cached.
+    image: docker.io/aquasec/trivy:0.73.0
+    # Sequential rather than parallel with cache-push. The agent VM has 2 cores
+    # and has previously killed steps with `queue: task expired` when several
+    # containers started at once; scanning a tree whose tests just failed is
+    # worth nothing anyway.
+    depends_on: [ci]
+    commands:
+      # --skip-dirs: `.ci-profile` is the GC root the ci step materialises and
+      # points into /nix/store; `target` and `.direnv` only exist on a developer
+      # checkout. None of them are this repo's code, and walking them is slow.
+      - |
+        trivy fs . \
+          --scanners vuln,secret,misconfig \
+          --severity HIGH,CRITICAL \
+          --exit-code 1 \
+          --skip-dirs .ci-profile \
+          --skip-dirs target \
+          --skip-dirs .direnv \
+          --skip-version-check \
+          --no-progress \
+          --timeout 10m
+    # Advisory, not a gate. A new CVE lands in a transitive crate without anyone
+    # touching this repo, and that must not red-line a pipeline whose code is
+    # green -- `failure: ignore` still marks the step failed in the UI, so the
+    # finding is visible without blocking a merge. Drop this line to make the
+    # scan blocking.
     failure: ignore
