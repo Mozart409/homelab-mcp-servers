@@ -35,7 +35,18 @@
 
       craneLib = (crane.mkLib pkgs).overrideToolchain rust;
 
-      src = craneLib.cleanCargoSource ./.;
+      # `craneLib.cleanCargoSource` keeps only Cargo.toml/Cargo.lock/*.rs, which
+      # would drop `clippy.toml` — and without it the workspace's deny-level
+      # `unwrap_used`/`expect_used` lints apply to test code too (the
+      # `allow-*-in-tests` relaxations live in that file), so every test module
+      # would fail clippy. `deny.toml` is kept for the same reason: so the source
+      # a check sees matches the source a developer sees.
+      src = pkgs.lib.cleanSourceWith {
+        src = ./.;
+        filter = path: type:
+          (craneLib.filterCargoSources path type)
+          || (builtins.elem (builtins.baseNameOf path) ["clippy.toml" "deny.toml"]);
+      };
 
       commonArgs = {
         inherit src;
@@ -70,7 +81,62 @@
         lokimcp-server = mkServer "lokimcp-server";
         hamcp-server = mkServer "hamcp-server";
       };
+
+      # Nix-native lint/test checks, sharing `cargoArtifacts` with the package
+      # builds above.
+      #
+      # WHY THESE EXIST: `just ci` shells out to cargo directly, so every CI run
+      # recompiled all ~1580 dependency crates from scratch — `target/` and
+      # `~/.cargo` live in a container that is destroyed when the step ends, and
+      # nothing outside the Nix store can be served by the Attic cache. Routing
+      # the same checks through crane makes the compiled dependency tree a store
+      # path, so it is cached once and substituted thereafter, leaving only the
+      # ~11 workspace crates to build.
+      #
+      # `cargoArtifacts` invalidates when Cargo.lock changes, so a dependency
+      # bump pays the full cost once — the price of never paying it otherwise.
+      #
+      # NOT INCLUDED: cargo-deny. It fetches the RustSec advisory database over
+      # the network, and Nix builds run in a sandbox with no network access, so
+      # it cannot work here by construction. CI runs it in the dev shell instead.
+      checks = {
+        clippy = craneLib.cargoClippy (commonArgs
+          // {
+            inherit cargoArtifacts;
+            pname = "homelab-mcp-servers-clippy";
+            # Kept byte-identical to `just clippy` so a local run and a CI run
+            # fail on exactly the same lints.
+            cargoClippyExtraArgs = "--all-targets --all-features -- -D warnings -D clippy::pedantic";
+          });
+
+        test = craneLib.cargoTest (commonArgs
+          // {
+            inherit cargoArtifacts;
+            pname = "homelab-mcp-servers-test";
+            cargoTestExtraArgs = "--workspace";
+
+            # `reqwest`'s `rustls` feature loads the SYSTEM root store when
+            # `Client::builder().build()` runs — it is `rustls` (native roots),
+            # not `rustls-tls-webpki-roots` (bundled roots). A Nix build sandbox
+            # has no /etc/ssl/certs, so every `*Client::new()` fails with
+            # `ClientCreationFailed("builder error")` and every test that
+            # constructs a client dies instantly. Only the pure serde tests
+            # survived. Handing it nixpkgs' CA bundle fixes all of them.
+            #
+            # This is a sandbox artefact, not a product bug: the shipped
+            # containers inherit certs from the distroless base.
+            SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+            nativeCheckInputs = [pkgs.cacert];
+          });
+
+        fmt = craneLib.cargoFmt {
+          inherit src;
+          pname = "homelab-mcp-servers-fmt";
+        };
+      };
     in {
+      inherit checks;
+
       packages =
         serverPkgs
         // {

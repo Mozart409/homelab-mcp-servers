@@ -118,9 +118,19 @@ variables:
     done
 
 steps:
-  # `just ci` is `lint-ci test` — fmt-check, clippy, cargo-deny, cargo test.
-  # It is deliberately the read-only variant: plain `just lint` runs `cargo fmt`,
-  # which rewrites files and would let unformatted code pass a pipeline.
+  # fmt + clippy + tests, run through crane so the compiled dependency tree is a
+  # Nix store path.
+  #
+  # This used to be `just ci`, which shells out to cargo directly — and cargo's
+  # `target/` and `~/.cargo` live in a container that is destroyed when the step
+  # ends. Nothing outside the Nix store can be served by Attic, so every run
+  # recompiled all ~1580 dependency crates from scratch. Going through
+  # `checks.*` shares `cargoArtifacts` with the package builds, so dependencies
+  # are compiled once, cached, and substituted thereafter — leaving only the ~11
+  # workspace crates.
+  #
+  # `just ci` remains the local entry point and runs the same lints with the same
+  # toolchain; only the execution path differs.
   - name: ci
     image: *nix_image
     environment: *nix_env
@@ -133,14 +143,17 @@ steps:
       # shell is the first thing that touches substituters, so if egress is
       # broken this is where it shows -- and without a bounded, separate step it
       # shows as "the whole ci step hung", which says nothing about the cause.
-      # 15 min is generous for a cold closure and still far short of the
-      # pipeline timeout.
+      # --profile also materialises the closure as a GC root, which the
+      # cache-push step below needs in order to have something to upload.
       - 'timeout 900 nix develop --profile ./.ci-profile .#ci --command true || { echo "FAIL - could not realise devShells.ci. Run the preflight workflow: this is almost always DNS or egress from the agent, not a problem with the code."; exit 1; }'
-      # Only now run the actual gate, against a closure already on disk.
-      # --profile materialises it as a GC root so the push step below has
-      # something concrete to upload; without it the closure is reachable only
-      # through the eval cache and `attic push` has no path to send.
-      - 'nix develop --profile ./.ci-profile .#ci --command just ci'
+      # The system is spelled out rather than derived: this agent is amd64, and
+      # release.yaml pins linux/amd64 for the same reason.
+      - 'nix build --no-link --print-build-logs .#checks.x86_64-linux.fmt .#checks.x86_64-linux.clippy .#checks.x86_64-linux.test'
+      # cargo-deny fetches the RustSec advisory database over the network, and
+      # Nix builds run sandboxed without network access — so it cannot be a
+      # crane check by construction. Run it in the dev shell, which is already
+      # realised and cached by this point, so it costs seconds.
+      - 'nix develop --profile ./.ci-profile .#ci --command cargo deny check'
 
   # Populate the cache so the next run skips closure realisation. Gated to
   # trusted events: Woodpecker does not expose secrets to `pull_request` by
