@@ -158,6 +158,19 @@ variables:
     echo "--- external (needed to realise the CI shell on a cold cache) ---"
     probe https://cache.nixos.org/nix-cache-info "cache.nixos.org"
     probe https://github.com/ "github.com (flake inputs)"
+    echo "--- external (trivy scan step in test.yaml) ---"
+    # Where trivy fetches its vulnerability DB and its misconfig checks bundle
+    # on every run. As of trivy 0.73 the default --db-repository is
+    # `mirror.gcr.io/aquasec/trivy-db:2` with `ghcr.io/aquasecurity/trivy-db:2`
+    # as fallback, so BOTH are probed: mirror.gcr.io failing while ghcr.io works
+    # is survivable (trivy falls through), the reverse costs nothing, and only
+    # both failing means the scan step cannot run at all.
+    #
+    # READING THESE TWO ROWS: an unauthenticated GET of /v2/ answers 401 or 200
+    # when a registry is reachable, so `OK` and `WARN ... HTTP 401` are BOTH
+    # passes. Only the DNS / connect / TLS rows indicate a real problem.
+    probe https://mirror.gcr.io/v2/ "mirror.gcr.io (trivy DB, primary)"
+    probe https://ghcr.io/v2/ "ghcr.io (trivy DB, fallback)"
 
 steps:
   # ---------------------------------------------------------------------------
