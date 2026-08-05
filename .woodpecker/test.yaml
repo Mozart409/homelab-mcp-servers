@@ -33,6 +33,8 @@ variables:
       extra-substituters = https://cache.homelab.local/homelab
       extra-trusted-public-keys = homelab:aswnRAo2zbP13gGnUTCINX78X/lURQgPAfrgNpHpQpY=
       accept-flake-config = true
+      connect-timeout = 5
+      stalled-download-timeout = 60
 
 steps:
   # `just ci` is `lint-ci test` — fmt-check, clippy, cargo-deny, cargo test.
@@ -44,11 +46,19 @@ steps:
     commands:
       # Nix refuses to evaluate a flake in a repo it considers foreign-owned,
       # and the clone step's uid does not match the step container's.
-      - git config --global --add safe.directory "$CI_WORKSPACE"
-      # --profile materialises the shell's closure as a GC root so the push
-      # step below has something concrete to upload. Without it the closure is
-      # only reachable through the eval cache and `attic push` has no path.
-      - nix develop --profile ./.ci-profile .#ci --command just ci
+      - 'git config --global --add safe.directory "$CI_WORKSPACE"'
+      # Fail fast and legibly when the network is the problem. Realising the CI
+      # shell is the first thing that touches substituters, so if egress is
+      # broken this is where it shows -- and without a bounded, separate step it
+      # shows as "the whole ci step hung", which says nothing about the cause.
+      # 15 min is generous for a cold closure and still far short of the
+      # pipeline timeout.
+      - 'timeout 900 nix develop --profile ./.ci-profile .#ci --command true || { echo "FAIL - could not realise devShells.ci. Run the preflight workflow: this is almost always DNS or egress from the agent, not a problem with the code."; exit 1; }'
+      # Only now run the actual gate, against a closure already on disk.
+      # --profile materialises it as a GC root so the push step below has
+      # something concrete to upload; without it the closure is reachable only
+      # through the eval cache and `attic push` has no path to send.
+      - 'nix develop --profile ./.ci-profile .#ci --command just ci'
 
   # Populate the cache so the next run skips closure realisation. Gated to
   # trusted events: Woodpecker does not expose secrets to `pull_request` by
