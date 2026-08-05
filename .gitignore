@@ -11,6 +11,29 @@
 # Local environment files (keep .env.example tracked)
 .env
 !.env.example
+
+# Shell/editor/tooling dotfiles that agent sandboxes and IDEs drop into the repo
+# root. These are home-directory files with no business being here, but they
+# reappear on their own, so ignoring them keeps `git status` readable.
+#
+# All anchored with a leading `/` so they only match the repo root — a crate that
+# legitimately ships one of these names is unaffected.
+#
+# `.gitmodules` is listed deliberately: this repo has no submodules (no gitlink
+# entries in the index), so a `.gitmodules` appearing here is always spurious.
+# Delete this line the day real submodules are added, or git will ignore config
+# it needs.
+/.bashrc
 /.bash_profile
+/.gitconfig
+/.gitmodules
+/.mcp.json
+/.profile
+/.ripgreprc
+/.zprofile
+/.zshrc
 /.zsh_rc
-/mcp.json
+# No trailing slash: the sandbox drops these as plain files, not directories, and
+# a `/.idea/` pattern would only match a directory.
+/.idea
+/.vscode
