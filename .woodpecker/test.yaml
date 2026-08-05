@@ -21,9 +21,13 @@ when:
   - event: tag
 
 variables:
-  # `latest` is not reproducible; pin this to a released tag once you have
-  # confirmed which one your agent has cached.
-  - &nix_image 'nixos/nix:latest'
+  # Pinned, not `:latest`. Woodpecker's `pull` defaults to false, so a floating
+  # tag leaves the agent on whatever it first cached -- one run landed on an
+  # image whose CA layout differed from the published one, which cost an entire
+  # debugging cycle. Forcing `pull: true` instead made every step re-pull and
+  # helped saturate the agent into `queue: task expired`, so pinning is the fix
+  # that costs nothing per run.
+  - &nix_image 'docker.io/nixos/nix:2.35.1'
   # Flakes are still gated behind experimental-features. `extra-substituters`
   # (not `substituters`) appends to the image's defaults so cache.nixos.org is
   # kept as a fallback when the homelab cache is unreachable.
@@ -112,10 +116,6 @@ steps:
   # which rewrites files and would let unformatted code pass a pipeline.
   - name: ci
     image: *nix_image
-    # `pull` defaults to false, so an agent keeps whatever `latest` it
-    # cached -- which is how this ran against a stale image whose CA
-    # layout differed from the published one.
-    pull: true
     environment: *nix_env
     commands:
       - *ca_setup
@@ -141,10 +141,6 @@ steps:
   # the write token. Reads stay public, so PRs still get full cache benefit.
   - name: cache-push
     image: *nix_image
-    # `pull` defaults to false, so an agent keeps whatever `latest` it
-    # cached -- which is how this ran against a stale image whose CA
-    # layout differed from the published one.
-    pull: true
     depends_on: [ci]
     environment:
       <<: *nix_env
