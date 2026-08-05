@@ -46,8 +46,15 @@ variables:
   # configured but is never used.
   #
   # The certificate is committed at .woodpecker/homelab-ca.crt. A ROOT CA
-  # CERTIFICATE IS PUBLIC — it is handed to every client that talks to the
-  # homelab; the secret half is the CA private key, which lives only in step-ca.
+  # CERTIFICATE IS PUBLIC — it is handed to every client that talks to a
+  # step-ca-issued endpoint; the secret half is the CA private key, which lives
+  # only in step-ca.
+  #
+  # SCOPE: this is needed ONLY for step-ca-issued names like *.homelab.local.
+  # Services on the tailnet (*.dropbear-butterfly.ts.net) carry publicly trusted
+  # certs from Tailscale, which any stock CA bundle already verifies -- which is
+  # why the deployed MCP servers reach Home Assistant, PBS, and Prometheus from
+  # containers without any of this. The Attic cache is the odd one out.
   # Committing it is what lets this work with no volume mounts, no `Volumes`
   # trust level, and no custom agent image.
   #
