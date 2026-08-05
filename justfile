@@ -189,8 +189,11 @@ attic_url := "https://cache.homelab.local/homelab"
 seed-cache:
     @echo "==> realising the CI shell closure (same command the pipeline runs)"
     nix develop --profile ./.ci-profile .#ci --command true
-    @echo "==> pushing closure to {{ attic_target }}"
-    attic push {{ attic_target }} ./.ci-profile
+    @echo "==> building the compiled dependency tree the crane checks consume"
+    nix build --no-link .#legacyPackages.x86_64-linux.cargo-artifacts
+    @echo "==> pushing both to {{ attic_target }}"
+    attic push {{ attic_target }} ./.ci-profile \
+        "$(nix build --no-link --print-out-paths .#legacyPackages.x86_64-linux.cargo-artifacts)"
     @just verify-cache
 
 # Queries the binary-cache URL directly, which is the same request Nix makes when

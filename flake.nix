@@ -137,6 +137,14 @@
     in {
       inherit checks;
 
+      # Exposed so CI can build and push it to the binary cache by name.
+      #
+      # `cargoArtifacts` is a build INPUT of the checks, not part of any check's
+      # runtime closure, so pushing the check outputs would not carry it. Without
+      # an explicit handle there is no way to name the one derivation that makes
+      # the whole crane arrangement worthwhile — the compiled dependency tree.
+      legacyPackages.cargo-artifacts = cargoArtifacts;
+
       packages =
         serverPkgs
         // {

@@ -173,7 +173,15 @@ steps:
       # `https://cache.homelab.localhomelab`. The slash is correct whether attic
       # joins properly or concatenates naively, so it costs nothing to be safe.
       - nix run nixpkgs#attic-client -- login homelab https://cache.homelab.local/ "$ATTIC_PUSH_TOKEN"
-      - nix run nixpkgs#attic-client -- push homelab:homelab ./.ci-profile
+      # Push BOTH the dev shell and the compiled dependency tree.
+      #
+      # `./.ci-profile` alone is not enough: it holds the toolchain, but
+      # `cargoArtifacts` — the ~1580 compiled dependency crates that the crane
+      # checks consume — is a build input rather than part of any output's
+      # runtime closure, so it would never be uploaded. Pushing only the profile
+      # would mean the crane checks recompile every dependency on every run,
+      # which is the exact cost they exist to remove.
+      - 'nix run nixpkgs#attic-client -- push homelab:homelab ./.ci-profile $(nix build --no-link --print-out-paths .#legacyPackages.x86_64-linux.cargo-artifacts)'
     when:
       - event: push
         branch: ${CI_REPO_DEFAULT_BRANCH}
