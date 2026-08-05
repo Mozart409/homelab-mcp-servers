@@ -143,6 +143,59 @@ update:
     nix flake update
 
 # ------------------------------------------------------------------------------
+# Binary cache (Attic)
+# ------------------------------------------------------------------------------
+
+# Attic push target, as <server>:<cache>. Writes need a JWT (`attic login`);
+# reads are public, which is why CI can substitute without any secret.
+attic_target := "homelab:homelab"
+
+# The binary-cache URL Nix substitutes from — must match `extra-substituters`
+# in .woodpecker/test.yaml and `substituters` in /etc/nix/nix.conf.
+attic_url := "https://cache.homelab.local/homelab"
+
+# The profile path is load-bearing: .woodpecker/test.yaml runs
+# `nix develop --profile ./.ci-profile .#ci`, so pushing that same profile gives
+# CI exact-path hits rather than near-misses. Building `.#ci` (not the default
+# shell) matters too — the default shell drags in podman, trivy, claude-code and
+# the rest of the workstation toolbox, none of which CI ever asks for.
+#
+# Requires `attic login` beforehand. Worth re-running after `just update`, since
+# new flake inputs are exactly when CI would otherwise face a cold cache.
+#
+# Push the CI shell closure to the Attic cache so a cold pipeline doesn't realise it
+seed-cache:
+    @echo "==> realising the CI shell closure (same command the pipeline runs)"
+    nix develop --profile ./.ci-profile .#ci --command true
+    @echo "==> pushing closure to {{ attic_target }}"
+    attic push {{ attic_target }} ./.ci-profile
+    @just verify-cache
+
+# Queries the binary-cache URL directly for the profile's .narinfo — the same
+# request Nix makes when substituting. It therefore tests the URL that actually
+# matters, rather than trusting `attic cache info`, whose "Binary Cache Endpoint"
+# line renders as `...localhomelab`, joining host and cache name with no
+# separator. If this recipe passes, that display is cosmetic; if it fails, the
+# endpoint really is misconfigured.
+#
+# Check the Attic cache actually serves the seeded CI closure
+verify-cache:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    store_path="$(readlink -f ./.ci-profile)"
+    hash="$(basename "$store_path" | cut -d- -f1)"
+    url="{{ attic_url }}/${hash}.narinfo"
+    echo "==> GET ${url}"
+    if curl -fsS --max-time 20 "$url" > /dev/null; then
+        echo "==> OK: cache serves the CI closure; a cold pipeline will hit it"
+    else
+        echo "==> FAILED: cache did not serve ${hash}.narinfo" >&2
+        echo "    Check that '{{ attic_url }}' is the right binary-cache URL and" >&2
+        echo "    that 'attic login' used an endpoint with a trailing slash." >&2
+        exit 1
+    fi
+
+# ------------------------------------------------------------------------------
 # Clean
 # ------------------------------------------------------------------------------
 
