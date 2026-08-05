@@ -46,6 +46,14 @@ variables:
       accept-flake-config = true
       connect-timeout = 5
       stalled-download-timeout = 60
+      # The agent VM has 2 cores. Left unbounded, Nix ran one derivation with
+      # `cargo -j 3` and oversubscribed both of them, and the Woodpecker agent
+      # could not service its task lease — the server then killed the step with
+      # `queue: task expired` after six minutes of real work. Bounding this keeps
+      # a scheduler slot free for the agent's own bookkeeping. Raise both if the
+      # agent ever gets more cores.
+      max-jobs = 1
+      cores = 2
 
   # Trust the homelab step-ca root inside the container.
   #

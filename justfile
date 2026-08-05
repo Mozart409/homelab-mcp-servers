@@ -192,7 +192,14 @@ seed-cache:
     @echo "==> building the compiled dependency tree the crane checks consume"
     nix build --no-link .#legacyPackages.x86_64-linux.cargo-artifacts
     @echo "==> pushing both to {{ attic_target }}"
-    attic push {{ attic_target }} ./.ci-profile \
+    # `-j 2` deliberately. The dependency tree's closure is ~325 paths / ~670 MiB,
+    # 318 of them small `cargo-package-*` vendored sources. Pushing those at
+    # attic's default concurrency made the server return `InternalServerError`
+    # for a scattered subset while neighbours succeeded — interleaving like that
+    # points at load or a flaky storage backend, not at one bad path. Slower, but
+    # a push that completes beats a fast one that leaves the cache half-populated,
+    # because a partial closure cannot be substituted and CI recompiles anyway.
+    attic push -j 2 {{ attic_target }} ./.ci-profile \
         "$(nix build --no-link --print-out-paths .#legacyPackages.x86_64-linux.cargo-artifacts)"
     @just verify-cache
 
