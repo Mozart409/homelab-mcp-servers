@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.6.1 - 2026-08-05
+#### Bug Fixes
+- (**cog**) cog will push after bump - (b601411) - Amadeus Mader
+
+- - -
+
 ## 0.6.0 - 2026-08-05
 #### Features
 - (**hamcp**) add 9 tools with models, client fixes, and wiremock tests - (7b98899) - Amadeus Mader
