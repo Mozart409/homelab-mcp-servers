@@ -1,6 +1,6 @@
 # homelab-mcp-servers
 
-[status-badge](https://ci.homelab.local/api/badges/1/status.svg?events=push%2Ctag%2Crelease)
+[![status-badge](https://ci.homelab.local/api/badges/1/status.svg)](https://ci.homelab.local/repos/1)
 
 A Cargo workspace of [Model Context Protocol](https://modelcontextprotocol.io)
 (MCP) servers for a personal homelab. Most servers expose **read-only** tools
