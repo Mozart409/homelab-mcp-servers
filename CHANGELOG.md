@@ -2,6 +2,40 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.6.0 - 2026-08-05
+#### Features
+- (**hamcp**) add 9 tools with models, client fixes, and wiremock tests - (7b98899) - Amadeus Mader
+- (**lokimcp**) add 6 tools with config refactoring and wiremock tests - (691003a) - Amadeus Mader
+- (**mcp-common**) add health_router and run_healthcheck with tests - (d10cee6) - Amadeus Mader
+- (**nix**) expose cargo-artifacts so ci can push deps to the cache - (44cb863) - Amadeus Mader
+- (**nix**) add crane checks so cargo deps land in the attic cache - (bad0e21) - Amadeus Mader
+- (**pbsmcp**) refactor config with parse helpers and add wiremock tests - (b80a400) - Amadeus Mader
+- (**pgmcp**) add 7 tools with clamp_limit, client fixes, and integration tests - (04cd8d6) - Amadeus Mader
+- (**prommcp**) add 11 tools with config refactoring and wiremock tests - (a452061) - Amadeus Mader
+#### Bug Fixes
+- (**ci**) cap nix to one core after measuring 98.9% agent cpu saturation - (0c5cf32) - Amadeus Mader
+- (**ci**) throttle attic pushes and bound nix jobs to keep the agent alive - (bd6586d) - Amadeus Mader
+- (**just**) verify the cache by sampling the closure, not one path - (95873c4) - Amadeus Mader
+- (**woodpecker**) pin images and serialise preflight to stop agent overload - (1d05e94) - Amadeus Mader
+- (**woodpecker**) stop ca setup clobbering the trust store and pull images fresh - (230ed46) - Amadeus Mader
+#### Documentation
+- (**agents**) document mcp-common, healthcheck, and no-panic rules - (8c48fde) - Amadeus Mader
+- (**woodpecker**) scope the step-ca note to homelab.local, not tailnet certs - (4e876e9) - Amadeus Mader
+#### Continuous Integration
+- (**woodpecker**) stop manual triggers racing preflight against the test workflow - (5b01310) - Amadeus Mader
+- (**woodpecker**) trust the step-ca root and probe from busybox, curl, and nix images - (0507a79) - Amadeus Mader
+- (**woodpecker**) add fail-fast timeouts and curl-based reachability probes - (96cb072) - Amadeus Mader
+- (**woodpecker**) document security trust level and fix attic login endpoint - (0a8e481) - Amadeus Mader
+- (**woodpecker**) add preflight, test, and release pipelines - (e44104d) - Amadeus Mader
+#### Refactoring
+- (**flake**) switch to fenix - (3fe12c5) - Amadeus Mader
+#### Miscellaneous Chores
+- (**gitignore**) ignore stray shell, editor, and tooling dotfiles - (09bb272) - Amadeus Mader
+- (**just**) add seed-cache and verify-cache for the attic binary cache - (58c09c1) - Amadeus Mader
+- (**templates**) update scaffold with workspace lints - (0a48e3b) - Amadeus Mader
+
+- - -
+
 ## 0.5.0 - 2026-07-31
 #### Features
 - (**pbsmcp**) add start/tail paging with total to task_log - (25c3fd2) - Amadeus Mader
