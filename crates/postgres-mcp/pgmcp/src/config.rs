@@ -45,12 +45,7 @@ impl Config {
                  (e.g. postgres://user:pass@host:5432/dbname)",
             )?;
         let bind = std::env::var("PG_BIND").unwrap_or_else(|_| "127.0.0.1:8081".to_string());
-        let allowed_hosts = std::env::var("PG_ALLOWED_HOSTS").ok().map(|s| {
-            s.split(',')
-                .map(|h| h.trim().to_string())
-                .filter(|h| !h.is_empty())
-                .collect()
-        });
+        let allowed_hosts = parse_allowed_hosts(std::env::var("PG_ALLOWED_HOSTS").ok().as_deref());
         let max_connections = parse_env("PG_MAX_CONNECTIONS", 5)?;
         let statement_timeout_ms = parse_env("PG_STATEMENT_TIMEOUT_MS", 5_000)?;
         let max_rows = parse_env("PG_MAX_ROWS", 1_000)?;
@@ -80,6 +75,24 @@ where
             .map_err(|e| eyre!("{key} must be a valid number: {e}")),
         Err(_) => Ok(default),
     }
+}
+
+/// Parse a comma-separated allow-list, treating "set but empty" as unset.
+///
+/// Returning `Some(vec![])` here would be actively dangerous: `run()` passes it
+/// to rmcp's `with_allowed_hosts`, and an empty allow-list rejects *every*
+/// inbound `Host` header. A value like `" , "` — a typo, or a template that
+/// expanded to nothing — would therefore produce a server that silently accepts
+/// no connections at all. Collapsing that to `None` falls back to rmcp's
+/// loopback-only default instead, which is the safe reading of "unset".
+fn parse_allowed_hosts(raw: Option<&str>) -> Option<Vec<String>> {
+    let hosts: Vec<String> = raw?
+        .split(',')
+        .map(|h| h.trim().to_string())
+        .filter(|h| !h.is_empty())
+        .collect();
+
+    if hosts.is_empty() { None } else { Some(hosts) }
 }
 
 #[cfg(test)]
@@ -168,6 +181,155 @@ mod tests {
             vec!["a.example.com".to_string(), "localhost".to_string()]
         );
         assert_eq!(cfg.max_rows, 10);
+
+        clear_env();
+    }
+
+    #[test]
+    fn from_env_falls_back_to_database_url() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        clear_env();
+        set_env("DATABASE_URL", "postgres://fallback/db");
+
+        let cfg = Config::from_env().unwrap();
+        assert_eq!(cfg.database_url, "postgres://fallback/db");
+
+        clear_env();
+    }
+
+    #[test]
+    fn from_env_reads_every_override() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        clear_env();
+        set_env("PG_DATABASE_URL", "postgres://x/db");
+        set_env("PG_BIND", "0.0.0.0:9999");
+        set_env("PG_ALLOWED_HOSTS", "mcp.example.com");
+        set_env("PG_MAX_CONNECTIONS", "17");
+        set_env("PG_STATEMENT_TIMEOUT_MS", "250");
+        set_env("PG_MAX_ROWS", "42");
+
+        let cfg = Config::from_env().unwrap();
+        assert_eq!(cfg.database_url, "postgres://x/db");
+        assert_eq!(cfg.bind, "0.0.0.0:9999");
+        assert_eq!(cfg.allowed_hosts.unwrap(), vec!["mcp.example.com"]);
+        assert_eq!(cfg.max_connections, 17);
+        assert_eq!(cfg.statement_timeout_ms, 250);
+        assert_eq!(cfg.max_rows, 42);
+
+        clear_env();
+    }
+
+    #[test]
+    fn from_env_defaults_are_loopback_only() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        clear_env();
+        set_env("PG_DATABASE_URL", "postgres://x/db");
+
+        // Hard rule §2: the *code* default must stay loopback with rmcp's
+        // DNS-rebinding protection intact (`allowed_hosts: None`).
+        let cfg = Config::from_env().unwrap();
+        assert_eq!(cfg.bind, "127.0.0.1:8081");
+        assert!(cfg.bind.starts_with("127.0.0.1:"));
+        assert!(cfg.allowed_hosts.is_none());
+
+        clear_env();
+    }
+
+    #[test]
+    fn from_env_allowed_hosts_of_only_separators_is_empty() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        clear_env();
+        set_env("PG_DATABASE_URL", "postgres://x/db");
+        // Regression: set-but-blank is treated as unset. It used to produce
+        // `Some(vec![])`, which reaches rmcp's `with_allowed_hosts` and rejects
+        // *every* inbound Host header — a typo'd value yielded a server that
+        // silently accepted no connections. Falling back to `None` restores the
+        // loopback-only default (hard rule §2).
+        for blank in [" , , ", "", ",", "   ", ",,,"] {
+            set_env("PG_ALLOWED_HOSTS", blank);
+            assert_eq!(
+                Config::from_env().unwrap().allowed_hosts,
+                None,
+                "{blank:?} should fall back to the loopback default"
+            );
+        }
+
+        clear_env();
+    }
+
+    #[test]
+    fn from_env_rejects_unparseable_numbers_without_panicking() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+
+        for (key, bad) in [
+            ("PG_MAX_CONNECTIONS", "many"),
+            ("PG_MAX_CONNECTIONS", "-1"),  // u32 rejects negatives
+            ("PG_MAX_CONNECTIONS", "5.5"), // and non-integers
+            ("PG_MAX_CONNECTIONS", "4294967296"), // u32 overflow
+            ("PG_STATEMENT_TIMEOUT_MS", "soon"),
+            ("PG_STATEMENT_TIMEOUT_MS", "-1"), // u64 rejects negatives
+            ("PG_MAX_ROWS", "lots"),
+            ("PG_MAX_ROWS", "9223372036854775808"), // i64 overflow
+            ("PG_MAX_ROWS", ""),                    // empty is not a number
+        ] {
+            clear_env();
+            set_env("PG_DATABASE_URL", "postgres://x/db");
+            set_env(key, bad);
+
+            let err = Config::from_env()
+                .expect_err(&format!("{key}={bad:?} must be rejected"))
+                .to_string();
+            assert!(
+                err.contains(key),
+                "error for {key}={bad:?} should name the variable: {err}"
+            );
+        }
+
+        clear_env();
+    }
+
+    #[test]
+    fn from_env_accepts_boundary_numeric_values() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        clear_env();
+        set_env("PG_DATABASE_URL", "postgres://x/db");
+        set_env("PG_MAX_CONNECTIONS", "0");
+        set_env("PG_STATEMENT_TIMEOUT_MS", "0");
+        set_env("PG_MAX_ROWS", "0");
+
+        // Zeros parse — they are nonsensical but must not panic here; the row
+        // cap is floored downstream in `client::clamp_limit`.
+        let cfg = Config::from_env().unwrap();
+        assert_eq!(cfg.max_connections, 0);
+        assert_eq!(cfg.statement_timeout_ms, 0);
+        assert_eq!(cfg.max_rows, 0);
+
+        set_env("PG_MAX_CONNECTIONS", "4294967295");
+        set_env("PG_STATEMENT_TIMEOUT_MS", "18446744073709551615");
+        set_env("PG_MAX_ROWS", "9223372036854775807");
+
+        let cfg = Config::from_env().unwrap();
+        assert_eq!(cfg.max_connections, u32::MAX);
+        assert_eq!(cfg.statement_timeout_ms, u64::MAX);
+        assert_eq!(cfg.max_rows, i64::MAX);
+
+        // Negative row caps parse (i64) and are floored at query time.
+        set_env("PG_MAX_ROWS", "-1");
+        assert_eq!(Config::from_env().unwrap().max_rows, -1);
+
+        clear_env();
+    }
+
+    #[test]
+    fn parse_env_tolerates_surrounding_whitespace() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        clear_env();
+
+        set_env("__PG_PARSE_TEST", "\t 99 \n");
+        assert_eq!(parse_env::<i64>("__PG_PARSE_TEST", 0).unwrap(), 99);
+        // But internal whitespace is still an error, not a silent truncation.
+        set_env("__PG_PARSE_TEST", "9 9");
+        assert!(parse_env::<i64>("__PG_PARSE_TEST", 0).is_err());
 
         clear_env();
     }

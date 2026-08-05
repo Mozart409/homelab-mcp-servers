@@ -45,12 +45,8 @@ impl Config {
             Ok("1" | "true" | "yes")
         );
         let bind = std::env::var("LOKI_BIND").unwrap_or_else(|_| "127.0.0.1:8083".to_string());
-        let allowed_hosts = std::env::var("LOKI_ALLOWED_HOSTS").ok().map(|s| {
-            s.split(',')
-                .map(|h| h.trim().to_string())
-                .filter(|h| !h.is_empty())
-                .collect()
-        });
+        let allowed_hosts =
+            parse_allowed_hosts(std::env::var("LOKI_ALLOWED_HOSTS").ok().as_deref());
 
         Ok(Self {
             base_url: normalize_base_url(&host),
@@ -73,5 +69,177 @@ fn normalize_base_url(host: &str) -> String {
         format!("http://{h}")
     } else {
         format!("http://{h}:3100")
+    }
+}
+
+/// Parse a comma-separated allow-list, treating "set but empty" as unset.
+///
+/// Returning `Some(vec![])` here would be actively dangerous: `run()` passes it
+/// to rmcp's `with_allowed_hosts`, and an empty allow-list rejects *every*
+/// inbound `Host` header. A value like `" , "` — a typo, or a template that
+/// expanded to nothing — would therefore produce a server that silently accepts
+/// no connections at all. Collapsing that to `None` falls back to rmcp's
+/// loopback-only default instead, which is the safe reading of "unset".
+fn parse_allowed_hosts(raw: Option<&str>) -> Option<Vec<String>> {
+    let hosts: Vec<String> = raw?
+        .split(',')
+        .map(|h| h.trim().to_string())
+        .filter(|h| !h.is_empty())
+        .collect();
+
+    if hosts.is_empty() { None } else { Some(hosts) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Mutex, PoisonError};
+
+    // `from_env` reads process-global state, so serialize the tests that mutate
+    // it. `unwrap_or_else(into_inner)` keeps a panicking test from poisoning the
+    // lock and cascading failures into the others.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    const KEYS: &[&str] = &[
+        "LOKI_HOST",
+        "LOKI_TOKEN",
+        "LOKI_ORG_ID",
+        "LOKI_INSECURE",
+        "LOKI_BIND",
+        "LOKI_ALLOWED_HOSTS",
+    ];
+
+    // SAFETY: all env mutation is confined to tests holding `ENV_LOCK`, so no
+    // other thread reads or writes the environment concurrently.
+    fn clear_env() {
+        for k in KEYS {
+            unsafe { std::env::remove_var(k) };
+        }
+    }
+    fn set_env(k: &str, v: &str) {
+        unsafe { std::env::set_var(k, v) };
+    }
+
+    #[test]
+    fn from_env_requires_host() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        clear_env();
+        assert!(Config::from_env().is_err());
+        clear_env();
+    }
+
+    #[test]
+    fn from_env_applies_defaults() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        clear_env();
+        set_env("LOKI_HOST", "loki.lan");
+
+        let cfg = Config::from_env().unwrap();
+        assert_eq!(cfg.base_url, "http://loki.lan:3100");
+        assert_eq!(cfg.bind, "127.0.0.1:8083");
+        assert!(cfg.token.is_none());
+        assert!(cfg.org_id.is_none());
+        assert!(!cfg.insecure);
+        assert!(cfg.allowed_hosts.is_none());
+
+        clear_env();
+    }
+
+    #[test]
+    fn from_env_reads_every_override() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        clear_env();
+        set_env("LOKI_HOST", "https://loki.example.com/");
+        set_env("LOKI_TOKEN", "secret");
+        set_env("LOKI_ORG_ID", "tenant-7");
+        set_env("LOKI_INSECURE", "true");
+        set_env("LOKI_BIND", "0.0.0.0:9999");
+
+        let cfg = Config::from_env().unwrap();
+        assert_eq!(cfg.base_url, "https://loki.example.com");
+        assert_eq!(cfg.token.as_deref(), Some("secret"));
+        assert_eq!(cfg.org_id.as_deref(), Some("tenant-7"));
+        assert!(cfg.insecure);
+        assert_eq!(cfg.bind, "0.0.0.0:9999");
+
+        clear_env();
+    }
+
+    #[test]
+    fn from_env_treats_empty_token_and_org_id_as_unset() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        clear_env();
+        set_env("LOKI_HOST", "loki.lan");
+        set_env("LOKI_TOKEN", "");
+        set_env("LOKI_ORG_ID", "");
+
+        let cfg = Config::from_env().unwrap();
+        assert!(cfg.token.is_none());
+        assert!(cfg.org_id.is_none());
+
+        clear_env();
+    }
+
+    #[test]
+    fn insecure_is_true_only_for_1_true_yes() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        clear_env();
+        set_env("LOKI_HOST", "loki.lan");
+
+        for truthy in ["1", "true", "yes"] {
+            set_env("LOKI_INSECURE", truthy);
+            assert!(
+                Config::from_env().unwrap().insecure,
+                "{truthy} should enable insecure"
+            );
+        }
+        // Case-sensitive and strictly literal: nothing else counts.
+        for falsy in ["0", "false", "no", "", "TRUE", "Yes", "on", "2"] {
+            set_env("LOKI_INSECURE", falsy);
+            assert!(
+                !Config::from_env().unwrap().insecure,
+                "{falsy:?} should not enable insecure"
+            );
+        }
+
+        clear_env();
+    }
+
+    #[test]
+    fn allowed_hosts_splits_trims_and_drops_empty_items() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        clear_env();
+        set_env("LOKI_HOST", "loki.lan");
+        set_env("LOKI_ALLOWED_HOSTS", " a.example.com , localhost ,, ");
+
+        let cfg = Config::from_env().unwrap();
+        assert_eq!(
+            cfg.allowed_hosts.unwrap(),
+            vec!["a.example.com".to_string(), "localhost".to_string()]
+        );
+
+        // Regression: a value that trims to nothing collapses to `None`, not
+        // `Some(vec![])`. An empty allow-list reaches rmcp's
+        // `with_allowed_hosts` and rejects *every* inbound Host header, so a
+        // typo'd or empty-template value used to yield a server that silently
+        // accepted no connections at all.
+        for blank in [" , ", "", ",", "   ", ",,,"] {
+            set_env("LOKI_ALLOWED_HOSTS", blank);
+            assert_eq!(
+                Config::from_env().unwrap().allowed_hosts,
+                None,
+                "{blank:?} should fall back to the loopback default"
+            );
+        }
+
+        clear_env();
+    }
+
+    #[test]
+    fn normalize_base_url_fills_in_scheme_and_port() {
+        assert_eq!(normalize_base_url("loki.lan"), "http://loki.lan:3100");
+        assert_eq!(normalize_base_url("loki.lan:3200"), "http://loki.lan:3200");
+        assert_eq!(normalize_base_url("http://loki.lan/"), "http://loki.lan");
+        assert_eq!(normalize_base_url(" https://loki.lan "), "https://loki.lan");
     }
 }
