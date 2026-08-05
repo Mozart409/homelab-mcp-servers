@@ -2,6 +2,12 @@
 /.claude
 /target
 
+# Nix profile + GC root created by `just seed-cache` and by .woodpecker/test.yaml
+# (`nix develop --profile ./.ci-profile`). Keeping it locally is deliberate — it
+# pins the CI closure against garbage collection — but it must never be committed.
+/.ci-profile
+/.ci-profile-*-link
+
 # Local environment files (keep .env.example tracked)
 .env
 !.env.example
