@@ -21,6 +21,7 @@ Built in Rust on [`rmcp`](https://github.com/modelcontextprotocol/rust-sdk)
 | [`prometheus-mcp`](crates/prometheus-mcp/README.md) | Prometheus         | `prommcp`, `prommcp-server` | implemented |
 | [`loki-mcp`](crates/loki-mcp/README.md)          | Grafana Loki          | `lokimcp`, `lokimcp-server` | implemented |
 | [`homeassistant-mcp`](crates/homeassistant-mcp/README.md) | Home Assistant | `hamcp`, `hamcp-server` | implemented |
+| [`woodpecker-mcp`](crates/woodpecker-mcp/README.md) | Woodpecker CI      | `wpmcp`, `wpmcp-server`     | implemented |
 
 Each server is split into a **library** crate (REST/DB client + MCP tool
 definitions and wiring) and a thin **`-server`** binary that serves the tools
@@ -68,6 +69,17 @@ Query and control a Home Assistant instance. Tools: `health_check`,
 required token setup, and tool details are in the
 [crate README](crates/homeassistant-mcp/README.md).
 
+### woodpecker-mcp — Woodpecker CI
+
+Inspect repositories, pipelines, steps, and logs. Tools: `version`, `healthz`,
+`queue_info`, `list_repos`, `lookup_repo`, `get_repo`, `list_branches`,
+`list_pull_requests`, `list_pipelines`, `get_pipeline`, `pipeline_config`,
+`pipeline_metadata`, `step_logs`, `list_crons`, `list_agents`, `pipeline_feed`
+— all read-only GETs against the Woodpecker CI REST API. The server is
+read-only and does not expose secrets/registries endpoints. Full configuration
+and tool details are in the
+[crate README](crates/woodpecker-mcp/README.md).
+
 ## Quick start
 
 This repo ships a [Nix flake](flake.nix) that pins the Rust toolchain (1.96.1)
@@ -98,6 +110,7 @@ cargo run -p pgmcp-server     # Postgres,   default endpoint http://127.0.0.1:80
 cargo run -p prommcp-server   # Prometheus, default endpoint http://127.0.0.1:8082/mcp
 cargo run -p lokimcp-server   # Loki,       default endpoint http://127.0.0.1:8083/mcp
 cargo run -p hamcp-server     # Home Assistant, default endpoint http://127.0.0.1:8084/mcp
+cargo run -p wpmcp-server     # Woodpecker CI, default endpoint http://127.0.0.1:8085/mcp
 ```
 
 Both bind loopback-only by default and reject non-loopback `Host` headers
@@ -116,7 +129,8 @@ The servers use the streamable-HTTP transport, so point the client at the URL:
     "postgres": { "type": "http", "url": "http://127.0.0.1:8081/mcp" },
     "prometheus": { "type": "http", "url": "http://127.0.0.1:8082/mcp" },
     "loki": { "type": "http", "url": "http://127.0.0.1:8083/mcp" },
-    "homeassistant": { "type": "http", "url": "http://127.0.0.1:8084/mcp" }
+    "homeassistant": { "type": "http", "url": "http://127.0.0.1:8084/mcp" },
+    "woodpecker": { "type": "http", "url": "http://127.0.0.1:8085/mcp" }
   }
 }
 ```

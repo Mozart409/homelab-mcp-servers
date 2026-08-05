@@ -83,6 +83,27 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  wpmcp:
+    build:
+      context: .
+      dockerfile: Containerfile
+      args:
+        BIN: wpmcp-server
+    image: localhost/wpmcp-server:dev
+    env_file: .env
+    environment:
+      WP_BIND: 0.0.0.0:8085
+      RUST_LOG: info
+    ports:
+      - "8085:8085"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/server", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
   # --- Postgres MCP instance #1 -----------------------------------------------
   # Credentials come from .env (POSTGRES_PASSWORD is required; user/db default
   # to `pgmcp`). Loopback-only on the host; reachable as `postgres:5432` inside
@@ -137,11 +158,11 @@ services:
   # pgmcp2:
   #   <<: *pgmcp-base
   #   environment:
-  #     PG_BIND: 0.0.0.0:8085
+  #     PG_BIND: 0.0.0.0:8086
   #     PG_DATABASE_URL: postgres://${PG2_USER:-pgmcp}:${PG2_PASSWORD}@postgres2:5432/${PG2_DB:-pgmcp}
   #     RUST_LOG: info
   #   ports:
-  #     - "8085:8085"
+  #     - "8086:8086"
   #   depends_on:
   #     postgres2:
   #       condition: service_healthy
