@@ -52,8 +52,13 @@ variables:
       # `queue: task expired` after six minutes of real work. Bounding this keeps
       # a scheduler slot free for the agent's own bookkeeping. Raise both if the
       # agent ever gets more cores.
+      # Measured: peak CPU on the agent host hit 98.9% during these builds
+      # (node_cpu_seconds_total, 2h window). `cores = 2` on a 2-core box still
+      # saturates it, so this leaves one core for the agent's own bookkeeping.
+      # Builds are slower; a build that finishes beats a faster one the server
+      # kills. Raise to 2 if the agent VM ever gets more cores.
       max-jobs = 1
-      cores = 2
+      cores = 1
 
   # Trust the homelab step-ca root inside the container.
   #
