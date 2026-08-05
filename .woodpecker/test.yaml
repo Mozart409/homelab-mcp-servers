@@ -62,16 +62,49 @@ variables:
   # cache.nixos.org and github.com working.
   - &ca_setup |
     set -e
-    base=""
-    for c in /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-bundle.crt "$NIX_SSL_CERT_FILE"; do
-      if [ -n "$c" ] && [ -r "$c" ]; then base="$c"; break; fi
-    done
     bundle=/tmp/homelab-ca-bundle.crt
-    { if [ -n "$base" ]; then cat "$base"; fi; cat .woodpecker/homelab-ca.crt; } > "$bundle"
-    export NIX_SSL_CERT_FILE="$bundle"
-    export CURL_CA_BUNDLE="$bundle"
-    export SSL_CERT_FILE="$bundle"
-    echo "trust store: $bundle (base: ${base:-none}, +1 homelab root)"
+
+    # Locate the system CA bundle. `-s` (exists AND non-empty) rather than `-r`,
+    # because /etc/ssl/certs/* are symlinks into the nix profile and a dangling
+    # symlink would otherwise look usable.
+    base=""
+    for c in "$NIX_SSL_CERT_FILE" "$SSL_CERT_FILE" \
+             /etc/ssl/certs/ca-certificates.crt \
+             /etc/ssl/certs/ca-bundle.crt \
+             /etc/pki/tls/certs/ca-bundle.crt \
+             /nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt \
+             /root/.nix-profile/etc/ssl/certs/ca-bundle.crt; do
+      if [ -n "$c" ] && [ -s "$c" ]; then base="$c"; break; fi
+    done
+
+    if [ -z "$base" ]; then
+      # FAIL SAFE. An earlier version fell through to writing a bundle holding
+      # ONLY the homelab root, which silently REPLACED the trust store instead
+      # of extending it -- so cache.nixos.org and github.com lost their trust
+      # anchor and every fetch failed. Losing the homelab cache costs time;
+      # losing public TLS breaks the build outright, so leave it alone.
+      echo "WARNING: no system CA bundle found -- NOT overriding the trust store."
+      echo "         The homelab cache will fail TLS and Nix will fall back to"
+      echo "         public substituters (slower, but working)."
+    else
+      cat "$base" .woodpecker/homelab-ca.crt > "$bundle"
+      export NIX_SSL_CERT_FILE="$bundle"
+      export CURL_CA_BUNDLE="$bundle"
+      export SSL_CERT_FILE="$bundle"
+      echo "trust store: $bundle (base: $base, +1 homelab root)"
+    fi
+
+    # Self-check: prove the resulting trust store works for BOTH a public host
+    # and the homelab one. Without this the misconfiguration above surfaced four
+    # minutes later as an unrelated-looking fetch error.
+    for u in https://cache.nixos.org/nix-cache-info \
+             https://cache.homelab.local/homelab/nix-cache-info; do
+      if curl -fsS --max-time 10 -o /dev/null "$u" 2>/dev/null; then
+        echo "  trust OK   $u"
+      else
+        echo "  trust FAIL $u"
+      fi
+    done
 
 steps:
   # `just ci` is `lint-ci test` — fmt-check, clippy, cargo-deny, cargo test.
@@ -79,6 +112,10 @@ steps:
   # which rewrites files and would let unformatted code pass a pipeline.
   - name: ci
     image: *nix_image
+    # `pull` defaults to false, so an agent keeps whatever `latest` it
+    # cached -- which is how this ran against a stale image whose CA
+    # layout differed from the published one.
+    pull: true
     environment: *nix_env
     commands:
       - *ca_setup
@@ -104,6 +141,10 @@ steps:
   # the write token. Reads stay public, so PRs still get full cache benefit.
   - name: cache-push
     image: *nix_image
+    # `pull` defaults to false, so an agent keeps whatever `latest` it
+    # cached -- which is how this ran against a stale image whose CA
+    # layout differed from the published one.
+    pull: true
     depends_on: [ci]
     environment:
       <<: *nix_env
