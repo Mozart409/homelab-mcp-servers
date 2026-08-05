@@ -11,21 +11,30 @@
 #        HARBOR_USERNAME   Harbor robot account name
 #        HARBOR_PASSWORD   Harbor robot account token
 #
-#   2. Repo marked **Trusted** by a server admin. Required for `privileged`.
+#   2. Repo -> Settings -> Trusted -> **Security** enabled by a server admin.
+#      Trust is granular (Network / Volumes / Security are separate toggles);
+#      `privileged` needs Security ONLY -- this workflow mounts no volumes and
+#      touches no network settings, so leave the other two off.
 #
 #   3. Server admin sets, with the tag pinned exactly as written below:
 #        WOODPECKER_PLUGINS_PRIVILEGED=woodpeckerci/plugin-docker-buildx:5
-#      Since Woodpecker 3.0 no plugin gets privileged by default; without this
-#      the step fails with an "insufficient privileges" error that looks like a
-#      YAML problem but is not.
+#      Since Woodpecker 3.0 no plugin gets privileged by default.
 #
-# Why buildx and not kaniko: kaniko needs none of the above, which would make it
-# the obvious choice -- but it does not implement BuildKit's
-# `RUN --mount=type=cache`, which Containerfile relies on to share the cargo
-# registry and target dir across builds. Kaniko upstream was also archived in
-# June 2025. If you ever want to drop the privileged requirement, the move is to
-# delete the cache mounts from Containerfile and switch this to
-# woodpeckerci/plugin-kaniko -- at the cost of a cold cargo build per image.
+# (2) and (3) are DIFFERENT gates and fail at different times:
+#   * (2) is checked by the linter when the pipeline is created. The linter
+#     validates every workflow file regardless of its `when:` conditions, so
+#     while Security is off this file blocks test.yaml and preflight.yaml from
+#     running too -- on pushes that would never build an image at all.
+#   * (3) is enforced at runtime, so it only surfaces when a tag is actually
+#     pushed. Its error reads like a YAML mistake but is not.
+#
+# Why buildx and not kaniko: kaniko needs neither (2) nor (3), which would make
+# it the obvious choice -- but it does not implement BuildKit's
+# `RUN --mount=type=cache`, which Containerfile relies on. Kaniko upstream was
+# also archived in June 2025. Note the cache mounts are daemon-local and so buy
+# nothing in CI; they matter for local `just image-all`, which is the real cost
+# of switching. To drop the privileged requirement: delete the cache mounts from
+# Containerfile and switch this to woodpeckerci/plugin-kaniko.
 # ---------------------------------------------------------------------------
 
 # Only publish images for a commit whose tests already passed. `test` is the
@@ -74,8 +83,17 @@ steps:
         }
 
   - name: publish
+    # !! COUPLED TO SERVER CONFIG -- do not bump this tag alone !!
+    # This exact string must also appear in the server's
+    # `WOODPECKER_PLUGINS_PRIVILEGED` allowlist. Woodpecker matches the image
+    # verbatim, so changing `:5` here without changing it there makes the step
+    # fail at *runtime* with an "insufficient privileges" error that reads like
+    # a YAML mistake. The two must move together, in the same change.
     image: woodpeckerci/plugin-docker-buildx:5
     depends_on: [verify-tag-matches-version]
+    # Requires the repo's `Security` trust level (Woodpecker's linter checks
+    # `trusted.Security`, and rejects the whole pipeline -- including unrelated
+    # workflows -- when it is off). `Network` and `Volumes` are NOT needed.
     privileged: true
     settings:
       registry: homelab-harbor.dropbear-butterfly.ts.net

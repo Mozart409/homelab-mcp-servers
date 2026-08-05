@@ -62,7 +62,11 @@ steps:
       ATTIC_PUSH_TOKEN:
         from_secret: ATTIC_PUSH_TOKEN
     commands:
-      - nix run nixpkgs#attic-client -- login homelab https://cache.homelab.local "$ATTIC_PUSH_TOKEN"
+      # Trailing slash is deliberate. Attic joins the API endpoint with the cache
+      # name; without it the binary-cache URL can render as
+      # `https://cache.homelab.localhomelab`. The slash is correct whether attic
+      # joins properly or concatenates naively, so it costs nothing to be safe.
+      - nix run nixpkgs#attic-client -- login homelab https://cache.homelab.local/ "$ATTIC_PUSH_TOKEN"
       - nix run nixpkgs#attic-client -- push homelab:homelab ./.ci-profile
     when:
       - event: push
