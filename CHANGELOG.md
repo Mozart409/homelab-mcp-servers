@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.7.0 - 2026-08-05
+#### Features
+- (**wpmcp**) add woodpecker ci mcp server - (0102209) - Amadeus Mader
+#### Continuous Integration
+- (**woodpecker**) scan with trivy fs instead of building images nothing deploys - (348eae1) - Amadeus Mader
+#### Miscellaneous Chores
+- (**deps**) upgrade flake - (82acfc0) - Amadeus Mader
+
+- - -
+
 ## 0.6.1 - 2026-08-05
 #### Bug Fixes
 - (**cog**) cog will push after bump - (b601411) - Amadeus Mader
