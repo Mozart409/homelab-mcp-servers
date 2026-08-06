@@ -46,8 +46,12 @@ variables:
       accept-flake-config = true
       connect-timeout = 5
       stalled-download-timeout = 60
-      # The agent VM has 2 cores. Left unbounded, Nix ran one derivation with
-      # `cargo -j 3` and oversubscribed both of them, and the Woodpecker agent
+      # Step containers are capped at 3 cores by the agent's
+      # WOODPECKER_BACKEND_DOCKER_LIMIT_CPU_QUOTA, on a 4-core VM shared with
+      # the server. (An earlier revision of this comment said the VM had 2
+      # cores; it has 4 -- the cap is the quota, not the hardware.) Left
+      # unbounded, Nix ran one derivation with
+      # `cargo -j 3` and oversubscribed the quota, and the Woodpecker agent
       # could not service its task lease — the server then killed the step with
       # `queue: task expired` after six minutes of real work. Bounding this keeps
       # a scheduler slot free for the agent's own bookkeeping. Raise both if the
@@ -59,6 +63,30 @@ variables:
       # kills. Raise to 2 if the agent VM ever gets more cores.
       max-jobs = 1
       cores = 1
+      # `max-jobs`/`cores` bound DERIVATION BUILDS ONLY. They do nothing for
+      # substitution -- the `copying path ... from cache.homelab.local` phase --
+      # which is bounded by `http-connections` (default 25). That gap is what
+      # killed pipeline #25: the step was still healthily copying vendored crate
+      # sources when the agent stopped being able to renew its workflow lease.
+      #
+      # The server and the agent share one VM, and memory is the binding
+      # constraint there, not cores: the guest balloons down toward its
+      # `floating` minimum, and on the day of #25 MemTotal had drifted from
+      # ~3.0 GB to ~1.2 GB with only ~240 MB available. Up to 25 concurrent NAR
+      # fetches, each decompressing on arrival, is a page-cache and CPU spike
+      # that box cannot absorb -- woodpecker-server's SQLite began returning
+      # `database is locked`, the agent's `extend()` RPC failed with `sql: no
+      # rows in result set`, and five minutes later the server expired the task
+      # and orphaned the container. The UI reports that as `Canceled` with no
+      # error in the step log, which points at the build and is the wrong place
+      # to look -- check the agent/server journal instead.
+      #
+      # 4 keeps the cache worth having -- the ~800 paths still stream four at a
+      # time, nowhere near the bottleneck here -- while leaving the server
+      # enough memory and CPU to service its own writes. This bounds the blast
+      # radius; it does not fix the cause, which is a ballooned-down VM running
+      # a SQLite-backed server alongside its own agent.
+      http-connections = 4
 
   # Trust the homelab step-ca root inside the container.
   #
