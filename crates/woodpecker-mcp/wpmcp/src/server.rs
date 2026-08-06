@@ -1107,6 +1107,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn error_with_an_empty_body_has_no_dangling_separator() -> Result<()> {
+        // Woodpecker answers a 404 with no body at all. Appending an empty
+        // message left `... returned 404 Not Found: ` with nothing after the
+        // colon, which reads like the error itself was truncated.
+        let (_mock, server) = mock_wp(ResponseTemplate::new(404).set_body_string("")).await?;
+
+        let err = server
+            .version()
+            .await
+            .expect_err("a 404 must surface as ErrorData");
+        let message = format!("{err:?}");
+        assert!(
+            message.contains("404"),
+            "the status must survive into the message, got: {message}"
+        );
+        assert!(
+            !message.contains("Not Found: "),
+            "no separator without a message after it, got: {message}"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn empty_200_body_yields_null() -> Result<()> {
         let (_mock, server) = mock_wp(ResponseTemplate::new(200).set_body_string("")).await?;
 
