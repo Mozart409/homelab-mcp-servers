@@ -91,6 +91,13 @@ impl WpClient {
             } else {
                 body.trim().to_string()
             };
+            // Woodpecker answers some errors (404 in particular) with an empty
+            // body, and appending an empty message left a dangling `": "` that
+            // reads like the error was truncated. Only add the separator when
+            // there is something after it.
+            if message.is_empty() {
+                bail!("Woodpecker API {url} returned {status}");
+            }
             bail!("Woodpecker API {url} returned {status}: {message}");
         }
 

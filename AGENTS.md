@@ -30,12 +30,12 @@ templates/server-mcp/  scaffold for a new server (copy this to start)
 
 Existing servers: `crates/pbs-mcp` (Proxmox Backup Server, REST, port `8080`),
 `crates/postgres-mcp` (PostgreSQL, sqlx, `8081`), `crates/prometheus-mcp`
-(Prometheus, REST, `8082`), `crates/loki-mcp` (Grafana Loki, REST, `8083`), and
+(Prometheus, REST, `8082`), `crates/loki-mcp` (Grafana Loki, REST, `8083`),
 `crates/homeassistant-mcp` (Home Assistant, REST, `8084` — **not read-only**,
-see Hard rules §1). The library crate is the unit of substance; the `-server`
-binary is a near-empty `main` that calls `run()`. The Prometheus/Loki REST
-servers are the closest clone of `pbs-mcp` — copy that one when adding another
-REST-backed server.
+see Hard rules §1), and `crates/woodpecker-mcp` (Woodpecker CI, REST, `8085`).
+The library crate is the unit of substance; the `-server` binary is a near-empty
+`main` that calls `run()`. The Prometheus/Loki REST servers are the closest
+clone of `pbs-mcp` — copy that one when adding another REST-backed server.
 
 Alongside the servers, `crates/common/mcp-common` (package `mcp-common`) holds
 the cross-server plumbing that would otherwise be copy-pasted into every crate:
@@ -144,7 +144,8 @@ Before considering a change done: `just ci` must pass. Clippy runs with
 1. Copy `templates/server-mcp/` to `crates/<service>-mcp/`, rename the
    `mymcp`/`mymcp-server` crates to `<svc>mcp`/`<svc>mcp-server`.
 2. Implement `config.rs` (env vars prefixed `<SVC>_`, pick the next free default
-   port — pbs `8080`, postgres `8081`, prometheus `8082`, loki `8083`, ha `8084`),
+   port — pbs `8080`, postgres `8081`, prometheus `8082`, loki `8083`, ha `8084`,
+   wp `8085`),
    `client.rs`, `server.rs` (read-only tools), and `run()` in `lib.rs`.
 3. Register the crate (workspace `members` is `crates/*/*`, so it's automatic),
    add deps to `[workspace.dependencies]` if new.
