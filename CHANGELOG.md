@@ -2,6 +2,21 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.8.0 - 2026-08-06
+#### Features
+- (**wpmcp**) add list_agent_tasks and document cancel_info for post-mortems - (6e962f7) - Amadeus Mader
+#### Bug Fixes
+- (**wpmcp**) drop the dangling separator when an api error has no body - (1ea2f0d) - Amadeus Mader
+#### Documentation
+- (**agents**) list woodpecker-mcp and its 8085 port among existing servers - (afbdb6a) - Amadeus Mader
+- (**readme**) add badge - (3c3c97a) - Amadeus Mader
+- (**woodpecker**) fix badge - (f2d784f) - Amadeus Mader
+- (**woodpecker**) fix status badge - (e88d9dd) - Amadeus Mader
+#### Continuous Integration
+- (**woodpecker**) bound nix substitution so the agent keeps its task lease - (8d986ce) - Amadeus Mader
+
+- - -
+
 ## 0.7.0 - 2026-08-05
 #### Features
 - (**wpmcp**) add woodpecker ci mcp server - (0102209) - Amadeus Mader
