@@ -94,7 +94,7 @@ server sees exactly what you see in the web UI.
 
 ## Tools
 
-All 16 tools are read-only `GET`s. The **Auth** column reflects behaviour
+All 17 tools are read-only `GET`s. The **Auth** column reflects behaviour
 measured against Woodpecker 3.16.0; see
 [Authentication](#authentication-and-anonymous-access) for what "public" means.
 
@@ -115,6 +115,7 @@ measured against Woodpecker 3.16.0; see
 | `step_logs`          | `GET /api/repos/{repo_id}/logs/{number}/{step_id}`      | public repos: no  |
 | `list_crons`         | `GET /api/repos/{repo_id}/cron`                         | token             |
 | `list_agents`        | `GET /api/agents`                                       | token + **admin** |
+| `list_agent_tasks`   | `GET /api/agents/{agent_id}/tasks`                      | token + **admin** |
 | `pipeline_feed`      | `GET /api/user/feed`                                    | token             |
 
 `list_pipelines` accepts `page`, `per_page`, `branch`, `event`, `status`, `ref`,
@@ -163,9 +164,72 @@ cannot enumerate repositories by walking IDs. Use `list_repos` (authenticated) o
 
 ### Admin-only endpoints
 
-`list_agents` requires server admin rights and returns `401`/`403` for an ordinary
-user's token. This is expected and not a misconfiguration — everything else in the
-table works with a normal account.
+`list_agents` and `list_agent_tasks` require server admin rights and return
+`401`/`403` for an ordinary user's token. This is expected and not a
+misconfiguration — everything else in the table works with a normal account.
+
+## Post-mortems
+
+Working out why a pipeline stopped is the most common thing this server gets
+pointed at, and the web UI is unhelpfully lossy about it: several very different
+causes all render as "Canceled". Three tools cover most of the question, and one
+limitation decides where you have to go next.
+
+### `cancel_info` says who stopped it
+
+`get_pipeline` returns a `cancel_info` object. It is the fastest way to tell why
+a pipeline stopped, because it records the *provenance* of the stop rather than
+just the resulting status:
+
+| `cancel_info`                             | What actually happened                                                              |
+| ----------------------------------------- | ----------------------------------------------------------------------------------- |
+| `canceled_by_user` set                    | A human cancelled it                                                                |
+| `superseded_by` set                       | Auto-cancelled by a newer pipeline (repo setting `cancel_previous_pipeline_events`) |
+| `canceled_by_step` set                    | A step cancelled the pipeline                                                       |
+| status `killed`, `cancel_info` null/empty | Nobody cancelled it — the server's queue expired the task                           |
+
+The last row is the one worth internalising. An expired task looks identical to
+a deliberate cancellation in the UI, and the step log simply ends: the agent
+lost its workflow lease, so it never got the chance to write an error. "Canceled
+with no error in the log and nobody who admits to cancelling it" is the
+signature of queue expiry, not of a human.
+
+### Agent liveness
+
+`list_agents` returns `last_contact` and `last_work`. Together they bound when an
+agent last *completed* anything, which is what separates "the agent is wedged"
+(still checking in, but `last_work` frozen well before the pipeline died) from
+"the agent is merely idle" (nothing to do, both timestamps quiet).
+
+`list_agent_tasks` is a **live** view of one agent's queue, not a history. Tasks
+are removed from the queue the moment they complete or expire, so the tool can
+catch a wedge in progress and tells you nothing whatsoever about a pipeline that
+has already finished. Reach for it during an incident, not after one.
+
+### What this server cannot tell you
+
+Stated plainly, because it matters more than any of the above: this MCP tells you
+**what** happened — status, timing, cancel provenance, step errors, logs. It
+cannot tell you **why** the scheduler killed something. Woodpecker's queue is
+in-memory with a database backup table; there is no event log, no task-history
+endpoint, and an expired task is deleted rather than archived. No route in the
+3.16.0 API exposes any of it.
+
+That evidence exists only in the Woodpecker server and agent journals. The
+workflow that actually works:
+
+1. `get_pipeline` → status `killed` with null `cancel_info`. Nobody cancelled it.
+2. Take the pipeline's start and finish timestamps from the same response.
+3. Read `journalctl -u woodpecker-server` and
+   `journalctl -u woodpecker-agent-podman` across that window. Lines like
+   `database is locked`, `failed to extend workflow lease`,
+   `queue: resubmitting expired task`, and
+   `pull queue item: not found in backup, dropping stale task` only ever appear
+   there — and they are the actual answer.
+
+So the honest framing of this server's contribution to a post-mortem is not that
+it explains the failure. It is that it rules out the mundane explanations in one
+call and tells you **which five-minute window of journal to read**.
 
 ## API quirks
 
@@ -241,8 +305,8 @@ Below the cap the array is returned unwrapped.
 
 Every tool issues a `GET`; none can restart, cancel, approve, trigger, or delete
 anything. This is enforced by a test, not just convention:
-`every_tool_issues_only_get_requests` invokes all 16 tools against a mock server
-and asserts that all 16 recorded requests used `GET`. A tool added without a line
+`every_tool_issues_only_get_requests` invokes all 17 tools against a mock server
+and asserts that all 17 recorded requests used `GET`. A tool added without a line
 in that test fails the assertion.
 
 Woodpecker's mutating endpoints — restart, cancel, approve, decline, trigger,

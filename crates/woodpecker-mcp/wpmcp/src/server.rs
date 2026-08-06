@@ -185,6 +185,12 @@ struct ListAgentsParams {
     per_page: Option<i64>,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct ListAgentTasksParams {
+    /// Agent ID, as reported by `list_agents`.
+    agent_id: i64,
+}
+
 /// Decode each log entry's base64 `data` field into readable text, in place.
 ///
 /// Woodpecker models a log line's payload as Go `[]byte`, which marshals to
@@ -371,8 +377,13 @@ impl WpServer {
             .await
     }
 
+    // The cancel_info breakdown is in the description rather than a comment
+    // because it is the caller who needs it: the object is easy to overlook, and
+    // the "killed with empty cancel_info" case is invisible in this API — it was
+    // confirmed by correlating a killed pipeline here against the server journal,
+    // which is the only place the queue's expiry is recorded.
     #[tool(
-        description = "Get detailed information about a specific pipeline, including its steps, status, and configuration."
+        description = "Get detailed information about a specific pipeline, including its steps, status, and configuration. To determine WHY a pipeline stopped, read the `cancel_info` object first — it is the fastest answer: `canceled_by_user` set means a human cancelled it; `superseded_by` set means it was auto-cancelled by a newer pipeline (the repo's cancel_previous_pipeline_events setting); `canceled_by_step` set means a step cancelled it. If `status` is \"killed\" but `cancel_info` is null or empty, NOBODY cancelled it — the server's queue expired the task. That reason appears only in the Woodpecker server/agent journal (\"queue: task expired\", \"failed to extend workflow lease\"), never in this API, so stop looking for it here."
     )]
     async fn get_pipeline(
         &self,
@@ -509,6 +520,21 @@ impl WpServer {
             q.push(("perPage", pp.to_string()));
         }
         self.call("/api/agents", &q).await
+    }
+
+    // No pagination on this route: verified against the Woodpecker 3.16.0 Swagger
+    // spec, `agent_id` is the only parameter it accepts. Sending page/perPage here
+    // would be silently ignored and would mislead the caller into thinking they
+    // had seen a page rather than the whole set.
+    #[tool(
+        description = "List the tasks an agent is currently holding. This is a LIVE view of the queue only: tasks are removed once they complete or expire, so a finished pipeline shows nothing here — use get_pipeline and step_logs for post-mortems. Its use is catching a wedge while it is happening, e.g. an agent still holding a task the server has already dropped. Each task carries its pipeline_id, repo_id, pid, name, dependencies, dep_status, labels, and created timestamp. Note: requires admin rights and may return 401 or 403 if permission is denied."
+    )]
+    async fn list_agent_tasks(
+        &self,
+        Parameters(ListAgentTasksParams { agent_id }): Parameters<ListAgentTasksParams>,
+    ) -> Result<String, ErrorData> {
+        self.call(&format!("/api/agents/{agent_id}/tasks"), &[])
+            .await
     }
 
     #[tool(
@@ -1072,6 +1098,21 @@ mod tests {
         Ok(())
     }
 
+    /// The route takes no query parameters at all, so an empty query string is
+    /// part of the contract, not an incidental detail.
+    #[tokio::test]
+    async fn list_agent_tasks_hits_its_path() -> Result<()> {
+        let (mock, server) = mock_wp(ok_body()).await?;
+        ok(server
+            .list_agent_tasks(Parameters(ListAgentTasksParams { agent_id: 1 }))
+            .await)?;
+
+        let req = only_request(&mock).await?;
+        assert_eq!(req.url.path(), "/api/agents/1/tasks");
+        assert_eq!(req.url.query(), None);
+        Ok(())
+    }
+
     #[tokio::test]
     async fn pipeline_feed_hits_its_path() -> Result<()> {
         let (mock, server) = mock_wp(ok_body()).await?;
@@ -1139,7 +1180,7 @@ mod tests {
         Ok(())
     }
 
-    /// Invoke all 16 tools once, with minimal arguments.
+    /// Invoke all 17 tools once, with minimal arguments.
     ///
     /// Split out of the test below purely so neither function trips
     /// `clippy::too_many_lines` — enumerating every tool is inherently long, and
@@ -1230,6 +1271,9 @@ mod tests {
                 per_page: None,
             }))
             .await)?;
+        ok(server
+            .list_agent_tasks(Parameters(ListAgentTasksParams { agent_id: 1 }))
+            .await)?;
         ok(server.pipeline_feed().await)?;
         Ok(())
     }
@@ -1248,8 +1292,8 @@ mod tests {
             .ok_or_else(|| eyre!("mock server is not recording requests"))?;
         assert_eq!(
             requests.len(),
-            16,
-            "all 16 tools should have issued a request"
+            17,
+            "all 17 tools should have issued a request"
         );
         for req in &requests {
             assert_eq!(
