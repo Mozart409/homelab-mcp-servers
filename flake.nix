@@ -80,6 +80,7 @@
         prommcp-server = mkServer "prommcp-server";
         lokimcp-server = mkServer "lokimcp-server";
         hamcp-server = mkServer "hamcp-server";
+        wpmcp-server = mkServer "wpmcp-server";
       };
 
       # Nix-native lint/test checks, sharing `cargoArtifacts` with the package
@@ -260,6 +261,13 @@
           hamcp-server = {
             prefix = "HA";
             port = 8084;
+            hasToken = true;
+          };
+          wpmcp-server = {
+            # WP_, not WOODPECKER_ — the agent injects WOODPECKER_* into every
+            # pipeline step, so the two namespaces are kept disjoint.
+            prefix = "WP";
+            port = 8085;
             hasToken = true;
           };
         };
