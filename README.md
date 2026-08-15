@@ -78,8 +78,11 @@ Inspect repositories, pipelines, steps, and logs. Tools: `version`, `healthz`,
 `list_pull_requests`, `list_pipelines`, `get_pipeline`, `pipeline_config`,
 `pipeline_metadata`, `step_logs`, `list_crons`, `list_agents`, `pipeline_feed`
 — all read-only GETs against the Woodpecker CI REST API. The server is
-read-only and does not expose secrets/registries endpoints. Full configuration
-and tool details are in the
+read-only and does not expose secrets/registries endpoints. `get_pipeline`'s
+`cancel_info` plus `list_agents`/`list_agent_tasks` are the fastest way to
+tell a human cancellation apart from the queue silently expiring a task's
+lease — see the crate README's post-mortem section for the full workflow.
+Full configuration and tool details are in the
 [crate README](crates/woodpecker-mcp/README.md).
 
 ## Quick start
