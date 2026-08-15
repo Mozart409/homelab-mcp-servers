@@ -86,6 +86,16 @@ variables:
       # enough memory and CPU to service its own writes. This bounds the blast
       # radius; it does not fix the cause, which is a ballooned-down VM running
       # a SQLite-backed server alongside its own agent.
+      #
+      # Neither fix was sufficient on its own: pipeline #33 (2026-08-15, commit
+      # 9b05ed5) hit the identical `queue: task expired` signature in the `ci`
+      # step after ~8 minutes of real work, with BOTH the guest memory sizing
+      # bump (pve-nixos-homelab #36, 4 GB step cap / 8 GB guest) and the SQLite
+      # busy_timeout/connection tuning (pve-nixos-homelab #84) already deployed
+      # and confirmed live beforehand. So the lease-renewal failure survives
+      # sizing and SQLite tuning together — treat those as necessary, not
+      # sufficient, and check the agent/server journal on the next recurrence
+      # rather than assuming either fix alone will hold.
       http-connections = 4
 
   # Trust the homelab step-ca root inside the container.
