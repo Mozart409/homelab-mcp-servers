@@ -62,6 +62,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM ${RUNTIME_IMAGE} AS runtime
 COPY --from=build /app/server /usr/local/bin/server
 
+# Already true via the :nonroot base image (UID/GID 65532), but implicit --
+# trivy's DS-0002 check reads this file statically and cannot see a user set by
+# an upstream image, so it flags a false positive without this line spelled out.
+USER nonroot:nonroot
+
 # Streamable-HTTP MCP endpoint. Bind 0.0.0.0 inside the container via the
 # server's *_BIND env var (e.g. PBS_BIND=0.0.0.0:8080) — the default 127.0.0.1
 # is unreachable from outside the container.
