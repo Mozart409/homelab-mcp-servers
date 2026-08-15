@@ -22,10 +22,11 @@
       pkgs = import nixpkgs {
         inherit system;
         config.allowUnfree = true;
+        overlays = [fenix.overlays.default];
       };
 
       # Latest stable Rust, pinned by flake.lock rather than a literal version.
-      rust = fenix.packages.${system}.stable.withComponents [
+      toolchain = pkgs.fenix.stable.withComponents [
         "cargo"
         "clippy"
         "rust-src"
@@ -33,7 +34,7 @@
         "rustfmt"
       ];
 
-      craneLib = (crane.mkLib pkgs).overrideToolchain rust;
+      craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
 
       # `craneLib.cleanCargoSource` keeps only Cargo.toml/Cargo.lock/*.rs, which
       # would drop `clippy.toml` — and without it the workspace's deny-level
@@ -179,9 +180,9 @@
           opencode
           podman
           podman-compose
-          rust
           sqlx-cli
           tailwindcss_4
+          toolchain
           trivy
           # keep-sorted end
         ];
@@ -206,14 +207,14 @@
       # what makes a cold pipeline (empty binary cache) merely slow rather than
       # unusable.
       #
-      # `rust` is the same fenix derivation the default shell uses, so CI and
+      # `toolchain` is the same fenix derivation the default shell uses, so CI and
       # the workstation run byte-identical rustc/clippy/rustfmt — which matters
       # because clippy's pedantic set shifts between toolchain releases.
       devShells.ci = pkgs.mkShell {
         buildInputs = [
           pkgs.cargo-deny
           pkgs.just
-          rust
+          toolchain
         ];
       };
     })
