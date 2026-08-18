@@ -145,9 +145,12 @@ run-image bin tag="dev" port="8080":
 scan bin tag="dev": (image bin tag)
     trivy image --skip-version-check {{ bin }}:{{ tag }}
 
-# Bring the whole stack up with podman-compose
+# Build images sequentially (avoids IO storm from parallel podman builds),
+# then bring the whole stack up. On a small VM (6 cores, limited RAM),
+# parallel builds saturate btrfs IO and choke the system.
 up:
-    podman-compose up --build -d
+    just image-all
+    podman-compose up -d
 
 # Tear the stack down
 down:
