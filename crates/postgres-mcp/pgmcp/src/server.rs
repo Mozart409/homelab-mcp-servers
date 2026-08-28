@@ -1,10 +1,16 @@
 //! MCP server: exposes a Postgres database as read-only introspection and
 //! query tools.
 
+use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{Implementation, ServerCapabilities, ServerInfo};
-use rmcp::{ErrorData, ServerHandler, schemars, tool, tool_handler, tool_router};
+use rmcp::model::{
+    Implementation, ListResourcesResult, PromptMessage, Role, ServerCapabilities, ServerInfo,
+};
+use rmcp::{
+    ErrorData, ServerHandler, prompt, prompt_handler, prompt_router, schemars, tool, tool_handler,
+    tool_router,
+};
 use serde::Deserialize;
 
 use crate::client::{PgClient, clamp_limit};
@@ -14,6 +20,7 @@ use crate::client::{PgClient, clamp_limit};
 pub struct PgServer {
     client: PgClient,
     tool_router: ToolRouter<Self>,
+    prompt_router: PromptRouter<Self>,
 }
 
 impl PgServer {
@@ -23,6 +30,7 @@ impl PgServer {
         Self {
             client,
             tool_router: Self::tool_router(),
+            prompt_router: Self::prompt_router(),
         }
     }
 
@@ -63,6 +71,25 @@ struct QueryParams {
     /// `PG_MAX_ROWS`).
     #[serde(default)]
     limit: Option<i64>,
+}
+
+// ---- Prompt parameter types ---
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct SchemaOverviewArgs {
+    /// Schema to analyze (default: all non-system schemas).
+    #[serde(default)]
+    schema: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct TableHealthArgs {
+    /// Schema-qualified table name, e.g. `public.users` or just `users` (defaults
+    /// to `public`).
+    table: String,
+    /// Schema the table lives in (default: `public`).
+    #[serde(default)]
+    schema: Option<String>,
 }
 
 // ---- Parameter resolution ----------------------------------------------------
@@ -253,7 +280,91 @@ impl PgServer {
     }
 }
 
+// ---- Prompts ----
+
+/// Common database introspection workflows, encoded as prompts.
+///
+/// These live in their own inherent `impl` block so `#[prompt_router]` and
+/// `#[tool_router]` each own one block outright. Both generate an associated
+/// router constructor (`Self::prompt_router()` / `Self::tool_router()`), and
+/// keeping them separate avoids asking either macro to walk attributes it does
+/// not recognise.
+#[prompt_router]
+impl PgServer {
+    /// Walk through database structure to understand what tables dominate by
+    /// size and row count, infer entity relationships from foreign keys, and
+    /// flag orphaned or append-only tables.
+    #[prompt(
+        name = "schema_overview",
+        description = "Orient yourself in an unfamiliar database: scale, schemas, table distribution, and core entities."
+    )]
+    async fn schema_overview(&self, params: Parameters<SchemaOverviewArgs>) -> Vec<PromptMessage> {
+        let SchemaOverviewArgs { schema } = params.0;
+
+        let schema_hint = schema.as_ref().map_or_else(
+            || "the database".to_string(),
+            |s| format!("the `{s}` schema"),
+        );
+
+        vec![PromptMessage::new_text(
+            Role::User,
+            format!(
+                "Analyze {schema_hint} and help me understand its structure and data distribution.\n\n\
+                 Work in this order:\n\
+                 1. Start with `database_size` to understand the overall scale.\n\
+                 2. Call `list_schemas` to see all available schemas (if not already scoped to one).\n\
+                 3. Call `list_tables` to list the tables in the schema{} \n\
+                 4. Call `table_stats` to find the largest tables by disk size and by row count. These are rarely the same set — the difference tells a story.\n\
+                 5. Call `describe_table` and `list_foreign_keys` on the top 3–4 tables that dominate by size or row count. Use foreign keys to infer real entity relationships rather than guessing from table names.\n\
+                 6. Flag any tables that appear orphaned (no incoming or outgoing foreign keys) and any that look like append-only logs (monotonically increasing row counts, no deletes, minimal indexing).\n\n\
+                 **Output requirements:**\n\
+                 - Name the tables dominating by size and by row count (with row counts and sizes).\n\
+                 - Describe the core entity relationships inferred from foreign keys. Do not rely on table names alone.\n\
+                 - Explicitly flag tables that are orphaned or appear to be logs.\n\
+                 - **If the schema is too large to summarise fully, say so and scope your analysis to the top tables by size instead of guessing.**",
+                if schema.is_some() {
+                    " you specified"
+                } else {
+                    ""
+                }
+            ),
+        )]
+    }
+
+    /// Identify bloat, redundancy, missing indexes, and data type issues in
+    /// a single table to surface problems that operators can fix with schema
+    /// changes.
+    #[prompt(
+        name = "table_health",
+        description = "Audit a table's bloat, indexing, referential load, and data type usage."
+    )]
+    async fn table_health(&self, params: Parameters<TableHealthArgs>) -> Vec<PromptMessage> {
+        let TableHealthArgs { table, schema } = params.0;
+        let schema = schema.unwrap_or_else(|| "public".to_string());
+
+        vec![PromptMessage::new_text(
+            Role::User,
+            format!(
+                "Audit the health of the `{schema}`.`{table}` table. Focus on bloat, indexing, referential load, and data type correctness.\n\n\
+                 Work in this order:\n\
+                 1. Call `describe_table` to see column names, types, and nullability.\n\
+                 2. Call `table_stats` for live/dead tuple counts and on-disk size. **A high dead-tuple ratio (dead_rows / estimated_rows) indicates bloat** — autovacuum settings are the fix, which must be applied by a human. This server cannot run `VACUUM` or `REINDEX`.\n\
+                 3. Call `list_indexes` to see what indexes exist.\n\
+                 4. Call `list_foreign_keys` to see the referential load: both foreign keys referencing this table and foreign keys pointing outward.\n\
+                 5. Use `run_query` for targeted read-only counts if the catalog tools do not show what you need (e.g. NULL distributions, cardinality, duplicate checks). Stay within the row cap and statement timeout.\n\n\
+                 **Identify and report:**\n\
+                 - **Bloat:** Dead-tuple ratio and what fix to apply (autovacuum tuning, manual `VACUUM FULL`, `REINDEX` — humans must run these out-of-band).\n\
+                 - **Index health:** Redundant indexes (one whose leading columns are a prefix of another's), missing indexes on foreign key columns (which slows referential checks and cascading deletes), and unused indexes.\n\
+                 - **Referential integrity:** Foreign key columns lacking a supporting index.\n\
+                 - **Data type issues:** Columns declared as TEXT or VARCHAR(large) when SMALLINT or UUID would fit; NUMERIC(huge_precision) for what could be DECIMAL(10,2); TIMESTAMP without timezone handling; large arrays when they could be a separate table.\n\n\
+                 **Important:** Autovacuum settings, `VACUUM`, `REINDEX`, and schema changes are not available through this server. Flag what humans must fix; do not suggest this server run those commands."
+            ),
+        )]
+    }
+}
+
 #[tool_handler(router = self.tool_router)]
+#[prompt_handler(router = self.prompt_router)]
 impl ServerHandler for PgServer {
     fn get_info(&self) -> ServerInfo {
         // `ServerInfo` is `#[non_exhaustive]`, so build from default and assign.
@@ -264,7 +375,11 @@ impl ServerHandler for PgServer {
              read-only SELECT queries via `run_query`."
                 .to_string(),
         );
-        info.capabilities = ServerCapabilities::builder().enable_tools().build();
+        info.capabilities = ServerCapabilities::builder()
+            .enable_tools()
+            .enable_prompts()
+            .enable_resources()
+            .build();
 
         let mut server_info = Implementation::default();
         server_info.name = env!("CARGO_PKG_NAME").to_string();
@@ -272,6 +387,44 @@ impl ServerHandler for PgServer {
         info.server_info = server_info;
 
         info
+    }
+
+    /// Advertise this crate's README as the server's operator guide.
+    ///
+    /// The README documents the read-only transaction guarantee, statement
+    /// timeout, and row cap — information no tool return value carries.
+    /// Exposing it as a resource lets clients read the reasoning without
+    /// burning a tool call on it.
+    async fn list_resources(
+        &self,
+        _request: Option<rmcp::model::PaginatedRequestParams>,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<ListResourcesResult, ErrorData> {
+        let uri = mcp_common::doc_resource_uri(env!("CARGO_PKG_NAME"));
+        Ok(ListResourcesResult::with_all_items(vec![
+            mcp_common::doc_resource(
+                &uri,
+                "PostgreSQL MCP operator guide",
+                "README for pgmcp: read-only guarantees, transaction limits, and schema introspection.",
+            ),
+        ]))
+    }
+
+    /// Serve the operator guide's markdown for the URI advertised above.
+    async fn read_resource(
+        &self,
+        request: rmcp::model::ReadResourceRequestParams,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<rmcp::model::ReadResourceResponse, ErrorData> {
+        let uri = mcp_common::doc_resource_uri(env!("CARGO_PKG_NAME"));
+        if request.uri == uri {
+            Ok(mcp_common::doc_resource_contents(&uri, include_str!("../../README.md")).into())
+        } else {
+            Err(ErrorData::resource_not_found(
+                format!("unknown resource uri: {}", request.uri),
+                None,
+            ))
+        }
     }
 }
 

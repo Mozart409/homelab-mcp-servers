@@ -1,9 +1,17 @@
 //! MCP server: exposes a Prometheus instance as read-only query and status tools.
 
+use std::fmt::Write;
+
+use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{Implementation, ServerCapabilities, ServerInfo};
-use rmcp::{ErrorData, ServerHandler, schemars, tool, tool_handler, tool_router};
+use rmcp::model::{
+    Implementation, ListResourcesResult, PromptMessage, Role, ServerCapabilities, ServerInfo,
+};
+use rmcp::{
+    ErrorData, ServerHandler, prompt, prompt_handler, prompt_router, schemars, tool, tool_handler,
+    tool_router,
+};
 use serde::Deserialize;
 
 use crate::client::{PromClient, seg};
@@ -13,6 +21,7 @@ use crate::client::{PromClient, seg};
 pub struct PromServer {
     client: PromClient,
     tool_router: ToolRouter<Self>,
+    prompt_router: PromptRouter<Self>,
 }
 
 impl PromServer {
@@ -22,6 +31,7 @@ impl PromServer {
         Self {
             client,
             tool_router: Self::tool_router(),
+            prompt_router: Self::prompt_router(),
         }
     }
 
@@ -100,6 +110,25 @@ struct MetadataParams {
     /// Restrict metadata to a single metric name (default: all metrics).
     #[serde(default)]
     metric: Option<String>,
+}
+
+// ---- Prompt arguments -------------------------------------------------------
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct AlertTriageArgs {
+    /// Alert severity to filter on, e.g. `critical` or `warning`. Omit to show all severities.
+    #[serde(default)]
+    severity: Option<String>,
+    /// Optional `PromQL` label matcher to narrow scope, e.g. `job="api"` to filter by job.
+    #[serde(default)]
+    matcher: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct TargetHealthArgs {
+    /// Restrict to a single scrape job. Omit to check all jobs.
+    #[serde(default)]
+    job: Option<String>,
 }
 
 // ---- Tools ------------------------------------------------------------------
@@ -242,7 +271,107 @@ impl PromServer {
     }
 }
 
+// ---- Prompts ----------------------------------------------------------------
+
+/// Repeated Prometheus workflows, encoded as prompts.
+///
+/// These live in their own inherent `impl` block so `#[prompt_router]` and
+/// `#[tool_router]` each own one block outright. Both generate an associated
+/// router constructor (`Self::prompt_router()` / `Self::tool_router()`), and
+/// keeping them separate avoids asking either macro to walk attributes it does
+/// not recognise.
+#[prompt_router]
+impl PromServer {
+    /// Triage active alerts: walk the model through their rules, run queries to ground
+    /// reasoning in actual data, and distinguish real breaches from scrape failures.
+    #[prompt(
+        name = "alert_triage",
+        description = "Investigate active alerts: identify their root causes, compare rule definitions against live data, and rank by severity and trend."
+    )]
+    async fn alert_triage(&self, params: Parameters<AlertTriageArgs>) -> Vec<PromptMessage> {
+        let AlertTriageArgs { severity, matcher } = params.0;
+
+        let mut instructions = String::from(
+            "Triage the active alerts in this Prometheus instance and tell me what is failing.\n\n\
+             Work in this order:\n\
+             1. Call `alerts` to get what is currently firing. ",
+        );
+
+        if let Some(s) = &severity {
+            let _ = write!(instructions, "Filter for severity `{s}` ");
+        } else {
+            instructions.push_str("Scan all severities. ");
+        }
+
+        if let Some(m) = &matcher {
+            let _ = write!(instructions, "in alerts matching `{m}`. ");
+        }
+
+        instructions.push_str(
+            "Note the label sets of each distinct alert.\n\
+             2. For each distinct alert, call `rules` to recover the alert rule's expression and `for` \
+             duration — do not guess from the alert name; anchor reasoning in the rule definition.\n\
+             3. Run `query` or `query_range` on the rule's own expression to see how far over \
+             threshold it is and whether the metric is trending toward or away from resolution. Use \
+             `query_range` with a 10-15 minute window to detect trend.\n\
+             4. Call `targets` to check whether the alert is caused by a scrape failure rather than \
+             a genuine application breach — a down target (`up{instance=\"...\"}=0`) produces alerts \
+             that look like application failures but are infrastructure issues, not data issues.\n\n\
+             Report: \
+             - Group alerts by likely common cause rather than listing them flat.\n\
+             - Distinguish a real breach from a scrape/staleness artifact.\n\
+             - State for each whether it is worsening, steady, or recovering based on the range query \
+             rather than the instantaneous value.\n\
+             - Quote the rule definition and the most recent metric value."
+        );
+
+        vec![PromptMessage::new_text(Role::User, instructions)]
+    }
+
+    /// Walk the model through scrape health to diagnose why targets are failing,
+    /// whether scrapes are slow, and whether cardinality pressure is degrading collection.
+    #[prompt(
+        name = "target_health",
+        description = "Diagnose scrape health: find which targets are down, struggling, or misconfigured."
+    )]
+    async fn target_health(&self, params: Parameters<TargetHealthArgs>) -> Vec<PromptMessage> {
+        let TargetHealthArgs { job } = params.0;
+
+        let mut instructions = String::from(
+            "Diagnose the scrape health of this Prometheus instance.\n\n\
+             Work in this order:\n\
+             1. Call `targets` to list up/down state and `lastError`/`lastScrape` metadata per target. ",
+        );
+
+        if let Some(j) = &job {
+            let _ = write!(instructions, "Restrict to the `{j}` scrape job. ");
+        }
+
+        instructions.push_str(
+            "Note which targets are down (`state=dropped` or `up=0`) and their error signatures.\n\
+             2. For each target that is down or scraping slowly (large `lastScrape` interval), query \
+             `up{instance=\"...\"}` with `query_range` over the last 30 minutes to confirm whether \
+             the target is perpetually down or intermittently failing.\n\
+             3. Call `tsdb_status` to check Prometheus's own health: series/chunk cardinality, \
+             head-block series count, and which metrics dominate. Use `metadata` to name the \
+             high-cardinality metrics and gauge whether dropping them would help.\n\
+             4. Call `build_info` to confirm the Prometheus version (some versions have known scrape \
+             bugs).\n\n\
+             Report: \
+             - A verdict distinguishing (a) targets genuinely down with their last error, (b) targets up \
+             but scraping slowly or erroring intermittently, and (c) a Prometheus instance under cardinality \
+             pressure that is degrading scrapes on its own.\n\
+             - Flag high-cardinality metrics from `tsdb_status` when they are the actual problem, not \
+             target health.\n\
+             - For each down target, quote the rule or config that should be collecting from it."
+        );
+
+        vec![PromptMessage::new_text(Role::User, instructions)]
+    }
+}
+
 #[tool_handler(router = self.tool_router)]
+#[prompt_handler(router = self.prompt_router)]
 impl ServerHandler for PromServer {
     fn get_info(&self) -> ServerInfo {
         // `ServerInfo` is `#[non_exhaustive]`, so build from default and assign.
@@ -253,7 +382,11 @@ impl ServerHandler for PromServer {
              alerts, and rules."
                 .to_string(),
         );
-        info.capabilities = ServerCapabilities::builder().enable_tools().build();
+        info.capabilities = ServerCapabilities::builder()
+            .enable_tools()
+            .enable_prompts()
+            .enable_resources()
+            .build();
 
         let mut server_info = Implementation::default();
         server_info.name = env!("CARGO_PKG_NAME").to_string();
@@ -261,6 +394,43 @@ impl ServerHandler for PromServer {
         info.server_info = server_info;
 
         info
+    }
+
+    /// Advertise this crate's README as the server's operator guide.
+    ///
+    /// The README carries `PromQL` guidance and Prometheus HTTP API caveats that no
+    /// tool return value contains, so exposing it as a resource lets a client read
+    /// the reasoning without spending a tool call on it.
+    async fn list_resources(
+        &self,
+        _request: Option<rmcp::model::PaginatedRequestParams>,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<ListResourcesResult, ErrorData> {
+        let uri = mcp_common::doc_resource_uri(env!("CARGO_PKG_NAME"));
+        Ok(ListResourcesResult::with_all_items(vec![
+            mcp_common::doc_resource(
+                &uri,
+                "Prometheus MCP operator guide",
+                "README for prometheus-mcp: PromQL usage, scrape config, and API caveats.",
+            ),
+        ]))
+    }
+
+    /// Serve the operator guide's markdown for the URI advertised above.
+    async fn read_resource(
+        &self,
+        request: rmcp::model::ReadResourceRequestParams,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<rmcp::model::ReadResourceResponse, ErrorData> {
+        let uri = mcp_common::doc_resource_uri(env!("CARGO_PKG_NAME"));
+        if request.uri == uri {
+            Ok(mcp_common::doc_resource_contents(&uri, include_str!("../../README.md")).into())
+        } else {
+            Err(ErrorData::resource_not_found(
+                format!("unknown resource uri: {}", request.uri),
+                None,
+            ))
+        }
     }
 }
 

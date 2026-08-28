@@ -2,10 +2,16 @@
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{Implementation, ServerCapabilities, ServerInfo};
-use rmcp::{ErrorData, ServerHandler, schemars, tool, tool_handler, tool_router};
+use rmcp::model::{
+    Implementation, ListResourcesResult, PromptMessage, Role, ServerCapabilities, ServerInfo,
+};
+use rmcp::{
+    ErrorData, ServerHandler, prompt, prompt_handler, prompt_router, schemars, tool, tool_handler,
+    tool_router,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -17,6 +23,7 @@ pub struct WpServer {
     client: WpClient,
     max_log_lines: usize,
     tool_router: ToolRouter<Self>,
+    prompt_router: PromptRouter<Self>,
 }
 
 impl WpServer {
@@ -27,6 +34,7 @@ impl WpServer {
             client,
             max_log_lines,
             tool_router: Self::tool_router(),
+            prompt_router: Self::prompt_router(),
         }
     }
 
@@ -225,6 +233,25 @@ struct TruncatedLogs {
     returned_entries: usize,
     note: String,
     entries: Vec<Value>,
+}
+
+// ---- Prompt arguments -------------------------------------------------------
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct PipelinePostmortemArgs {
+    /// Repository slug in the form `owner/name`.
+    repo: String,
+    /// Pipeline number to investigate. Omit to investigate the most recent failed pipeline.
+    #[serde(default)]
+    pipeline: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct CiHealthTriageArgs {
+    /// Optional repository slug to focus the triage (e.g., `owner/name`).
+    /// Omit to scan all repositories in the user's feed.
+    #[serde(default)]
+    repo: Option<String>,
 }
 
 // ---- Tools ------------------------------------------------------------------
@@ -545,7 +572,133 @@ impl WpServer {
     }
 }
 
+// ---- Prompts ----------------------------------------------------------------
+
+/// Common Woodpecker CI diagnostic workflows, encoded as prompts.
+///
+/// These live in their own inherent `impl` block so `#[prompt_router]` and
+/// `#[tool_router]` each own one block outright. Both generate an associated
+/// router constructor (`Self::prompt_router()` / `Self::tool_router()`), and
+/// keeping them separate avoids asking either macro to walk attributes it does
+/// not recognise.
+#[prompt_router]
+impl WpServer {
+    /// Diagnose why a pipeline failed, ruling out mundane explanations in one sweep.
+    ///
+    /// This prompt walks through the `cancel_info` structure and agent state to
+    /// separate human intervention from task expiry — the most common failure mode
+    /// that the web UI conflates with cancellation. See the README's post-mortems
+    /// section for the reasoning.
+    #[prompt(
+        name = "pipeline_postmortem",
+        description = "Investigate why a Woodpecker pipeline stopped: distinguish human cancellation from queue expiry, read step failures, and check agent health."
+    )]
+    async fn pipeline_postmortem(
+        &self,
+        params: Parameters<PipelinePostmortemArgs>,
+    ) -> Vec<PromptMessage> {
+        let PipelinePostmortemArgs { repo, pipeline } = params.0;
+
+        let pipeline_resolution = match pipeline {
+            Some(num) => format!("Call `get_pipeline` with repo_id and pipeline number {num}."),
+            None => "Call `list_pipelines` with repo_id and `status: failure` to find the most \
+                     recent failed pipeline, then call `get_pipeline` on it."
+                .to_string(),
+        };
+
+        vec![PromptMessage::new_text(
+            Role::User,
+            format!(
+                "Help me investigate why a Woodpecker pipeline in repo `{repo}` failed.\n\n\
+                 Work in this order:\n\n\
+                 1. **Resolve the pipeline.** Call `lookup_repo` with `{repo}` to get the repo_id. Then:\n\
+                    {pipeline_resolution}\n\n\
+                 2. **Read the `cancel_info` object in the response.** It is the fastest answer to why \
+                    the pipeline stopped:\n\
+                    - If `canceled_by_user` is set: a human cancelled it — case closed.\n\
+                    - If `superseded_by` is set: auto-cancelled by a newer pipeline (repo's `cancel_previous_pipeline_events` setting).\n\
+                    - If `canceled_by_step` is set: a step cancelled the pipeline.\n\
+                    - If `status` is `\"killed\"` but `cancel_info` is null or empty: **Nobody cancelled it — \
+                      the server's queue expired the task.** This is the signature: a killed pipeline with \
+                      no error in the logs and nobody to blame. Queue expiry appears only in the \
+                      Woodpecker server/agent journal (\"queue: task expired\", \"failed to extend workflow \
+                      lease\"), never in this API.\n\n\
+                 3. **Call `step_logs` for the failed step** to see the last part of the output. If the \
+                    log just stops with no error at the end, queue expiry is confirmed (the agent lost \
+                    its lease and never got to write an error).\n\n\
+                 4. **Check agent liveness** via `list_agents`. Find the agent that was running the \
+                    pipeline (from the pipeline's metadata if available, or guess from running workloads). \
+                    Look at `last_contact` and `last_work`:\n\
+                    - Both timestamps quiet and recent (within the last few minutes): agent is healthy, \
+                      just idle.\n\
+                    - `last_contact` recent but `last_work` frozen well *before* the pipeline died: agent \
+                      is *wedged* (still checking in, but not finishing work).\n\n\
+                 5. **Summarise what you found.** State the reason clearly:\n\
+                    - For cancellation: WHO cancelled and WHY (user, auto-supersede, or step action).\n\
+                    - For queue expiry: the pipeline's start/stop timestamps from `get_pipeline`, and a \
+                      note that the real cause lives only in `journalctl` on the Woodpecker server/agent \
+                      (search that window for \"expired\", \"lease\", \"database is locked\", or \"pull queue item\").\n\
+                    - For a wedged agent: agent ID, when it last checked in and last completed work, and \
+                      the implication (agent is stuck, likely needs a restart).\n\
+                 Do not speculate beyond what these tools show. The server cannot tell you why the \
+                 scheduler killed something — that evidence exists only in the Woodpecker journal."
+            ),
+        )]
+    }
+
+    /// Triage overall CI health in one pass.
+    ///
+    /// This prompt uses the broadest tools to scan for widespread degradation
+    /// versus individual pipeline failures.
+    #[prompt(
+        name = "ci_health_triage",
+        description = "Health check: is the Woodpecker CI system itself degraded, or are specific pipelines just failing?"
+    )]
+    async fn ci_health_triage(&self, params: Parameters<CiHealthTriageArgs>) -> Vec<PromptMessage> {
+        let CiHealthTriageArgs { repo } = params.0;
+
+        let repo_filter = repo
+            .as_ref()
+            .map(|r| format!(" in repo `{r}`"))
+            .unwrap_or_default();
+
+        vec![PromptMessage::new_text(
+            Role::User,
+            format!(
+                "Give me a health check on this Woodpecker CI system{repo_filter}.\n\n\
+                 Work in this order:\n\n\
+                 1. **Server liveness.** Call `version` and `healthz` to confirm the CI server itself \
+                    is running. If either fails, the system is down — stop here.\n\n\
+                 2. **Queue depth.** Call `queue_info` to see how many pipelines are pending, running, \
+                    and waiting. An unusually large backlog might indicate the system is overwhelmed. \
+                    Normal depth depends on your setup; note the numbers.\n\n\
+                 3. **Agent health.** Call `list_agents` (requires admin rights; if you get a 401/403, \
+                    skip this and report it). For each agent, check `last_contact` and `last_work`:\n\
+                    - Recent timestamps: agent is healthy.\n\
+                    - `last_contact` recent but `last_work` frozen for hours: agent is *wedged* and \
+                      should be restarted.\n\
+                    - No recent contact at all: agent is offline or unreachable.\n\n\
+                 4. **Recent failures across the system.** Call `pipeline_feed` to get the user's cross-repo \
+                    pipeline feed. Scan for patterns:\n\
+                    - Same step failing in many repos: likely a shared infrastructure problem (test runner \
+                      down, dependency repo offline, etc.).\n\
+                    - Failures scattered across different repos and steps: likely individual issues.\n\
+                    - A recent failure surge compared to earlier in the feed: likely a deployment or \
+                      config change.\n\n\
+                 5. **Report the verdict.** Is the CI system itself degraded (server slow, agents \
+                    offline, queue blocked) or are specific pipelines just failing? If specific, which \
+                    repos or steps? Distinguish:\n\
+                    - **System degradation**: server down, all/most agents wedged, queue unable to drain, \
+                      widespread failures. → Escalate to infrastructure.\n\
+                    - **Isolated failures**: specific pipelines failing on their own merits in otherwise \
+                      healthy repos. → Route to teams running those pipelines."
+            ),
+        )]
+    }
+}
+
 #[tool_handler(router = self.tool_router)]
+#[prompt_handler(router = self.prompt_router)]
 impl ServerHandler for WpServer {
     fn get_info(&self) -> ServerInfo {
         // `ServerInfo` is `#[non_exhaustive]`, so build from default and assign.
@@ -556,7 +709,11 @@ impl ServerHandler for WpServer {
              state; secrets and registries are deliberately not exposed."
                 .to_string(),
         );
-        info.capabilities = ServerCapabilities::builder().enable_tools().build();
+        info.capabilities = ServerCapabilities::builder()
+            .enable_tools()
+            .enable_prompts()
+            .enable_resources()
+            .build();
 
         let mut server_info = Implementation::default();
         server_info.name = env!("CARGO_PKG_NAME").to_string();
@@ -564,6 +721,43 @@ impl ServerHandler for WpServer {
         info.server_info = server_info;
 
         info
+    }
+
+    /// Advertise this crate's README as the server's operator guide.
+    ///
+    /// The README carries the post-mortems reasoning and API quirks that no tool
+    /// return value contains, so exposing it as a resource lets a client understand
+    /// the limitations without spending a tool call on it.
+    async fn list_resources(
+        &self,
+        _request: Option<rmcp::model::PaginatedRequestParams>,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<ListResourcesResult, ErrorData> {
+        let uri = mcp_common::doc_resource_uri(env!("CARGO_PKG_NAME"));
+        Ok(ListResourcesResult::with_all_items(vec![
+            mcp_common::doc_resource(
+                &uri,
+                "Woodpecker MCP operator guide",
+                "README for woodpecker-mcp: post-mortem reasoning, API authentication quirks, and server/agent diagnostics.",
+            ),
+        ]))
+    }
+
+    /// Serve the operator guide's markdown for the URI advertised above.
+    async fn read_resource(
+        &self,
+        request: rmcp::model::ReadResourceRequestParams,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<rmcp::model::ReadResourceResponse, ErrorData> {
+        let uri = mcp_common::doc_resource_uri(env!("CARGO_PKG_NAME"));
+        if request.uri == uri {
+            Ok(mcp_common::doc_resource_contents(&uri, include_str!("../../README.md")).into())
+        } else {
+            Err(ErrorData::resource_not_found(
+                format!("unknown resource uri: {}", request.uri),
+                None,
+            ))
+        }
     }
 }
 
