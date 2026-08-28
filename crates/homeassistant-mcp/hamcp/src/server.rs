@@ -1,10 +1,16 @@
 //! MCP server: exposes Home Assistant control and query tools.
 
+use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{Implementation, ServerCapabilities, ServerInfo};
-use rmcp::{ErrorData, ServerHandler, tool, tool_handler, tool_router};
-use serde::Serialize;
+use rmcp::model::{
+    Implementation, ListResourcesResult, PromptMessage, Role, ServerCapabilities, ServerInfo,
+};
+use rmcp::{
+    ErrorData, ServerHandler, prompt, prompt_handler, prompt_router, schemars, tool, tool_handler,
+    tool_router,
+};
+use serde::{Deserialize, Serialize};
 
 use crate::client::HaClient;
 use crate::models::inputs::{
@@ -17,6 +23,7 @@ use crate::models::inputs::{
 pub struct HaServer {
     client: HaClient,
     tool_router: ToolRouter<Self>,
+    prompt_router: PromptRouter<Self>,
 }
 
 impl HaServer {
@@ -26,6 +33,7 @@ impl HaServer {
         Self {
             client,
             tool_router: Self::tool_router(),
+            prompt_router: Self::prompt_router(),
         }
     }
 
@@ -240,7 +248,123 @@ impl HaServer {
     }
 }
 
+// ---- Prompt arguments -------------------------------------------------------
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct EntityDiagnosticArgs {
+    /// Entity to diagnose, e.g. `sensor.living_room_temperature`.
+    entity_id: String,
+    /// How many hours of history to review (default: 24).
+    #[serde(default)]
+    hours: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct AutomationAuditArgs {
+    /// Restrict the survey to one domain, e.g. `automation`, `light`, `sensor`.
+    /// Omit to survey the whole installation.
+    #[serde(default)]
+    domain: Option<String>,
+}
+
+// ---- Prompts ----------------------------------------------------------------
+
+/// Repeated Home Assistant workflows, encoded as prompts.
+///
+/// These live in their own inherent `impl` block so `#[prompt_router]` and
+/// `#[tool_router]` each own one block outright; neither macro is then asked to
+/// walk attributes it does not recognise.
+///
+/// Both prompts are **diagnostic and read-only in intent**. This is the one
+/// server in the workspace that may mutate its target (`set_state`,
+/// `call_service`), and an operator running a diagnostic does not expect their
+/// lights to change — so these prompts direct the model to gather and reason,
+/// and to hand any corrective action back to the human rather than firing it.
+#[prompt_router]
+impl HaServer {
+    /// Decide whether one entity is healthy, stuck, flapping, or simply gone.
+    #[prompt(
+        name = "entity_diagnostic",
+        description = "Diagnose one Home Assistant entity from its current state and history: healthy, stuck, flapping, or unavailable."
+    )]
+    async fn entity_diagnostic(
+        &self,
+        params: Parameters<EntityDiagnosticArgs>,
+    ) -> Vec<PromptMessage> {
+        let EntityDiagnosticArgs { entity_id, hours } = params.0;
+        let hours = hours.unwrap_or(24);
+
+        vec![PromptMessage::new_text(
+            Role::User,
+            format!(
+                "Diagnose the health of the Home Assistant entity `{entity_id}` over the last \
+                 {hours} hours.\n\n\
+                 Work in this order:\n\
+                 1. Call `get_entity` for `{entity_id}`. Report its current state verbatim and its \
+                 `last_changed` timestamp. If the entity does not exist, stop and say so — do not \
+                 guess at a similarly named one.\n\
+                 2. Call `get_history` for the same entity over {hours} hours. The history is the \
+                 evidence; the current state alone cannot distinguish the cases below.\n\
+                 3. Classify what you see into exactly one of:\n\
+                 - **Healthy** — the value moves as the device plausibly should.\n\
+                 - **Unavailable / unknown** — state is `unavailable` or `unknown`. This almost \
+                 always means the integration or device dropped off, not that the reading is \
+                 genuinely absent. Say how long it has been in that state.\n\
+                 - **Stuck** — the value has not changed across the whole window although this kind \
+                 of device should vary. Critically, a stuck sensor and a genuinely steady one look \
+                 identical if you only read the current state, which is why step 2 is not optional.\n\
+                 - **Flapping** — changing far more often than the device plausibly could.\n\n\
+                 Report the actual state and timestamps you observed, not a summary judgement. If \
+                 the history is too short or too sparse to separate 'steady' from 'stuck', say that \
+                 plainly instead of picking one.\n\n\
+                 This is a read-only diagnosis. Do not call `set_state` or `call_service`. If a fix \
+                 is warranted, describe it as a recommendation for the operator to approve."
+            ),
+        )]
+    }
+
+    /// Survey the installation for dead entities and leftovers, read-only.
+    #[prompt(
+        name = "automation_audit",
+        description = "Read-only survey of a Home Assistant installation: unavailable entities, automations that never fire, and orphaned leftovers."
+    )]
+    async fn automation_audit(
+        &self,
+        params: Parameters<AutomationAuditArgs>,
+    ) -> Vec<PromptMessage> {
+        let scope = params.0.domain.map_or_else(
+            || "the whole installation".to_string(),
+            |d| format!("the `{d}` domain"),
+        );
+
+        vec![PromptMessage::new_text(
+            Role::User,
+            format!(
+                "Audit {scope} and tell me what has quietly stopped working.\n\n\
+                 Work in this order:\n\
+                 1. Call `get_config` for the version and basic setup, then `check_config` to \
+                 confirm the configuration itself is valid. A broken config explains failures that \
+                 would otherwise look like unrelated dead entities, so establish this first.\n\
+                 2. Call `get_states` to enumerate entities in scope.\n\
+                 3. Pick the entities that look wrong and call `get_history` on a sample. Use \
+                 `render_template` when a Jinja expression answers a question more directly than \
+                 enumerating states would.\n\n\
+                 Surface specifically:\n\
+                 - Entities in `unavailable` or `unknown` state, and how long they have been so. \
+                 Group them by integration — several dead entities from one integration is one \
+                 fault, not several.\n\
+                 - Automations that appear never to have triggered.\n\
+                 - Duplicate or orphaned entities left behind by integrations that were removed.\n\n\
+                 Finish with recommendations the operator can act on. This audit is read-only: do \
+                 not call `set_state` or `call_service`, and present every corrective action as \
+                 something for a human to approve rather than a step you take."
+            ),
+        )]
+    }
+}
+
 #[tool_handler(router = self.tool_router)]
+#[prompt_handler(router = self.prompt_router)]
 impl ServerHandler for HaServer {
     fn get_info(&self) -> ServerInfo {
         let mut info = ServerInfo::default();
@@ -250,7 +374,11 @@ impl ServerHandler for HaServer {
              inspect calendars, render templates, and check configuration."
                 .to_string(),
         );
-        info.capabilities = ServerCapabilities::builder().enable_tools().build();
+        info.capabilities = ServerCapabilities::builder()
+            .enable_tools()
+            .enable_prompts()
+            .enable_resources()
+            .build();
 
         let mut server_info = Implementation::default();
         server_info.name = env!("CARGO_PKG_NAME").to_string();
@@ -258,6 +386,44 @@ impl ServerHandler for HaServer {
         info.server_info = server_info;
 
         info
+    }
+
+    /// Advertise this crate's README as the server's operator guide.
+    ///
+    /// hamcp is the one server here that can mutate its target, and that
+    /// exception is the single most important thing a client should know about
+    /// it — so the guidance belongs somewhere a client can read without
+    /// spending a tool call to find out.
+    async fn list_resources(
+        &self,
+        _request: Option<rmcp::model::PaginatedRequestParams>,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<ListResourcesResult, ErrorData> {
+        let uri = mcp_common::doc_resource_uri(env!("CARGO_PKG_NAME"));
+        Ok(ListResourcesResult::with_all_items(vec![
+            mcp_common::doc_resource(
+                &uri,
+                "Home Assistant MCP operator guide",
+                "README for homeassistant-mcp: entity/service usage, and the deliberate exception that makes this the one server with mutating tools.",
+            ),
+        ]))
+    }
+
+    /// Serve the operator guide's markdown for the URI advertised above.
+    async fn read_resource(
+        &self,
+        request: rmcp::model::ReadResourceRequestParams,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<rmcp::model::ReadResourceResponse, ErrorData> {
+        let uri = mcp_common::doc_resource_uri(env!("CARGO_PKG_NAME"));
+        if request.uri == uri {
+            Ok(mcp_common::doc_resource_contents(&uri, include_str!("../../README.md")).into())
+        } else {
+            Err(ErrorData::resource_not_found(
+                format!("unknown resource uri: {}", request.uri),
+                None,
+            ))
+        }
     }
 }
 
