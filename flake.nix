@@ -42,11 +42,16 @@
       # `allow-*-in-tests` relaxations live in that file), so every test module
       # would fail clippy. `deny.toml` is kept for the same reason: so the source
       # a check sees matches the source a developer sees.
+      #
+      # `README.md` is kept because each server `include_str!`s its crate README
+      # and serves it as an MCP doc resource. Filtering it out compiles fine on a
+      # developer's checkout and then fails only under `nix build`, which is the
+      # worst place to discover it — the file is a build input now, not just docs.
       src = pkgs.lib.cleanSourceWith {
         src = ./.;
         filter = path: type:
           (craneLib.filterCargoSources path type)
-          || (builtins.elem (builtins.baseNameOf path) ["clippy.toml" "deny.toml"]);
+          || (builtins.elem (builtins.baseNameOf path) ["clippy.toml" "deny.toml" "README.md"]);
       };
 
       commonArgs = {
