@@ -117,8 +117,18 @@ Before considering a change done: `just ci` must pass. Clippy runs with
 
 ## Conventions
 
-- **Commits:** [Conventional Commits](https://www.conventionalcommits.org/)
-  (`feat(pgmcp): ...`, `docs(readme): ...`). Git hooks run via lefthook.
+- **Commits:** [Conventional Commits](https://www.conventionalcommits.org/) in
+  the form `type(scope): title` (`feat(pgmcp): ...`, `docs(readme): ...`). Git
+  hooks run via lefthook.
+  - **Subject line only — no body.** Every non-merge commit in this repository's
+    history has an empty body, and new commits must match. Say it in the title
+    or don't say it: if a change needs a paragraph of justification, that
+    paragraph belongs in a code comment or the crate README, where it stays next
+    to the thing it explains instead of being buried in `git log`.
+  - Keep the subject under ~77 characters, the longest this history uses.
+  - Scope is the crate name (`pgmcp`, `wpmcp`, `mcp-common`) or the area
+    (`deps`, `nix`, `ci`, `readme`, `agents`). Use `servers` when a change lands
+    across several server crates at once.
 - **Releases / version bumps:** cut releases with cocogitto, never by hand. The
   workflow is `cog bump --patch` (or `--minor` / `--major` / `--auto`), wrapped
   as `just bump patch` / `just bump minor` / `just bump major` / `just bump auto`.
