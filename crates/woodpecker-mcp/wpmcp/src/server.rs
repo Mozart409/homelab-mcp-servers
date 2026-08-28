@@ -697,6 +697,16 @@ impl WpServer {
     }
 }
 
+// Rust 1.98's `clippy::unused_async_trait_impl` (pedantic, therefore deny here)
+// fires four times on this block, and only two of them are ours: `list_resources`
+// and `read_resource` genuinely have no `.await`. The other two originate inside
+// the `tool_handler` and `prompt_handler` expansions -- rmcp generates async trait
+// methods whose bodies are `std::future::ready(..)` -- so there is no source in
+// this repo to change. Silencing it per-method would still leave the macro pair
+// failing, which is why the allow sits on the whole impl. Revisit when rmcp stops
+// generating bodies that never await; the two hand-written methods can drop their
+// `async` at that point.
+#[allow(clippy::unused_async_trait_impl)]
 #[tool_handler(router = self.tool_router)]
 #[prompt_handler(router = self.prompt_router)]
 impl ServerHandler for WpServer {
