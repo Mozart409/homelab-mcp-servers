@@ -3,12 +3,58 @@
 //! Provides cross-server conventions that would otherwise be copy-pasted into
 //! every crate, starting with the healthcheck probe and the `/_healthcheck` HTTP
 //! route that the distroless containers rely on (there is no shell or curl).
+//!
+//! Also provides doc resource helpers for exposing crate README files as MCP resources.
 
 use std::time::Duration;
 
 use axum::{Json, Router, routing::get};
 use color_eyre::eyre::{Context, Result, bail};
+use rmcp::model::{ReadResourceResult, Resource, ResourceContents};
 use serde::Serialize;
+
+// ---- Doc resource helpers ---------------------------------------------------
+
+/// Constructs the conventional URI for a server's operator guide.
+///
+/// Each MCP server exposes its crate README as a resource at a URI of the form
+/// `doc://servername/guide` (e.g., `doc://hamcp/guide`), using this scheme to
+/// distinguish documentation resources from file-system or web resources.
+#[must_use]
+pub fn doc_resource_uri(server: &str) -> String {
+    format!("doc://{server}/guide")
+}
+
+/// Builds the MCP resource descriptor for a server's documentation.
+///
+/// Constructs a [`Resource`] that advertises a server's documentation (typically
+/// from `include_str!("../README.md")`) to MCP clients. The resource includes
+/// the provided URI, name, and optional description, and marks the MIME type
+/// as `"text/markdown"` for proper client rendering.
+///
+/// Callers typically use [`doc_resource_uri`] to construct the URI, and pass
+/// the server's name (e.g., `"hamcp"`) as both `name` and part of the URI.
+#[must_use]
+pub fn doc_resource(uri: &str, name: &str, description: &str) -> Resource {
+    Resource::new(uri, name)
+        .with_description(description)
+        .with_mime_type("text/markdown")
+}
+
+/// Builds the result of reading a server's documentation resource.
+///
+/// Constructs a [`ReadResourceResult`] that carries the markdown content
+/// of a server's documentation, suitable for immediate return from a
+/// [`ServerHandler::read_resource`](https://docs.rs/rmcp/latest/rmcp/server/trait.ServerHandler.html#tymethod.read_resource)
+/// handler.
+///
+/// The result wraps the markdown in a text resource with MIME type
+/// `"text/markdown"`, matching the descriptor created by [`doc_resource`].
+#[must_use]
+pub fn doc_resource_contents(uri: &str, markdown: &str) -> ReadResourceResult {
+    let contents = vec![ResourceContents::text(markdown, uri).with_mime_type("text/markdown")];
+    ReadResourceResult::new(contents)
+}
 
 /// How long the `--healthcheck` probe waits for the server before giving up.
 ///
@@ -212,5 +258,126 @@ mod tests {
             vec!["status"],
             "body must carry exactly one field"
         );
+    }
+
+    // ---- Doc resource tests -------------------------------------------------
+
+    #[test]
+    fn test_doc_resource_uri_format() {
+        let uri = doc_resource_uri("hamcp");
+        assert_eq!(uri, "doc://hamcp/guide");
+
+        let uri = doc_resource_uri("pbsmcp");
+        assert_eq!(uri, "doc://pbsmcp/guide");
+    }
+
+    #[test]
+    fn test_doc_resource_descriptor_carries_uri_and_name() {
+        let uri = "doc://hamcp/guide";
+        let name = "hamcp-readme";
+        let description = "HAMCP operator guide";
+
+        let resource = doc_resource(uri, name, description);
+
+        assert_eq!(resource.uri, uri);
+        assert_eq!(resource.name, name);
+        assert_eq!(
+            resource.description,
+            Some(description.to_string()),
+            "description must be set"
+        );
+    }
+
+    #[test]
+    fn test_doc_resource_descriptor_sets_markdown_mime_type() {
+        let resource = doc_resource("doc://test/guide", "test", "test doc");
+
+        assert_eq!(
+            resource.mime_type,
+            Some("text/markdown".to_string()),
+            "MIME type must be text/markdown"
+        );
+    }
+
+    #[test]
+    fn test_doc_resource_contents_carries_markdown() {
+        let uri = "doc://hamcp/guide";
+        let markdown = "# HAMCP\n\nThis is the operator guide.";
+
+        let result = doc_resource_contents(uri, markdown);
+
+        // ReadResourceResult wraps contents in a Vec
+        assert_eq!(
+            result.contents.len(),
+            1,
+            "must have exactly one content block"
+        );
+
+        // Extract the text content from the first (and only) ResourceContents enum variant
+        let text_content = match result.contents.first() {
+            Some(ResourceContents::TextResourceContents {
+                uri: u,
+                text: t,
+                mime_type,
+                ..
+            }) => {
+                assert_eq!(u, uri, "URI must match");
+                assert_eq!(
+                    mime_type,
+                    &Some("text/markdown".to_string()),
+                    "MIME type must be text/markdown"
+                );
+                t.as_str()
+            }
+            Some(ResourceContents::BlobResourceContents { .. }) => {
+                panic!("expected TextResourceContents, got BlobResourceContents")
+            }
+            Some(_) => {
+                panic!("unexpected ResourceContents variant")
+            }
+            None => {
+                panic!("contents should not be empty")
+            }
+        };
+
+        assert_eq!(text_content, markdown, "markdown content must round-trip");
+    }
+
+    #[test]
+    fn test_doc_resource_descriptor_and_contents_round_trip() {
+        let uri = "doc://custom/guide";
+        let name = "custom-server";
+        let description = "Custom server documentation";
+        let markdown = "# Custom Server\n\nDocumentation here.";
+
+        // Create the descriptor
+        let descriptor = doc_resource(uri, name, description);
+
+        // Create the contents
+        let contents = doc_resource_contents(uri, markdown);
+
+        // Verify the descriptor URI matches the contents URI
+        assert_eq!(
+            descriptor.uri, uri,
+            "descriptor URI must match contents URI"
+        );
+
+        // Verify the contents URI from the resource content itself
+        match contents.contents.first() {
+            Some(ResourceContents::TextResourceContents {
+                uri: content_uri, ..
+            }) => {
+                assert_eq!(content_uri, uri, "content URI must match");
+            }
+            Some(ResourceContents::BlobResourceContents { .. }) => {
+                panic!("expected text content, got blob")
+            }
+            Some(_) => {
+                panic!("unexpected ResourceContents variant")
+            }
+            None => {
+                panic!("contents should not be empty")
+            }
+        }
     }
 }
