@@ -2,6 +2,29 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.9.0 - 2026-09-01
+#### Features
+- (**lokimcp**) add error_scan and label_explorer prompts, plus a doc resource - (104815c) - developmentbot
+- (**mcp-common**) add doc resource helpers for server operator guides - (cb06830) - developmentbot
+- (**nix**) package wpmcp-server and register its WP_ known-server defaults - (f562ea9) - Amadeus Mader
+- (**servers**) add workflow prompts and doc resources to five servers - (fefa0e4) - developmentbot
+- (**tools**) build tools in paralellel - (14b1b79) - developmentbot
+#### Bug Fixes
+- (**container**) explicit nonroot user - (acf53fd) - developmentbot
+- (**deps**) bump h2 to 0.4.16 for RUSTSEC-2026-0258 - (fd56f45) - developmentbot
+#### Documentation
+- (**agents**) require subject-only commit messages - (745dc29) - developmentbot
+- (**readme**) point status badge at ci.homelab.internal - (75dfe8f) - developmentbot
+- (**readme**) document wpmcp post-mortem workflow in the Servers table - (9b05ed5) - developmentbot
+- (**woodpecker**) note pipeline #33 expired despite both known fixes - (5093faf) - developmentbot
+#### Refactoring
+- (**nix**) use fenix overlay for the rust toolchain - (fdc9529) - developmentbot
+#### Miscellaneous Chores
+- (**deps**) upgrade flake to rust 1.98 and allow its new macro lint - (dd3be0c) - developmentbot
+- (**deps**) bump rmcp to 3.1.4 and base64 to 0.23 - (4d9e0b6) - developmentbot
+
+- - -
+
 ## 0.8.0 - 2026-08-06
 #### Features
 - (**wpmcp**) add list_agent_tasks and document cancel_info for post-mortems - (6e962f7) - Amadeus Mader
