@@ -288,6 +288,21 @@ clean-all: clean
     rm -rf .direnv
 
 # ------------------------------------------------------------------------------
+# Remotes
+# ------------------------------------------------------------------------------
+
+# Origin (Forgejo) is the main remote and where other people and agents push,
+# so it is pulled first and local work is published straight back to it.
+# GitHub is a downstream copy nobody else pushes to — it only receives the
+# merged state, never pulls.
+#
+# Sync all remotes (pull+push origin, then push github)
+sync-remotes:
+    git pull
+    git push
+    git push github
+
+# ------------------------------------------------------------------------------
 # Versioning / Release
 # ------------------------------------------------------------------------------
 
