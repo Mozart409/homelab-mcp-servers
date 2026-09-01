@@ -1,9 +1,17 @@
 //! MCP server: exposes PBS backup-status data as read-only tools.
 
+use std::fmt::Write;
+
+use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{Implementation, ServerCapabilities, ServerInfo};
-use rmcp::{ErrorData, ServerHandler, schemars, tool, tool_handler, tool_router};
+use rmcp::model::{
+    Implementation, ListResourcesResult, PromptMessage, Role, ServerCapabilities, ServerInfo,
+};
+use rmcp::{
+    ErrorData, ServerHandler, prompt, prompt_handler, prompt_router, schemars, tool, tool_handler,
+    tool_router,
+};
 use serde::Deserialize;
 
 use crate::client::{PbsClient, seg};
@@ -13,6 +21,7 @@ use crate::client::{PbsClient, seg};
 pub struct PbsServer {
     client: PbsClient,
     tool_router: ToolRouter<Self>,
+    prompt_router: PromptRouter<Self>,
 }
 
 impl PbsServer {
@@ -22,6 +31,7 @@ impl PbsServer {
         Self {
             client,
             tool_router: Self::tool_router(),
+            prompt_router: Self::prompt_router(),
         }
     }
 
@@ -108,6 +118,24 @@ struct TaskLogParams {
     /// for long-running tasks. Mutually exclusive with `start`.
     #[serde(default)]
     tail: Option<u64>,
+}
+
+// ---- Prompt argument types --------------------------------------------------
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct BackupHealthReportArgs {
+    /// Specific datastore to report on. Omit to check all configured datastores.
+    #[serde(default)]
+    datastore: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct SnapshotAuditArgs {
+    /// Datastore to audit (required).
+    datastore: String,
+    /// Specific backup group to audit (e.g., `vm/100`). Omit to audit all groups in the datastore.
+    #[serde(default)]
+    group: Option<String>,
 }
 
 // ---- Tool helpers -----------------------------------------------------------
@@ -312,7 +340,135 @@ impl PbsServer {
     }
 }
 
+// ---- Prompt argument helpers ------------------------------------------------
+
+/// Repeated PBS workflows, encoded as prompts.
+///
+/// These live in their own inherent `impl` block so `#[prompt_router]` and
+/// `#[tool_router]` each own one block outright. Both generate an associated
+/// router constructor (`Self::prompt_router()` / `Self::tool_router()`), and
+/// keeping them separate avoids asking either macro to walk attributes it does
+/// not recognise.
+#[prompt_router]
+impl PbsServer {
+    /// Diagnostic prompt for backup health across datastores.
+    ///
+    /// Checks datastore capacity, garbage collection status, and recent task
+    /// failures to identify whether backups are succeeding but the store is
+    /// filling up, or whether backups are failing outright.
+    #[prompt(
+        name = "backup_health_report",
+        description = "Assess backup health and datastore status: capacity, GC completion, and recent task failures."
+    )]
+    async fn backup_health_report(
+        &self,
+        params: Parameters<BackupHealthReportArgs>,
+    ) -> Vec<PromptMessage> {
+        let datastore = params.0.datastore.as_deref();
+
+        let mut instructions = String::new();
+
+        if let Some(store) = datastore {
+            let _ = write!(
+                instructions,
+                "Generate a backup health report for datastore `{store}`.\n\n\
+                 Work in this order:\n"
+            );
+        } else {
+            instructions.push_str(
+                "Generate a backup health report across all datastores.\n\n\
+                 Work in this order:\n",
+            );
+        }
+
+        instructions.push_str(
+            "1. Call `list_datastores` to confirm configured datastores. \
+             If a specific datastore was requested, verify it exists.\n\
+             2. For each datastore (or the one specified), call `datastore_status` to get \
+             capacity, used space, available space, and deduplication factor. \
+             Calculate and report headroom percentage.\n\
+             3. Call `gc_status` to check garbage collection jobs. For each job covering \
+             your datastore(s), note: is GC enabled, when did it last complete, and did it succeed? \
+             A datastore filling up when GC is not running or has stopped is a separate emergency \
+             from backup failure.\n\
+             4. Call `list_tasks` with `errors_only=true` and `limit=50` to find recent failed tasks \
+             (backup, verify, prune, sync). For any failures, call `task_status` and then `task_log` \
+             (use `tail=50` to get the last 50 lines of the log) to extract the actual error text.\n\
+             5. Synthesize the report: state per-datastore usage (used/total) and headroom; \
+             explicitly note any datastore where GC has not completed recently; list each failed task \
+             with its actual error text, not just a status code; and clearly separate \
+             'backups are failing' from 'backups succeed but the store is filling up', as they need \
+             different fixes. Quote real error text from task logs rather than summarizing.\n"
+        );
+
+        vec![PromptMessage::new_text(Role::User, instructions)]
+    }
+
+    /// Audit backup coverage and snapshot retention for a datastore.
+    ///
+    /// Walks backup groups and their snapshots to identify stale backups,
+    /// overly aggressive retention pruning, groups that existed historically
+    /// but are now absent, and snapshot timestamp anomalies.
+    #[prompt(
+        name = "snapshot_audit",
+        description = "Audit backup coverage and snapshot retention in a datastore."
+    )]
+    async fn snapshot_audit(&self, params: Parameters<SnapshotAuditArgs>) -> Vec<PromptMessage> {
+        let datastore = &params.0.datastore;
+        let group = params.0.group.as_deref();
+
+        let mut instructions = String::new();
+
+        if let Some(g) = group {
+            let _ = write!(
+                instructions,
+                "Audit snapshot retention for group `{g}` in datastore `{datastore}`.\n\n\
+                 Work in this order:\n"
+            );
+        } else {
+            let _ = write!(
+                instructions,
+                "Audit backup coverage and snapshot retention in datastore `{datastore}`.\n\n\
+                 Work in this order:\n"
+            );
+        }
+
+        instructions.push_str(
+            "1. Call `list_groups` for the datastore to enumerate backup groups. \
+             If a specific group was requested, verify it is in the list.\n\
+             2. For each group (or the one specified), call `list_snapshots` to get its snapshots. \
+             Extract the backup timestamp from each snapshot and sort them chronologically.\n\
+             3. Analyze the timeline:\n\
+             - For each group, report the age of the most recent snapshot in human-readable form \
+             (e.g., 'last backup 3 days ago', 'last backup 6 hours ago').\n\
+             - Flag any group whose most recent snapshot is stale relative to the expected backup \
+             frequency (e.g., daily backups have not run for a week, or weekly backups are 3 weeks old).\n\
+             - Flag any group with suspiciously few snapshots relative to its peers \
+             (e.g., one group has 100+ snapshots but a similar-sized group has only 5), which may \
+             indicate retention pruning is too aggressive or a backup job stopped.\n\
+             - If a group appears in the list but has zero snapshots, flag it as an orphan.\n\
+             4. Report: the actual newest-snapshot age per group (not a vague 'looks fine'); \
+             groups whose backups are stale or whose retention looks wrong; and any orphaned groups. \
+             Quote snapshot timestamps from the API rather than approximating. State plainly when the \
+             snapshot count is too small to judge retention policy (e.g., a group with only one snapshot).\n"
+        );
+
+        vec![PromptMessage::new_text(Role::User, instructions)]
+    }
+}
+
+// Rust 1.98's `clippy::unused_async_trait_impl` (pedantic, therefore deny here)
+// fires four times on this block, and only two of them are ours: `list_resources`
+// and `read_resource` genuinely have no `.await`. The other two originate inside
+// the `tool_handler` and `prompt_handler` expansions -- rmcp generates async trait
+// methods whose bodies are `std::future::ready(..)` -- so there is no source in
+// this repo to change. Silencing it per-method would still leave the macro pair
+// failing, which is why the allow sits on the whole impl. Revisit when rmcp stops
+// generating bodies that never await; the two hand-written methods can drop their
+// `async` at that point.
+#[allow(clippy::unused_async_trait_impl)]
 #[tool_handler(router = self.tool_router)]
+#[prompt_handler(router = self.prompt_router)]
 impl ServerHandler for PbsServer {
     fn get_info(&self) -> ServerInfo {
         // `ServerInfo` is `#[non_exhaustive]`, so build from default and assign.
@@ -322,7 +478,11 @@ impl ServerHandler for PbsServer {
              datastores, backup snapshots, and task history to check backup status."
                 .to_string(),
         );
-        info.capabilities = ServerCapabilities::builder().enable_tools().build();
+        info.capabilities = ServerCapabilities::builder()
+            .enable_tools()
+            .enable_prompts()
+            .enable_resources()
+            .build();
 
         let mut server_info = Implementation::default();
         server_info.name = env!("CARGO_PKG_NAME").to_string();
@@ -330,6 +490,44 @@ impl ServerHandler for PbsServer {
         info.server_info = server_info;
 
         info
+    }
+
+    /// Advertise this crate's README as the server's operator guide.
+    ///
+    /// The README carries PBS API caveats, configuration requirements, and
+    /// tool documentation that no tool return value contains, so exposing it
+    /// as a resource lets a client read the reasoning without spending tool
+    /// calls on it.
+    async fn list_resources(
+        &self,
+        _request: Option<rmcp::model::PaginatedRequestParams>,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<ListResourcesResult, ErrorData> {
+        let uri = mcp_common::doc_resource_uri(env!("CARGO_PKG_NAME"));
+        Ok(ListResourcesResult::with_all_items(vec![
+            mcp_common::doc_resource(
+                &uri,
+                "PBS MCP operator guide",
+                "README for pbs-mcp: datastore inspection, backup health, task history, and PBS API caveats.",
+            ),
+        ]))
+    }
+
+    /// Serve the operator guide's markdown for the URI advertised above.
+    async fn read_resource(
+        &self,
+        request: rmcp::model::ReadResourceRequestParams,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<rmcp::model::ReadResourceResponse, ErrorData> {
+        let uri = mcp_common::doc_resource_uri(env!("CARGO_PKG_NAME"));
+        if request.uri == uri {
+            Ok(mcp_common::doc_resource_contents(&uri, include_str!("../../README.md")).into())
+        } else {
+            Err(ErrorData::resource_not_found(
+                format!("unknown resource uri: {}", request.uri),
+                None,
+            ))
+        }
     }
 }
 
