@@ -1,0 +1,96 @@
+# Pull-request / main-branch CI.
+#
+# This is the GitHub half of a two-CI arrangement. `origin` is the homelab
+# Forgejo instance and `.woodpecker/test.yaml` runs there; GitHub is the mirror
+# `just sync-remotes` pushes to, and it is the only side with a registry that
+# can be pulled from outside the tailnet — so it owns releases
+# (`release.yml`) and re-runs the same checks on every pull request.
+#
+# The Rust checks themselves live in `nix-checks.yml`, which release.yml calls
+# too. Everything below is the part that is specific to a pull request.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A force-push to a PR branch should not leave the previous run compiling the
+# workspace for a commit nobody will merge.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    uses: ./.github/workflows/nix-checks.yml
+
+  # Smoke-build ONE image rather than all six. Every server shares this
+  # Containerfile and differs only by `--build-arg BIN=`, so one build proves
+  # the musl cross-compile, the distroless copy and the toolchain pin; the other
+  # five would prove the same thing at five times the runner cost. release.yml
+  # builds the full set.
+  #
+  # The layer cache only ever hits on the rustup/toolchain layers: the cargo
+  # build layer is keyed on `COPY . .`, so any source change invalidates it, and
+  # the Containerfile's `--mount=type=cache` dirs are not exported to a registry
+  # cache. That is still a couple of minutes off every run for nothing.
+  image:
+    name: container image (smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Containerfile
+          build-args: BIN=pbsmcp-server
+          platforms: linux/amd64
+          push: false
+          tags: pbsmcp-server:ci
+          cache-from: type=gha,scope=image-pbsmcp-server
+          cache-to: type=gha,mode=max,scope=image-pbsmcp-server
+
+  # Vulnerability / secret / misconfiguration scan.
+  #
+  # `fs` and not `image`: trivy reads Cargo.lock and the tree directly, so this
+  # needs no image build and no privileged step. What it adds over the
+  # `cargo deny check` in nix-checks.yml is `secret` (a credential committed by
+  # accident) and `misconfig` (Containerfile, compose.yaml) — the `vuln` scanner
+  # is very nearly a second opinion on cargo-deny's advisories, not the reason
+  # this is here.
+  #
+  # Run through the pinned image rather than a scanner action, so the findings
+  # match `just scan` on a workstation and the trivy step in
+  # .woodpecker/test.yaml exactly.
+  trivy:
+    name: trivy (advisory)
+    runs-on: ubuntu-latest
+    # Advisory, not a gate: a new CVE lands in a transitive crate without anyone
+    # touching this repo, and that must not block a pull request whose code is
+    # green. The step still renders as failed, so the finding stays visible.
+    # Drop this line to make the scan blocking.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: trivy fs
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src docker.io/aquasec/trivy:0.73.0 \
+            fs . \
+            --scanners vuln,secret,misconfig \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --skip-dirs .ci-profile \
+            --skip-dirs target \
+            --skip-dirs .direnv \
+            --skip-version-check \
+            --no-progress \
+            --timeout 10m

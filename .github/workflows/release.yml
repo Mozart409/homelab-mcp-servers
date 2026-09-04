@@ -1,0 +1,225 @@
+# Publish a release: one container image per MCP server, pushed to GHCR.
+#
+# TRIGGER: a bare-semver git tag, because that is what cocogitto creates —
+# `cog.toml` sets `tag_prefix = ""`, so releases are `0.9.0`, never `v0.9.0`.
+# The whole release flow is one command:
+#
+#   just bump patch      # cog: version + CHANGELOG + tag, pushed to every remote
+#
+# `cog`'s post-bump hook runs `just push-all`, which pushes the branch and all
+# tags to every remote `git remote` lists. This workflow is what happens when
+# that reaches GitHub.
+#
+# WHAT THIS REPLACES: nothing, for the homelab itself — `push_harbor.sh` still
+# pushes the same images to the internal Harbor from a workstation. GHCR is the
+# copy that can be pulled without being on the tailnet.
+
+name: release
+
+on:
+  push:
+    tags:
+      # Bare semver only. Excludes prereleases on purpose: `latest` is pushed
+      # unconditionally below, and a prerelease must not claim that tag.
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: read
+
+jobs:
+  # Fast gate. Everything here is cheap, so a mistagged release fails in under a
+  # minute rather than after the image builds.
+  verify:
+    name: verify tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      servers: ${{ steps.servers.outputs.servers }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # Nix is here only to read the server list out of the flake below; this
+      # job deliberately builds nothing, so it needs no store cache.
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      # Same guard `push_harbor.sh` applies before it pushes anything: the tag
+      # and `[workspace.package] version` must agree. They can only disagree if
+      # someone tagged by hand instead of using `cog bump`, and the failure mode
+      # is images labelled with a version their binaries do not report.
+      - name: tag matches the workspace version
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="$(awk '
+              /^\[/                { section = $0 }
+              section == "[workspace.package]" && /^[[:space:]]*version[[:space:]]*=/ {
+                  gsub(/.*=[[:space:]]*"?/, ""); gsub(/".*/, ""); print; exit
+              }
+          ' Cargo.toml)"
+
+          if [ -z "$version" ]; then
+            echo "error: could not read version from [workspace.package] in Cargo.toml." >&2
+            exit 1
+          fi
+          if [ "$tag" != "$version" ]; then
+            echo "error: git tag ($tag) does not match Cargo version ($version)." >&2
+            echo "       Releases are cut with 'just bump <level>' (cocogitto), never by hand." >&2
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "releasing $version"
+
+      # Derived from the flake rather than hardcoded here or copied out of
+      # `just image-all`. `packages` is the list of servers the workspace
+      # actually ships, so adding a server to `flake.nix` adds it to the release
+      # with nothing else to remember — which is exactly the step that gets
+      # forgotten (`push_harbor.sh` shipped for two releases without
+      # wpmcp-server for that reason).
+      #
+      # `default` and `all` are aliases for the same binaries, not servers.
+      - name: enumerate servers from the flake
+        id: servers
+        run: |
+          servers="$(nix eval --json .#packages.x86_64-linux --apply builtins.attrNames \
+            | jq -c '[.[] | select(. != "default" and . != "all")]')"
+          echo "servers=$servers" >> "$GITHUB_OUTPUT"
+          echo "releasing images for: $servers"
+
+  # The exact checks ci.yml runs on every pull request, re-run against the
+  # tagged tree. The tag normally points at a `cog bump` commit on main that
+  # ci.yml has already gone green on, so the Nix cache is warm and this is
+  # usually a formality — but it is the only thing standing between a
+  # hand-made tag and a published image, and it runs in parallel with `verify`,
+  # so it costs no wall-clock.
+  checks:
+    uses: ./.github/workflows/nix-checks.yml
+
+  # One image per server, built from the shared Containerfile exactly as
+  # `just image <bin>` does locally.
+  #
+  # COST, stated plainly: each matrix leg compiles the whole dependency tree
+  # again, because the Containerfile's build stage is keyed on `COPY . .` and
+  # its `--mount=type=cache` dirs cannot be exported to a registry cache. Six
+  # legs in parallel keep wall-clock to roughly one build, but the runner
+  # minutes are six builds' worth. The alternative — one `cargo zigbuild
+  # --workspace` and six package-only images — needs a second Containerfile and
+  # would duplicate the toolchain-pin logic that file documents so carefully, so
+  # it is deliberately not done for a release that happens a few times a month.
+  #
+  # linux/amd64 only: everything this repo deploys to is amd64, and building
+  # arm64 here would mean either QEMU emulation of a Rust release build or
+  # reworking the Containerfile for `--platform=$BUILDPLATFORM` cross-compiles.
+  images:
+    name: ${{ matrix.bin }}
+    needs: [verify, checks]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # One server failing to build must not cancel the other five: the images
+      # are independent artifacts, and a partial release beats no release plus
+      # no information about which one broke.
+      fail-fast: false
+      matrix:
+        bin: ${{ fromJSON(needs.verify.outputs.servers) }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          # Automatically provisioned; the `packages: write` permission above is
+          # what makes it able to push. No PAT to rotate.
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Repository-scoped image names (ghcr.io/<owner>/<repo>/<bin>) rather than
+      # owner-scoped, so each package is linked to this repository and inherits
+      # its visibility and permissions instead of needing them set by hand in
+      # the org's package settings. metadata-action lowercases the name, which
+      # GHCR requires and `github.repository` does not guarantee.
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.bin }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=${{ matrix.bin }}
+            org.opencontainers.image.description=MCP server ${{ matrix.bin }} (static musl, distroless)
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Containerfile
+          build-args: BIN=${{ matrix.bin }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=image-${{ matrix.bin }}
+          cache-to: type=gha,mode=max,scope=image-${{ matrix.bin }}
+          # Single-platform build: leaving provenance on turns each package into
+          # an index with an `unknown/unknown` attestation entry, which renders
+          # as a phantom platform in the GHCR UI and buys nothing here.
+          provenance: false
+
+  # Published last, so the release notes never point at images that failed to
+  # build.
+  github-release:
+    name: github release
+    needs: [verify, images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      # CHANGELOG.md is generated by cocogitto during the bump, so the notes for
+      # this tag are already written — read them out rather than regenerating
+      # them from the commit range, which would need cog and the full history
+      # and could disagree with the file that shipped.
+      #
+      # Sections look like `## 0.9.0 - 2026-09-01` and are separated by `- - -`.
+      - name: assemble release notes
+        run: |
+          version="${{ needs.verify.outputs.version }}"
+
+          awk -v ver="$version" '
+            /^## / { in_section = ($2 == ver); next }
+            /^- - -$/ { if (in_section) exit; next }
+            in_section { print }
+          ' CHANGELOG.md > notes.md
+
+          if [ ! -s notes.md ]; then
+            echo "no CHANGELOG.md section for $version; falling back" >&2
+            echo "See [CHANGELOG.md](CHANGELOG.md)." > notes.md
+          fi
+
+          {
+            echo
+            echo "### Container images"
+            echo
+            echo '```sh'
+            for bin in $(echo '${{ needs.verify.outputs.servers }}' | jq -r '.[]'); do
+              echo "podman pull ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')/${bin}:${version}"
+            done
+            echo '```'
+          } >> notes.md
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          body_path: notes.md
+          # Appends the commit/contributor summary GitHub derives from the tag
+          # range underneath the changelog section above.
+          generate_release_notes: true

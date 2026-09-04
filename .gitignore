@@ -8,6 +8,10 @@
 /.ci-profile
 /.ci-profile-*-link
 
+# GC root for the compiled dependency tree, created by .github/workflows/ci.yml
+# so the Nix-store cache step cannot collect the one path worth caching.
+/.ci-artifacts
+
 # Local environment files (keep .env.example tracked)
 .env
 !.env.example

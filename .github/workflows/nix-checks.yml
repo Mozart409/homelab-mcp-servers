@@ -1,0 +1,121 @@
+# fmt + clippy + test + cargo-deny, through the flake.
+#
+# A reusable workflow rather than a job copied into both callers: ci.yml runs it
+# on every pull request and release.yml runs it again on the tag, and the whole
+# point of routing CI through `checks.*` is that there is exactly ONE definition
+# of what "green" means. Two copies drift, and the copy that drifts is the one
+# guarding the images that actually get published.
+#
+# WHY NIX RATHER THAN A `rust:1.x` SETUP ACTION: the toolchain is pinned by
+# `flake.lock` (fenix), with no rustc version literal anywhere in the repo
+# except the Containerfile's build arg — which the `toolchain pin` step below
+# exists to keep honest. Naming a version here would create a second,
+# hand-maintained pin that drifts the moment anyone runs `nix flake update`,
+# and because clippy runs with `-D clippy::pedantic`, a CI toolchain even one
+# minor ahead of the workstation fails on lints that do not exist locally.
+# Running the flake's own `devShells.ci` and `checks.*` makes that class of
+# failure structurally impossible, and makes a green run here mean exactly what
+# a green `just ci-nix` means locally.
+#
+# WHY NOT THE ATTIC CACHE: .woodpecker/test.yaml substitutes from
+# https://cache.homelab.local/homelab, which resolves only inside the homelab.
+# GitHub runners cannot reach it — pointing at it here would cost a connect
+# timeout per query and never hit — so the Nix store is carried between runs in
+# the GitHub Actions cache instead.
+
+name: nix checks
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: fmt / clippy / test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+            # Required for the GC roots below to be worth anything: without
+            # these, a root pins only the output paths themselves, and the
+            # dependency tree the cache exists to carry is collected anyway.
+            keep-outputs = true
+            keep-env-derivations = true
+
+      # Carries /nix/store between runs. The workspace's ~1580 dependency
+      # crates compile into `cargoArtifacts`, a single store path shared by all
+      # three checks — restoring it is the difference between a short run and a
+      # cold build of the entire dependency tree.
+      #
+      # `Cargo.lock` is in the key because that is exactly what invalidates
+      # `cargoArtifacts`; `flake.lock`/`flake.nix` because they select the
+      # toolchain. `restore-prefixes-first-match` still gets a warm store from
+      # the previous key when one of them changes, so a dependency bump pays for
+      # recompiling the delta rather than the world.
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix', 'Cargo.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          # The GitHub cache is 10 GB per repository and evicts by LRU, so an
+          # unbounded store would push the container-layer caches out.
+          gc-max-store-size-linux: 6G
+          purge: true
+          purge-prefixes: nix-${{ runner.os }}-
+          purge-created: 0
+          purge-primary-key: never
+
+      # Realising the CI shell is the first thing that touches substituters, so
+      # a broken network shows up here rather than as "the whole run hung".
+      # `--profile` also materialises the closure as a GC root, which is what
+      # keeps the cache step above from collecting it. Same path
+      # .woodpecker/test.yaml uses, so the two pipelines stay comparable.
+      - name: realise devShells.ci
+        run: nix develop --profile ./.ci-profile .#ci --command true
+
+      # `cargoArtifacts` is a build INPUT of the checks, not part of any check's
+      # runtime closure, so nothing else in this job holds it against garbage
+      # collection — and it is the one derivation that makes the whole crane
+      # arrangement worth having. Naming it explicitly gives it a GC root.
+      - name: realise the compiled dependency tree
+        run: nix build --out-link ./.ci-artifacts --print-build-logs .#legacyPackages.x86_64-linux.cargo-artifacts
+
+      # The system is spelled out rather than derived: GitHub's ubuntu runners
+      # are amd64, and release.yml pins linux/amd64 for the same reason.
+      - name: fmt, clippy, test
+        run: |
+          nix build --no-link --print-build-logs \
+            .#checks.x86_64-linux.fmt \
+            .#checks.x86_64-linux.clippy \
+            .#checks.x86_64-linux.test
+
+      # cargo-deny fetches the RustSec advisory database over the network, and
+      # Nix builds run sandboxed without network access — so it cannot be a
+      # crane check by construction. Run it in the dev shell, which is already
+      # realised by this point, so it costs seconds.
+      - name: cargo-deny
+        run: nix develop --profile ./.ci-profile .#ci --command cargo deny check
+
+      # The Containerfile carries the only rustc version literal in the repo:
+      # the cargo-zigbuild base image ships a rustc too old for edition 2024, so
+      # the image installs a toolchain by number and cannot read `flake.lock`.
+      # Its comment says "keep in sync with flake.nix", and nothing enforced
+      # that — the pin had already drifted a minor behind. Left alone, the drift
+      # surfaces at release time as MSRV errors from unrelated dependencies,
+      # which points at the wrong thing entirely.
+      - name: toolchain pin matches the flake
+        run: |
+          flake_rustc="$(nix develop --profile ./.ci-profile .#ci --command rustc --version | cut -d' ' -f2)"
+          pinned="$(awk -F= '/^ARG RUST_TOOLCHAIN=/ { print $2; exit }' Containerfile)"
+          if [ "$flake_rustc" != "$pinned" ]; then
+            echo "error: Containerfile pins RUST_TOOLCHAIN=$pinned but devShells.ci ships rustc $flake_rustc." >&2
+            echo "       Update the ARG in Containerfile to $flake_rustc." >&2
+            exit 1
+          fi
+          echo "toolchain pin OK: $pinned"
