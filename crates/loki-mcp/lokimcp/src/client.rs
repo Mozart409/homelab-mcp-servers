@@ -46,6 +46,10 @@ impl LokiClient {
             headers.insert(HeaderName::from_static("x-scope-orgid"), val);
         }
 
+        // rustls has no default provider in this workspace; see
+        // `mcp_common::install_crypto_provider`.
+        mcp_common::install_crypto_provider();
+
         let http = reqwest::Client::builder()
             .default_headers(headers)
             .danger_accept_invalid_certs(config.insecure)

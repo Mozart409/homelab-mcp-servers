@@ -13,6 +13,35 @@ use color_eyre::eyre::{Context, Result, bail};
 use rmcp::model::{ReadResourceResult, Resource, ResourceContents};
 use serde::Serialize;
 
+// ---- TLS --------------------------------------------------------------------
+
+/// Installs `ring` as the process-wide rustls [`CryptoProvider`].
+///
+/// **Every code path that builds a `reqwest::Client` must call this first.**
+///
+/// The workspace asks reqwest for `rustls-no-provider` rather than `rustls`.
+/// The two features are identical except that `rustls` also selects the
+/// aws-lc-rs crypto provider — whose `aws-lc-sys` C build was, by a factor of
+/// two, the most expensive crate in the workspace and forced `cmake` into the
+/// container image. `rustls-no-provider` selects none, which means rustls has
+/// no default to fall back on and `Client::builder().build()` fails at runtime
+/// with `ClientCreationFailed` until a provider is installed here.
+///
+/// This changes the cipher suites and key exchanges on the wire; it does **not**
+/// change which certificates are trusted. Root selection belongs to
+/// `rustls-platform-verifier`, which both features enable, so the system trust
+/// store — and the homelab CA installed on the deployment host — behaves as
+/// before. The one thing ring cannot verify that aws-lc-rs can is an ECDSA
+/// P-521 certificate.
+///
+/// Idempotent by construction: rustls' `install_default` reports an error when
+/// a provider is already installed, which is the expected outcome for every
+/// call after the first (several servers build more than one client, and each
+/// test builds its own). That error is deliberately discarded.
+pub fn install_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
 // ---- Doc resource helpers ---------------------------------------------------
 
 /// Constructs the conventional URI for a server's operator guide.
@@ -91,6 +120,8 @@ pub fn health_router() -> Router {
 /// success status.
 pub async fn run_healthcheck(bind: &str) -> Result<()> {
     let url = format!("http://{bind}/_healthcheck");
+
+    install_crypto_provider();
 
     let client = reqwest::Client::builder()
         .timeout(HEALTHCHECK_TIMEOUT)
