@@ -11,9 +11,23 @@ default:
 # Development
 # ------------------------------------------------------------------------------
 
+# ONE INVOCATION SHAPE, EVERYWHERE.
+#
+# Cargo keys its artifacts on the resolved feature set and the selected targets,
+# so `cargo check --workspace` and `cargo check --workspace --all-targets` are
+# two different builds that share nothing but the source. Measured on this
+# workspace: populating a second shape costs 70-150s, after which switching back
+# and forth is free — the artifacts coexist, they do not clobber each other.
+#
+# So the flags below are not decoration. `check`, `clippy` and `test` all select
+# the same units as the clippy check in flake.nix, which means an edit is
+# type-checked once and every subsequent recipe reuses it: after a one-line edit,
+# `just check` took 3s and `just clippy` 1s. Change the flags on one of these and
+# you silently reintroduce a 70s tax on alternating between them.
+#
 # Build the entire workspace
 check:
-    cargo check --workspace
+    cargo check --workspace --all-targets --all-features
 
 # Build the entire workspace (release mode)
 build:
@@ -22,10 +36,19 @@ build:
 build-release:
     cargo build --workspace --release
 
+# `--all-features` matches `check` and `clippy` above so all three share
+# artifacts. `--all-targets` is deliberately absent: it would silently drop
+# doctests from the run.
+#
 # Test everything
 test:
-    cargo test --workspace
+    cargo test --workspace --all-features
 
+# Narrowing to one package re-resolves features over just that package, so the
+# first run after a `just test` rebuilds a slice of the dependency tree (~16s
+# here) into a second, coexisting artifact set. Repeat runs are instant, and
+# switching back to `just test` is free — the two sets do not evict each other.
+#
 # Test a specific package (e.g. `just test-pkg pgmcp`)
 test-pkg pkg:
     cargo test -p {{ pkg }}
@@ -37,6 +60,25 @@ test-db:
 # Watch a specific package and re-run its binary (e.g. `just watch-pkg pbsmcp-server`)
 watch-pkg pkg:
     cargo watch -c -x "run -p {{ pkg }}"
+
+# sccache hit rate. The dev shell sets RUSTC_WRAPPER, so this reflects real
+# usage. Compile requests that are "non-cacheable" are expected and not a
+# misconfiguration: proc-macros, anything that invokes the linker, and workspace
+# crates built with `-C incremental` are all excluded by sccache's design. The
+# number that matters is the hit rate on the ~300 registry dependencies.
+#
+# Show the dependency-cache hit rate
+sccache-stats:
+    sccache --show-stats
+
+# Profile a build and open the per-crate breakdown. Use this before optimising
+# anything — the answer for this workspace was "aws-lc-sys and linking", which
+# is not what you would guess from watching the output scroll.
+#
+# Profile a build, per crate (writes target/cargo-timings/cargo-timing.html)
+timings *args:
+    cargo build --workspace --timings {{ args }}
+    @echo "==> report: target/cargo-timings/cargo-timing.html"
 
 # Clear terminal
 clear:
@@ -278,6 +320,11 @@ verify-cache:
 # Clean
 # ------------------------------------------------------------------------------
 
+# Clean Cargo build artifacts. This does NOT clear the sccache cache, which is
+# the point: the next build re-checks out the dependency tree from cache rather
+# than recompiling it. `sccache --zero-stats` resets counters;
+# `rm -rf ~/.cache/sccache` is the nuclear option.
+#
 # Clean Cargo build artifacts
 clean:
     cargo clean
