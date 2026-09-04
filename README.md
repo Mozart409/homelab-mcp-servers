@@ -145,9 +145,9 @@ The servers use the streamable-HTTP transport, so point the client at the URL:
 Common tasks are wrapped in the [`justfile`](justfile) (`just --list` for all):
 
 ```sh
-just check          # cargo check --workspace
+just check          # cargo check --workspace --all-targets --all-features
 just build          # cargo build --workspace
-just test           # cargo test --workspace
+just test           # cargo test --workspace --all-features
 just test-pkg pgmcp # test a single package
 just watch-pkg pgmcp-server  # watch + re-run a binary
 
@@ -155,6 +155,9 @@ just fmt            # cargo fmt
 just clippy         # clippy with -D warnings -D clippy::pedantic
 just lint           # fmt + clippy + cargo-deny
 just ci             # everything CI runs (lint + test)
+
+just sccache-stats  # dependency-cache hit rate
+just timings        # per-crate build profile (cargo --timings)
 ```
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/);
