@@ -168,29 +168,86 @@
       # to use other shells, run:
       # nix develop . --command fish
       devShells.default = pkgs.mkShell {
-        buildInputs = with pkgs; [
-          # keep-sorted start
-          act
-          cargo-audit
-          cargo-deny
-          cargo-edit
-          cargo-watch
-          cargo-workspaces
-          claude-code
-          cocogitto
-          just
-          keep-sorted
-          lazydocker
-          lefthook
-          opencode
-          podman
-          podman-compose
-          sqlx-cli
-          tailwindcss_4
-          toolchain
-          trivy
-          # keep-sorted end
-        ];
+        buildInputs =
+          (with pkgs; [
+            # keep-sorted start
+            act
+            cargo-audit
+            cargo-deny
+            cargo-edit
+            cargo-watch
+            cargo-workspaces
+            claude-code
+            cocogitto
+            just
+            keep-sorted
+            lazydocker
+            lefthook
+            mold
+            opencode
+            podman
+            podman-compose
+            sccache
+            sqlx-cli
+            tailwindcss_4
+            toolchain
+            trivy
+            # keep-sorted end
+          ])
+          ++ [
+            # rust-analyzer from the same fenix channel as `toolchain`, so the
+            # editor and the CLI agree on rustc — pedantic clippy and the
+            # analyzer disagreeing about a lint is a miserable way to spend an
+            # afternoon.
+            #
+            # Deliberately NOT a component of `toolchain` itself: devShells.ci
+            # consumes `toolchain`, and rust-analyzer is ~100 MB of closure a
+            # lint runner would realise and never invoke.
+            pkgs.fenix.stable.rust-analyzer
+          ];
+
+        # --- Build-time tuning; see docs/build-performance.md for the numbers --
+        #
+        # sccache caches rustc invocations for the ~300 registry dependencies.
+        # It does nothing for the warm edit-compile loop by design: proc-macros
+        # and anything that invokes the linker are excluded, and workspace
+        # crates carry `-C incremental`, which sccache refuses outright.
+        #
+        # WHAT IT ACTUALLY BUYS, measured: a rebuild after `cargo clean` in the
+        # SAME directory drops 92s -> 52s at a 50% Rust hit rate.
+        #
+        # WHAT IT DOES NOT BUY, also measured: reuse in a DIFFERENT target
+        # directory. A second, freshly created target dir got a 0% Rust hit rate
+        # and ran 19% slower (100s -> 119s) — sccache's cache keys here are
+        # sensitive to the absolute paths cargo passes. So this does not
+        # subsidise rust-analyzer's separate `target/rust-analyzer`, and any
+        # argument for that directory has to stand on lock contention alone.
+        # Do not restore the "reuse across target dirs" claim without
+        # re-measuring; it was believed here once and was wrong.
+        #
+        # Setting this changes every fingerprint in `target/`, so the first
+        # build after adopting it recompiles the world exactly once.
+        RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+        # Default is 10G; the dependency tree here is large enough, across
+        # enough target dirs and branches, to evict itself at that size.
+        SCCACHE_CACHE_SIZE = "20G";
+
+        # mold instead of GNU ld. Linking is the measured bottleneck of the dev
+        # loop — `cargo test --workspace --no-run` links a dozen test binaries,
+        # and `cargo check` on the same edit is ~100x faster because it links
+        # nothing at all.
+        #
+        # `build.rustflags` (not `target.<triple>.rustflags`, and not a
+        # committed `.cargo/config.toml`) is deliberate: crane's source filter
+        # globs every `*.toml`, so a `.cargo/config.toml` would silently become
+        # a build input of `nix build` and of the cargo-zigbuild container,
+        # neither of which has mold installed. Keeping it an env var of THIS
+        # shell means the flake's derivations and the musl cross-build keep
+        # their stock linker and stay reproducible.
+        #
+        # An explicitly set RUSTFLAGS overrides this, which is the right
+        # precedence for a one-off.
+        CARGO_BUILD_RUSTFLAGS = "-C link-arg=-fuse-ld=mold";
         # Installing the git hooks is a developer-workstation concern. In CI the
         # checkout is throwaway and `.git/hooks` is never consulted, so skip it —
         # it would only add noise (or fail) on a bare clone.

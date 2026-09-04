@@ -1,0 +1,32 @@
+# rust-analyzer workspace configuration.
+#
+# WHY THIS FILE EXISTS: rust-analyzer runs `cargo check` on every save. Left to
+# its defaults it does so in `target/`, the same directory your terminal uses,
+# so a save mid-`just test` parks one of them on "Blocking waiting for file lock
+# on build directory" — and the two also disagree about flags, so each one
+# re-checks what the other just did.
+#
+# `targetDir = true` moves the analyzer to `target/rust-analyzer`, which buys
+# silence on that lock.
+#
+# Be honest about the price: it is a second, full dependency build (~90s once)
+# and roughly 3 GB of disk. sccache does NOT offset this — measured, a fresh
+# target directory gets a 0% hit rate from it, because its cache keys track the
+# absolute paths cargo passes. The trade is one-time cost and disk against never
+# again waiting on the editor to release the build lock.
+#
+# NOTE: rust-analyzer's support for this file is still partial upstream — keys
+# it does not understand are ignored silently. If your editor's behaviour does
+# not match, set the same three values through its LSP settings instead
+# (`rust-analyzer.cargo.targetDir`, `rust-analyzer.check.command`,
+# `rust-analyzer.check.extraArgs`).
+[cargo]
+targetDir = true
+
+# Check with clippy, using the exact flags `just clippy` and the CI check use.
+# The analyzer is the earliest place these lints can be reported, and having the
+# editor agree with the pipeline is the entire point of pinning both to one
+# toolchain.
+[check]
+command = "clippy"
+extraArgs = ["--all-targets", "--all-features", "--", "-D", "warnings", "-D", "clippy::pedantic"]
