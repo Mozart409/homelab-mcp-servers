@@ -48,3 +48,28 @@ panic = "deny"
 unwrap_in_result = "deny"
 unwrap_used = "deny"
 # keep-sorted end
+
+# Build-time tuning. These numbers come from measuring this workspace on a
+# 6-core box; see `docs/build-performance.md` for the method and the before/after.
+#
+# WHY dev DEBUGINFO IS TRIMMED: `cargo test --workspace --no-run` after a
+# one-line edit cost 61s, while `cargo check` on the same edit cost 3s. The gap
+# is not type-checking, it is codegen and linking — and the bulk of what the
+# linker was moving around was DWARF for ~300 dependencies nobody ever steps
+# into. `line-tables-only` keeps file/line in every backtrace (which is what
+# these servers' `color_eyre` reports actually use) and drops the variable-level
+# DWARF that a debugger would want. Dependencies drop debuginfo entirely.
+#
+# Measured A/B in fresh target dirs: that 61s edit-to-test-binaries loop became
+# 5s, a cold build of the same went 351s -> 177s, and the target dir shrank from
+# 7.0G to 3.0G.
+#
+# If you need to single-step through a dependency, override for that session:
+#   CARGO_PROFILE_DEV_PACKAGE_hyper_DEBUG=true cargo build
+[profile.dev]
+debug = "line-tables-only"
+
+# `"*"` matches dependencies only, never workspace members — so this is the
+# 300-crate half of the tree, not your own code.
+[profile.dev.package."*"]
+debug = false
