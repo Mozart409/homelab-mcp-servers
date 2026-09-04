@@ -11,9 +11,23 @@ default:
 # Development
 # ------------------------------------------------------------------------------
 
+# ONE INVOCATION SHAPE, EVERYWHERE.
+#
+# Cargo keys its artifacts on the resolved feature set and the selected targets,
+# so `cargo check --workspace` and `cargo check --workspace --all-targets` are
+# two different builds that share nothing but the source. Measured on this
+# workspace: populating a second shape costs 70-150s, after which switching back
+# and forth is free — the artifacts coexist, they do not clobber each other.
+#
+# So the flags below are not decoration. `check`, `clippy` and `test` all select
+# the same units as the clippy check in flake.nix, which means an edit is
+# type-checked once and every subsequent recipe reuses it: after a one-line edit,
+# `just check` took 3s and `just clippy` 1s. Change the flags on one of these and
+# you silently reintroduce a 70s tax on alternating between them.
+#
 # Build the entire workspace
 check:
-    cargo check --workspace
+    cargo check --workspace --all-targets --all-features
 
 # Build the entire workspace (release mode)
 build:
@@ -22,10 +36,19 @@ build:
 build-release:
     cargo build --workspace --release
 
+# `--all-features` matches `check` and `clippy` above so all three share
+# artifacts. `--all-targets` is deliberately absent: it would silently drop
+# doctests from the run.
+#
 # Test everything
 test:
-    cargo test --workspace
+    cargo test --workspace --all-features
 
+# Narrowing to one package re-resolves features over just that package, so the
+# first run after a `just test` rebuilds a slice of the dependency tree (~16s
+# here) into a second, coexisting artifact set. Repeat runs are instant, and
+# switching back to `just test` is free — the two sets do not evict each other.
+#
 # Test a specific package (e.g. `just test-pkg pgmcp`)
 test-pkg pkg:
     cargo test -p {{ pkg }}
@@ -37,6 +60,25 @@ test-db:
 # Watch a specific package and re-run its binary (e.g. `just watch-pkg pbsmcp-server`)
 watch-pkg pkg:
     cargo watch -c -x "run -p {{ pkg }}"
+
+# sccache hit rate. The dev shell sets RUSTC_WRAPPER, so this reflects real
+# usage. Compile requests that are "non-cacheable" are expected and not a
+# misconfiguration: proc-macros, anything that invokes the linker, and workspace
+# crates built with `-C incremental` are all excluded by sccache's design. The
+# number that matters is the hit rate on the ~300 registry dependencies.
+#
+# Show the dependency-cache hit rate
+sccache-stats:
+    sccache --show-stats
+
+# Profile a build and open the per-crate breakdown. Use this before optimising
+# anything — the answer for this workspace was "aws-lc-sys and linking", which
+# is not what you would guess from watching the output scroll.
+#
+# Profile a build, per crate (writes target/cargo-timings/cargo-timing.html)
+timings *args:
+    cargo build --workspace --timings {{ args }}
+    @echo "==> report: target/cargo-timings/cargo-timing.html"
 
 # Clear terminal
 clear:
@@ -278,6 +320,11 @@ verify-cache:
 # Clean
 # ------------------------------------------------------------------------------
 
+# Clean Cargo build artifacts. This does NOT clear the sccache cache, which is
+# the point: the next build re-checks out the dependency tree from cache rather
+# than recompiling it. `sccache --zero-stats` resets counters;
+# `rm -rf ~/.cache/sccache` is the nuclear option.
+#
 # Clean Cargo build artifacts
 clean:
     cargo clean
@@ -292,17 +339,52 @@ clean-all: clean
 # ------------------------------------------------------------------------------
 
 # Origin (Forgejo) is the main remote and where other people and agents push,
-# so it is pulled first and local work is published straight back to it.
-# GitHub is a downstream copy nobody else pushes to — it only receives the
-# merged state, never pulls.
+# so it is the only one pulled from. Every other remote — GitHub today — is a
+# downstream copy that receives the merged state and is never pulled.
 #
-# Sync all remotes (pull+push origin, then push github; tags follow the same order)
+# The remotes are ENUMERATED, not named. `git remote` becomes the single place a
+# remote is declared, so adding one is `git remote add` and nothing else, and a
+# clone that has no `github` remote does not fail on a hardcoded name. That
+# second half matters because cog.toml's post-bump hook calls this recipe: a
+# release must not die halfway through on a workstation whose remotes differ.
+#
+# Push the current branch and ALL tags to every configured remote
+push-all:
+    #!/usr/bin/env bash
+    set -uo pipefail
+
+    failed=()
+    for remote in $(git remote); do
+        echo "==> $remote"
+        # `git push <remote>` with no refspec pushes the CURRENT branch to the
+        # branch of the same name there: push.default=simple falls back to
+        # `current` for a remote that is not this branch's upstream. So the
+        # downstream copies need no tracking branches set up.
+        #
+        # `--tags` is a SEPARATE push on purpose. `--follow-tags` carries only
+        # annotated tags reachable from the pushed commit, and cog creates
+        # lightweight ones (`tag_prefix = ""`, no -a), so it would silently
+        # push none of them. This is what makes "every remote has every tag"
+        # true rather than approximately true.
+        if git push "$remote" && git push "$remote" --tags; then
+            continue
+        fi
+        # Keep going rather than aborting on the first failure. One unreachable
+        # remote must not leave the reachable ones un-pushed — the point of this
+        # recipe is that they all end up holding the same refs, and a partial
+        # sync that stops early is the outcome hardest to reason about later.
+        failed+=("$remote")
+    done
+
+    if [ "${#failed[@]}" -gt 0 ]; then
+        echo "error: push failed for: ${failed[*]}" >&2
+        exit 1
+    fi
+
+# Pull from origin, then publish the branch and every tag to every remote
 sync-remotes:
     git pull
-    git push
-    git push github
-    git push --tags
-    git push github --tags
+    just push-all
 
 # ------------------------------------------------------------------------------
 # Versioning / Release

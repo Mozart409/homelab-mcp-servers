@@ -3,7 +3,13 @@
 # Release flow:
 #   cog bump --auto      # pick the bump from conventional commits
 #   cog bump --minor     # or force a level
-#   ./push_harbor.sh     # build + push the tagged images to Harbor
+#   ./push_harbor.sh     # build + push the tagged images to the internal Harbor
+#
+# The bump publishes itself: the post-bump hook below pushes the commit and the
+# tag to every remote, and the tag landing on GitHub starts
+# .github/workflows/release.yml, which builds one image per server and pushes it
+# to GHCR. push_harbor.sh remains a manual step because Harbor lives on the
+# tailnet and no hosted runner can reach it.
 #
 # cog bumps the [workspace.package] version in Cargo.toml, refreshes
 # Cargo.lock, updates CHANGELOG.md, then creates the version commit + tag.
@@ -31,10 +37,20 @@ pre_bump_hooks = [
     "cargo check --workspace",
 ]
 
-# Push the bump commit and its tag after every version bump.
+# Publish the bump commit and the new tag to EVERY remote, not just origin.
+#
+# `just push-all` enumerates `git remote` rather than naming them, so this works
+# unchanged on a clone that has only origin and on one that also carries the
+# GitHub mirror. Two things depend on it going everywhere:
+#
+#   * the tag reaching GitHub is what triggers .github/workflows/release.yml,
+#     which builds and pushes the container images to GHCR — a release that
+#     stopped at origin would leave the images unbuilt until someone remembered
+#     to sync by hand,
+#   * `git describe --exact-match` on any clone (push_harbor.sh's guard) needs
+#     the tag to actually be there.
 post_bump_hooks = [
-    "git push",
-    "git push origin {{version}}",
+    "just push-all",
 ]
 
 [changelog]

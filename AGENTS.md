@@ -68,10 +68,27 @@ Within a library crate the module split is consistent:
 2. **Loopback by default.** Servers bind `127.0.0.1` and rely on rmcp's
    DNS-rebinding protection (`allowed_hosts`). Don't change defaults to bind
    non-loopback; that's opt-in via `*_BIND` / `*_ALLOWED_HOSTS` env vars.
-3. **rustls everywhere — no OpenSSL/native-tls.** `reqwest` uses
-   `default-features = false, features = ["json","query","rustls"]`; `sqlx` uses
-   `tls-rustls-ring-webpki`. This is what keeps the static-musl/distroless image
-   possible. Don't pull in a dep that drags in OpenSSL.
+3. **rustls everywhere — no OpenSSL/native-tls, and ring is the only provider.**
+   `reqwest` uses
+   `default-features = false, features = ["json","query","rustls-no-provider"]`;
+   `sqlx` uses `tls-rustls-ring-webpki`. This is what keeps the
+   static-musl/distroless image possible. Don't pull in a dep that drags in
+   OpenSSL.
+
+   `rustls-no-provider` (not `rustls`) is deliberate: reqwest's `rustls` feature
+   also selects the aws-lc-rs provider, whose `aws-lc-sys` C build was the
+   single most expensive crate in the workspace. Because no provider is selected
+   by the feature, **something must install one before the first
+   `reqwest::Client` is built** — that is `mcp_common::install_crypto_provider()`,
+   and every client constructor calls it. A new REST server must do the same, or
+   it will fail at runtime with `ClientCreationFailed` and no other clue.
+
+   What this does *not* change is which certificates are trusted:
+   `rustls-platform-verifier` is enabled by both features, so the system trust
+   store (and therefore the homelab step-ca root on the deployment host) works
+   exactly as before. The one capability ring lacks is verifying **ECDSA P-521**
+   certificates; if a target ever presents one, that is the thing to check
+   first. See [`docs/build-performance.md`](docs/build-performance.md).
 4. **Config is runtime env only.** All settings come from env vars (`<SVC>_*`),
    loaded from `.env` via `dotenvy`. Secrets are never baked into images. Update
    [`.env.example`](.env.example) when adding a variable.
@@ -101,19 +118,29 @@ Within a library crate the module split is consistent:
 Use the [`justfile`](justfile) (`just --list`):
 
 ```sh
-just check              # cargo check --workspace
-just test               # cargo test --workspace
+just check              # cargo check --workspace --all-targets --all-features
+just test               # cargo test --workspace --all-features
 just test-pkg pgmcp     # one package
 just watch-pkg pgmcp-server
 just fmt                # cargo fmt
 just clippy             # clippy -D warnings -D clippy::pedantic  (must pass clean)
 just lint               # fmt + clippy + cargo-deny
 just ci                 # what CI runs: lint + test
+just sccache-stats      # dependency-cache hit rate
+just timings            # per-crate build profile (cargo --timings)
 ```
 
 Before considering a change done: `just ci` must pass. Clippy runs with
 `-D warnings -D clippy::pedantic`, so pedantic lints are errors — write
 `# Errors`/`# Panics` doc sections, `#[must_use]`, etc. as the existing code does.
+
+**Do not change the flags on `check` / `clippy` / `test`.** They deliberately
+select the same units, so one type-check is reused by all three; diverging them
+reintroduces a ~70s penalty every time you alternate between two recipes. The
+reasoning, and the measurements behind it, are in
+[`docs/build-performance.md`](docs/build-performance.md) — read that before
+touching `[profile.*]` in the root `Cargo.toml`, the build-tuning env vars in
+`flake.nix`, or [`rust-analyzer.toml`](rust-analyzer.toml).
 
 ## Conventions
 
@@ -137,6 +164,15 @@ Before considering a change done: `just ci` must pass. Clippy runs with
   `CHANGELOG.md` or the `version` in `Cargo.toml`, and don't create a
   `chore(version): ...` commit or git tag manually — `cog bump` owns all of that.
   Use `just changelog` (`cog changelog`) to preview unreleased changes.
+  - The bump publishes itself. `cog`'s post-bump hook runs `just push-all`,
+    which pushes the branch and *all* tags to every remote `git remote` lists —
+    never a hardcoded remote name. The tag reaching GitHub fires
+    [`.github/workflows/release.yml`](.github/workflows/release.yml): it
+    re-checks the tag against `[workspace.package] version`, re-runs the flake
+    checks, then builds and pushes one image per server to
+    `ghcr.io/<owner>/homelab-mcp-servers/<bin>`. The server list is read from
+    `flake.nix`'s `packages`, so a new server joins the release automatically.
+    Only [`push_harbor.sh`](push_harbor.sh) (internal Harbor) stays manual.
 - **Errors:** `color-eyre`'s `Result` in lib/`run()` code; map into
   `rmcp::ErrorData` (e.g. `ErrorData::internal_error(format!("{e:#}"), None)`)
   inside tool methods.
