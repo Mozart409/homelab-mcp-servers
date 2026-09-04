@@ -339,17 +339,52 @@ clean-all: clean
 # ------------------------------------------------------------------------------
 
 # Origin (Forgejo) is the main remote and where other people and agents push,
-# so it is pulled first and local work is published straight back to it.
-# GitHub is a downstream copy nobody else pushes to — it only receives the
-# merged state, never pulls.
+# so it is the only one pulled from. Every other remote — GitHub today — is a
+# downstream copy that receives the merged state and is never pulled.
 #
-# Sync all remotes (pull+push origin, then push github; tags follow the same order)
+# The remotes are ENUMERATED, not named. `git remote` becomes the single place a
+# remote is declared, so adding one is `git remote add` and nothing else, and a
+# clone that has no `github` remote does not fail on a hardcoded name. That
+# second half matters because cog.toml's post-bump hook calls this recipe: a
+# release must not die halfway through on a workstation whose remotes differ.
+#
+# Push the current branch and ALL tags to every configured remote
+push-all:
+    #!/usr/bin/env bash
+    set -uo pipefail
+
+    failed=()
+    for remote in $(git remote); do
+        echo "==> $remote"
+        # `git push <remote>` with no refspec pushes the CURRENT branch to the
+        # branch of the same name there: push.default=simple falls back to
+        # `current` for a remote that is not this branch's upstream. So the
+        # downstream copies need no tracking branches set up.
+        #
+        # `--tags` is a SEPARATE push on purpose. `--follow-tags` carries only
+        # annotated tags reachable from the pushed commit, and cog creates
+        # lightweight ones (`tag_prefix = ""`, no -a), so it would silently
+        # push none of them. This is what makes "every remote has every tag"
+        # true rather than approximately true.
+        if git push "$remote" && git push "$remote" --tags; then
+            continue
+        fi
+        # Keep going rather than aborting on the first failure. One unreachable
+        # remote must not leave the reachable ones un-pushed — the point of this
+        # recipe is that they all end up holding the same refs, and a partial
+        # sync that stops early is the outcome hardest to reason about later.
+        failed+=("$remote")
+    done
+
+    if [ "${#failed[@]}" -gt 0 ]; then
+        echo "error: push failed for: ${failed[*]}" >&2
+        exit 1
+    fi
+
+# Pull from origin, then publish the branch and every tag to every remote
 sync-remotes:
     git pull
-    git push
-    git push github
-    git push --tags
-    git push github --tags
+    just push-all
 
 # ------------------------------------------------------------------------------
 # Versioning / Release
