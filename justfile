@@ -296,11 +296,13 @@ clean-all: clean
 # GitHub is a downstream copy nobody else pushes to — it only receives the
 # merged state, never pulls.
 #
-# Sync all remotes (pull+push origin, then push github)
+# Sync all remotes (pull+push origin, then push github; tags follow the same order)
 sync-remotes:
     git pull
     git push
     git push github
+    git push --tags
+    git push github --tags
 
 # ------------------------------------------------------------------------------
 # Versioning / Release
