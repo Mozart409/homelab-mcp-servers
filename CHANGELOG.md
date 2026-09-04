@@ -2,6 +2,29 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.10.0 - 2026-09-04
+#### Features
+- (**justfile**) push tags to each remote in sync-remotes - (9618dec) - macbook-pro
+- (**nix**) add sccache, mold and a version-matched rust-analyzer - (19b7ec2) - developmentbot
+- (**release**) push the branch and all tags to every remote on bump - (0ace6be) - developmentbot
+#### Bug Fixes
+- (**container**) match the rust toolchain pin to the flake's 1.98.0 - (dade8c8) - developmentbot
+- (**harbor**) add the missing wpmcp-server to the pushed images - (a0942bb) - developmentbot
+#### Performance Improvements
+- (**cargo**) trim dev debuginfo for dependencies and workspace - (dc67ea5) - developmentbot
+- (**deps**) drop aws-lc-sys by moving reqwest to the ring provider - (a6127bf) - developmentbot
+- (**just**) align check, clippy and test on one invocation shape - (94ed885) - developmentbot
+#### Documentation
+- (**build**) record the build-performance measurements - (a507303) - developmentbot
+- (**release**) document the ghcr release flow and the github ci - (fdb6bc3) - developmentbot
+#### Continuous Integration
+- (**github**) add flake-driven pr checks and a ghcr release workflow - (d231e64) - developmentbot
+#### Miscellaneous Chores
+- (**deps**) upgrade flake - (9f6ed85) - Amadeus Mader
+- (**tools**) add sync-remotes - (662f651) - Amadeus Mader
+
+- - -
+
 ## 0.9.0 - 2026-09-01
 #### Features
 - (**lokimcp**) add error_scan and label_explorer prompts, plus a doc resource - (104815c) - developmentbot
