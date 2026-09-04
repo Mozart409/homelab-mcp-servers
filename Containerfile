@@ -5,8 +5,13 @@
 #
 # The whole workspace is rustls-only (no OpenSSL / native-tls), so we build a
 # fully static musl binary and ship it on distroless/static — no libc, no shell,
-# runs as a non-root user. cargo-zigbuild handles the musl cross-compile
-# (including aws-lc-rs, which reqwest's rustls provider pulls in).
+# runs as a non-root user. cargo-zigbuild handles the musl cross-compile.
+#
+# The single crypto provider is ring, which needs nothing but the C compiler zig
+# already provides. This image used to `apt-get install cmake` because reqwest's
+# `rustls` feature dragged in aws-lc-rs, a 125s C build that was the largest
+# single unit in the whole workspace; the workspace now asks for
+# `rustls-no-provider` and installs ring itself. See docs/build-performance.md.
 
 ARG BUILDER_IMAGE=docker.io/messense/cargo-zigbuild:0.20.0
 ARG RUNTIME_IMAGE=gcr.io/distroless/static-debian12:nonroot
@@ -34,12 +39,6 @@ ARG RUST_TOOLCHAIN
 # `rustup default` below is what actually takes effect.
 ENV RUSTUP_TOOLCHAIN=
 WORKDIR /app
-
-# aws-lc-rs (pbs server, via reqwest) builds its crypto with cmake; ring (pg
-# server, via sqlx) needs only the C compiler that zig already provides.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends cmake \
- && rm -rf /var/lib/apt/lists/*
 
 # The `rustc --version` assertion is not redundant: if RUST_TOOLCHAIN is ever
 # shadowed or empty again, rustup silently falls back to the base image's own

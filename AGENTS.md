@@ -68,10 +68,27 @@ Within a library crate the module split is consistent:
 2. **Loopback by default.** Servers bind `127.0.0.1` and rely on rmcp's
    DNS-rebinding protection (`allowed_hosts`). Don't change defaults to bind
    non-loopback; that's opt-in via `*_BIND` / `*_ALLOWED_HOSTS` env vars.
-3. **rustls everywhere — no OpenSSL/native-tls.** `reqwest` uses
-   `default-features = false, features = ["json","query","rustls"]`; `sqlx` uses
-   `tls-rustls-ring-webpki`. This is what keeps the static-musl/distroless image
-   possible. Don't pull in a dep that drags in OpenSSL.
+3. **rustls everywhere — no OpenSSL/native-tls, and ring is the only provider.**
+   `reqwest` uses
+   `default-features = false, features = ["json","query","rustls-no-provider"]`;
+   `sqlx` uses `tls-rustls-ring-webpki`. This is what keeps the
+   static-musl/distroless image possible. Don't pull in a dep that drags in
+   OpenSSL.
+
+   `rustls-no-provider` (not `rustls`) is deliberate: reqwest's `rustls` feature
+   also selects the aws-lc-rs provider, whose `aws-lc-sys` C build was the
+   single most expensive crate in the workspace. Because no provider is selected
+   by the feature, **something must install one before the first
+   `reqwest::Client` is built** — that is `mcp_common::install_crypto_provider()`,
+   and every client constructor calls it. A new REST server must do the same, or
+   it will fail at runtime with `ClientCreationFailed` and no other clue.
+
+   What this does *not* change is which certificates are trusted:
+   `rustls-platform-verifier` is enabled by both features, so the system trust
+   store (and therefore the homelab step-ca root on the deployment host) works
+   exactly as before. The one capability ring lacks is verifying **ECDSA P-521**
+   certificates; if a target ever presents one, that is the thing to check
+   first. See [`docs/build-performance.md`](docs/build-performance.md).
 4. **Config is runtime env only.** All settings come from env vars (`<SVC>_*`),
    loaded from `.env` via `dotenvy`. Secrets are never baked into images. Update
    [`.env.example`](.env.example) when adding a variable.

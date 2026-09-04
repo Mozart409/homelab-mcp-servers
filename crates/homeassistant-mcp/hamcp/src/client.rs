@@ -150,6 +150,10 @@ impl HaClient {
             header::HeaderValue::from_str(&auth_value).map_err(|_| ClientError::InvalidToken)?;
         headers.insert(header::AUTHORIZATION, auth_header);
 
+        // rustls has no default provider in this workspace; see
+        // `mcp_common::install_crypto_provider`.
+        mcp_common::install_crypto_provider();
+
         let client = Client::builder()
             .default_headers(headers)
             .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
