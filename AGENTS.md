@@ -164,6 +164,15 @@ touching `[profile.*]` in the root `Cargo.toml`, the build-tuning env vars in
   `CHANGELOG.md` or the `version` in `Cargo.toml`, and don't create a
   `chore(version): ...` commit or git tag manually — `cog bump` owns all of that.
   Use `just changelog` (`cog changelog`) to preview unreleased changes.
+  - The bump publishes itself. `cog`'s post-bump hook runs `just push-all`,
+    which pushes the branch and *all* tags to every remote `git remote` lists —
+    never a hardcoded remote name. The tag reaching GitHub fires
+    [`.github/workflows/release.yml`](.github/workflows/release.yml): it
+    re-checks the tag against `[workspace.package] version`, re-runs the flake
+    checks, then builds and pushes one image per server to
+    `ghcr.io/<owner>/homelab-mcp-servers/<bin>`. The server list is read from
+    `flake.nix`'s `packages`, so a new server joins the release automatically.
+    Only [`push_harbor.sh`](push_harbor.sh) (internal Harbor) stays manual.
 - **Errors:** `color-eyre`'s `Result` in lib/`run()` code; map into
   `rmcp::ErrorData` (e.g. `ErrorData::internal_error(format!("{e:#}"), None)`)
   inside tool methods.

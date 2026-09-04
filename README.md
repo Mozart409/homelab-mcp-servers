@@ -187,8 +187,38 @@ just down
 ```
 
 Secrets are read from `.env` and injected at runtime via `env_file` — never
-baked into images. [`push_harbor.sh`](push_harbor.sh) pushes images to a Harbor
-registry.
+baked into images. [`push_harbor.sh`](push_harbor.sh) pushes images to the
+internal Harbor registry from a workstation.
+
+### Releases
+
+Tagged releases publish one image per server to the GitHub Container Registry,
+which is the copy that can be pulled without being on the tailnet:
+
+```sh
+podman pull ghcr.io/<owner>/homelab-mcp-servers/pbsmcp-server:0.9.0
+```
+
+Cutting one is a single command. [`cog`](cog.toml) creates the version commit,
+the changelog entry and the tag, then its post-bump hook (`just push-all`)
+pushes the branch and every tag to **every** configured remote — and the tag
+landing on GitHub is what starts
+[`.github/workflows/release.yml`](.github/workflows/release.yml):
+
+```sh
+just bump patch      # or minor / major / auto
+```
+
+`just push-all` enumerates `git remote` rather than naming remotes, so it needs
+no setup beyond `git remote add`, and `just sync-remotes` (pull from origin,
+then `push-all`) is the same thing for ordinary work between releases.
+[`push_harbor.sh`](push_harbor.sh) stays manual: Harbor is on the tailnet, where
+no hosted runner can reach it.
+
+CI runs in two places against the same flake: `.woodpecker/` on the homelab
+Forgejo, and [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on pull
+requests to the GitHub mirror. Both run `checks.{fmt,clippy,test}` from
+[`flake.nix`](flake.nix), so `just ci-nix` reproduces either locally.
 
 ### Multiple instances — several Postgres databases
 
