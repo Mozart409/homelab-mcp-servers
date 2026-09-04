@@ -118,19 +118,29 @@ Within a library crate the module split is consistent:
 Use the [`justfile`](justfile) (`just --list`):
 
 ```sh
-just check              # cargo check --workspace
-just test               # cargo test --workspace
+just check              # cargo check --workspace --all-targets --all-features
+just test               # cargo test --workspace --all-features
 just test-pkg pgmcp     # one package
 just watch-pkg pgmcp-server
 just fmt                # cargo fmt
 just clippy             # clippy -D warnings -D clippy::pedantic  (must pass clean)
 just lint               # fmt + clippy + cargo-deny
 just ci                 # what CI runs: lint + test
+just sccache-stats      # dependency-cache hit rate
+just timings            # per-crate build profile (cargo --timings)
 ```
 
 Before considering a change done: `just ci` must pass. Clippy runs with
 `-D warnings -D clippy::pedantic`, so pedantic lints are errors — write
 `# Errors`/`# Panics` doc sections, `#[must_use]`, etc. as the existing code does.
+
+**Do not change the flags on `check` / `clippy` / `test`.** They deliberately
+select the same units, so one type-check is reused by all three; diverging them
+reintroduces a ~70s penalty every time you alternate between two recipes. The
+reasoning, and the measurements behind it, are in
+[`docs/build-performance.md`](docs/build-performance.md) — read that before
+touching `[profile.*]` in the root `Cargo.toml`, the build-tuning env vars in
+`flake.nix`, or [`rust-analyzer.toml`](rust-analyzer.toml).
 
 ## Conventions
 
