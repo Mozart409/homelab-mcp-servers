@@ -1,4 +1,4 @@
-# fmt + clippy + test + cargo-deny, through the flake.
+# fmt + clippy + test + cargo-deny + actionlint, through the flake.
 #
 # A reusable workflow rather than a job copied into both callers: ci.yml runs it
 # on every pull request and release.yml runs it again on the tag, and the whole
@@ -100,12 +100,18 @@ jobs:
 
       # The system is spelled out rather than derived: GitHub's ubuntu runners
       # are amd64, and release.yml pins linux/amd64 for the same reason.
-      - name: fmt, clippy, test
+      #
+      # `actionlint` lints this very file, and the awk/jq inside release.yml via
+      # the shellcheck pass it bundles. It is a check rather than a
+      # devShells.ci package because its closure is 236 MiB — see the comment on
+      # the check in flake.nix.
+      - name: fmt, clippy, test, actionlint
         run: |
           nix build --no-link --print-build-logs \
             .#checks.x86_64-linux.fmt \
             .#checks.x86_64-linux.clippy \
-            .#checks.x86_64-linux.test
+            .#checks.x86_64-linux.test \
+            .#checks.x86_64-linux.actionlint
 
       # cargo-deny fetches the RustSec advisory database over the network, and
       # Nix builds run sandboxed without network access — so it cannot be a
