@@ -140,6 +140,30 @@
           inherit src;
           pname = "homelab-mcp-servers-fmt";
         };
+
+        # actionlint over the GitHub Actions workflows, with the shellcheck and
+        # pyflakes passes it bundles — so the `run:` blocks in those files (awk,
+        # jq, the tag/version guards) are linted, not just the YAML schema.
+        #
+        # WHY THIS IS A CHECK AND NOT A devShells.ci PACKAGE: nixpkgs' actionlint
+        # carries shellcheck and pyflakes, a 236 MiB closure. The CI shell is
+        # deliberately held to what `just ci` invokes, because a lint runner has
+        # to realise that whole closure before it can run anything. As a check
+        # derivation the cost is paid only when this actually runs, and it is
+        # substituted from cache.nixos.org rather than built.
+        #
+        # WHY IT MATTERS HERE: a malformed workflow does not fail loudly on
+        # GitHub — it just never triggers, which is indistinguishable from a
+        # misconfigured repository and cost a release to work out once already.
+        # Nothing else in the tree looks at these files.
+        actionlint = pkgs.runCommand "actionlint" {nativeBuildInputs = [pkgs.actionlint];} ''
+          cp -r ${./.github} .github
+          # Named explicitly rather than letting actionlint discover them: with
+          # no arguments it locates the project by walking up for a `.git`
+          # directory, which a build sandbox does not have.
+          actionlint .github/workflows/*.yml
+          touch $out
+        '';
       };
     in {
       inherit checks;
@@ -172,6 +196,7 @@
           (with pkgs; [
             # keep-sorted start
             act
+            actionlint
             cargo-audit
             cargo-deny
             cargo-edit

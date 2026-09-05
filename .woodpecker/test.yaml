@@ -199,7 +199,7 @@ steps:
       - 'timeout 900 nix develop --profile ./.ci-profile .#ci --command true || { echo "FAIL - could not realise devShells.ci. Run the preflight workflow: this is almost always DNS or egress from the agent, not a problem with the code."; exit 1; }'
       # The system is spelled out rather than derived: this agent is amd64, and
       # release.yaml pins linux/amd64 for the same reason.
-      - 'nix build --no-link --print-build-logs .#checks.x86_64-linux.fmt .#checks.x86_64-linux.clippy .#checks.x86_64-linux.test'
+      - 'nix build --no-link --print-build-logs .#checks.x86_64-linux.fmt .#checks.x86_64-linux.clippy .#checks.x86_64-linux.test .#checks.x86_64-linux.actionlint'
       # cargo-deny fetches the RustSec advisory database over the network, and
       # Nix builds run sandboxed without network access — so it cannot be a
       # crane check by construction. Run it in the dev shell, which is already

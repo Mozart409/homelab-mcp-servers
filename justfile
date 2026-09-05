@@ -152,7 +152,8 @@ ci-nix:
     nix build --no-link --print-build-logs \
         .#checks.x86_64-linux.fmt \
         .#checks.x86_64-linux.clippy \
-        .#checks.x86_64-linux.test
+        .#checks.x86_64-linux.test \
+        .#checks.x86_64-linux.actionlint
 
 # Run pre-commit hooks manually
 pre-commit:
