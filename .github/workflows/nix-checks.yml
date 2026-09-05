@@ -27,6 +27,16 @@ name: nix checks
 
 on:
   workflow_call:
+    inputs:
+      ref:
+        description: >-
+          Ref to check out. Empty means "whatever triggered the run", which is
+          what ci.yml wants; release.yml passes the release tag explicitly,
+          because a workflow_dispatch run is triggered from a branch and would
+          otherwise check the wrong tree.
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -37,6 +47,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: cachix/install-nix-action@v31
         with:

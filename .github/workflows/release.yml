@@ -1,4 +1,6 @@
-# Publish a release: one container image per MCP server, pushed to GHCR.
+# Publish a release: one container image per MCP server pushed to GHCR, then a
+# GitHub release created from the changelog — in that order, so the release
+# notes never point at images that do not exist.
 #
 # TRIGGER: a bare-semver git tag, because that is what cocogitto creates —
 # `cog.toml` sets `tag_prefix = ""`, so releases are `0.9.0`, never `v0.9.0`.
@@ -9,6 +11,12 @@
 # `cog`'s post-bump hook runs `just push-all`, which pushes the branch and all
 # tags to every remote `git remote` lists. This workflow is what happens when
 # that reaches GitHub.
+#
+# CREATING A RELEASE BY HAND IS NOT A TRIGGER, deliberately. GitHub fires a
+# `release` event for that, not the `push` event this listens for — and the
+# ordering here runs the other way round: images first, release last. If a tag
+# is already on GitHub and you want the images built for it, use the
+# `workflow_dispatch` entry below rather than making a release by hand.
 #
 # WHAT THIS REPLACES: nothing, for the homelab itself — `push_harbor.sh` still
 # pushes the same images to the internal Harbor from a workstation. GHCR is the
@@ -23,6 +31,17 @@ on:
       # unconditionally below, and a prerelease must not claim that tag.
       - "[0-9]+.[0-9]+.[0-9]+"
 
+  # Manual entry point for a tag that already exists — a release whose push
+  # event was missed, or a re-run after fixing something in the registry. It
+  # does exactly what the tag push does; the tag is named explicitly instead of
+  # being read off the triggering ref.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to build (e.g. 0.10.0)"
+        required: true
+        type: string
+
 permissions:
   contents: read
 
@@ -33,10 +52,18 @@ jobs:
     name: verify tag
     runs-on: ubuntu-latest
     outputs:
+      tag: ${{ steps.version.outputs.tag }}
       version: ${{ steps.version.outputs.version }}
+      minor: ${{ steps.version.outputs.minor }}
       servers: ${{ steps.servers.outputs.servers }}
     steps:
+      # `inputs.tag || github.ref_name` is the one expression that makes both
+      # entry points identical: on a tag push the `inputs` context is null, so
+      # this falls through to the pushed tag. Every job below checks out the
+      # same way, rather than trusting whatever ref happened to trigger the run.
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
 
       # Nix is here only to read the server list out of the flake below; this
       # job deliberately builds nothing, so it needs no store cache.
@@ -53,7 +80,16 @@ jobs:
       - name: tag matches the workspace version
         id: version
         run: |
-          tag="${GITHUB_REF_NAME}"
+          tag="${{ inputs.tag || github.ref_name }}"
+
+          # The `on.push.tags` filter already enforces this shape, but a
+          # workflow_dispatch input is free text — catch a typo here rather than
+          # in the middle of a six-way image matrix.
+          if ! printf '%s' "$tag" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "error: '$tag' is not a bare semver release tag (e.g. 0.10.0)." >&2
+            exit 1
+          fi
+
           version="$(awk '
               /^\[/                { section = $0 }
               section == "[workspace.package]" && /^[[:space:]]*version[[:space:]]*=/ {
@@ -71,7 +107,11 @@ jobs:
             exit 1
           fi
 
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "minor=${version%.*}"
+          } >> "$GITHUB_OUTPUT"
           echo "releasing $version"
 
       # Derived from the flake rather than hardcoded here or copied out of
@@ -98,6 +138,8 @@ jobs:
   # so it costs no wall-clock.
   checks:
     uses: ./.github/workflows/nix-checks.yml
+    with:
+      ref: ${{ inputs.tag || github.ref_name }}
 
   # One image per server, built from the shared Containerfile exactly as
   # `just image <bin>` does locally.
@@ -130,6 +172,8 @@ jobs:
         bin: ${{ fromJSON(needs.verify.outputs.servers) }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.verify.outputs.tag }}
 
       - uses: docker/setup-buildx-action@v3
 
@@ -146,17 +190,23 @@ jobs:
       # its visibility and permissions instead of needing them set by hand in
       # the org's package settings. metadata-action lowercases the name, which
       # GHCR requires and `github.repository` does not guarantee.
+      #
+      # The tags are raw values taken from the version `verify` already checked,
+      # NOT `type=semver`: semver patterns parse `github.ref`, which is a branch
+      # ref on a workflow_dispatch run and would silently produce no version
+      # tags at all. One source for the version, both entry points.
       - uses: docker/metadata-action@v5
         id: meta
         with:
           images: ghcr.io/${{ github.repository }}/${{ matrix.bin }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ needs.verify.outputs.version }}
+            type=raw,value=${{ needs.verify.outputs.minor }}
             type=raw,value=latest
           labels: |
             org.opencontainers.image.title=${{ matrix.bin }}
             org.opencontainers.image.description=MCP server ${{ matrix.bin }} (static musl, distroless)
+            org.opencontainers.image.version=${{ needs.verify.outputs.version }}
 
       - uses: docker/build-push-action@v6
         with:
@@ -175,7 +225,9 @@ jobs:
           provenance: false
 
   # Published last, so the release notes never point at images that failed to
-  # build.
+  # build. `needs: images` covers the whole matrix, so one broken server means
+  # no release — which is the right way round: a release is the announcement
+  # that the images are there.
   github-release:
     name: github release
     needs: [verify, images]
@@ -184,6 +236,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.verify.outputs.tag }}
 
       # CHANGELOG.md is generated by cocogitto during the bump, so the notes for
       # this tag are already written — read them out rather than regenerating
@@ -217,8 +271,12 @@ jobs:
             echo '```'
           } >> notes.md
 
+      # Creates the release, or updates it in place if one already exists for
+      # this tag — so a re-run, or a release someone made by hand before the
+      # images were built, converges on the same notes rather than erroring.
       - uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ needs.verify.outputs.tag }}
           body_path: notes.md
           # Appends the commit/contributor summary GitHub derives from the tag
           # range underneath the changelog section above.
