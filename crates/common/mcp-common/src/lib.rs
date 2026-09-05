@@ -205,6 +205,14 @@ mod tests {
     /// GET `http://{addr}{path}` and return the decoded JSON body.
     async fn get_json(addr: &str, path: &str) -> Result<Value> {
         let url = format!("http://{addr}{path}");
+
+        // `reqwest::get` builds a Client of its own, which panics under
+        // `rustls-no-provider` unless a provider is already installed. Unlike
+        // the probe tests this path never goes through `run_healthcheck`, so
+        // whether it worked depended on another test happening to install one
+        // first — install it here instead of relying on test ordering.
+        install_crypto_provider();
+
         let response = reqwest::get(&url)
             .await
             .wrap_err_with(|| format!("GET {url} failed"))?;
