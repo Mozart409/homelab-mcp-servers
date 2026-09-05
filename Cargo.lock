@@ -730,7 +730,7 @@ dependencies = [
 
 [[package]]
 name = "hamcp"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "axum",
  "color-eyre",
@@ -749,7 +749,7 @@ dependencies = [
 
 [[package]]
 name = "hamcp-server"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "color-eyre",
  "dotenvy",
@@ -1205,7 +1205,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "lokimcp"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "axum",
  "color-eyre",
@@ -1223,7 +1223,7 @@ dependencies = [
 
 [[package]]
 name = "lokimcp-server"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "color-eyre",
  "dotenvy",
@@ -1251,7 +1251,7 @@ checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
 name = "mcp-common"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "axum",
  "color-eyre",
@@ -1397,7 +1397,7 @@ checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
 
 [[package]]
 name = "pbsmcp"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "axum",
  "color-eyre",
@@ -1415,7 +1415,7 @@ dependencies = [
 
 [[package]]
 name = "pbsmcp-server"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "color-eyre",
  "dotenvy",
@@ -1434,7 +1434,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "pgmcp"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "axum",
  "color-eyre",
@@ -1449,7 +1449,7 @@ dependencies = [
 
 [[package]]
 name = "pgmcp-server"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "color-eyre",
  "dotenvy",
@@ -1492,7 +1492,7 @@ dependencies = [
 
 [[package]]
 name = "prommcp"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "axum",
  "color-eyre",
@@ -1510,7 +1510,7 @@ dependencies = [
 
 [[package]]
 name = "prommcp-server"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "color-eyre",
  "dotenvy",
@@ -2949,7 +2949,7 @@ dependencies = [
 
 [[package]]
 name = "wpmcp"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -2968,7 +2968,7 @@ dependencies = [
 
 [[package]]
 name = "wpmcp-server"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "color-eyre",
  "dotenvy",
