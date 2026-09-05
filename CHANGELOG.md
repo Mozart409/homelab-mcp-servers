@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.10.1 - 2026-09-05
+#### Bug Fixes
+- (**github**) let the release workflow run for an existing tag - (2e05948) - developmentbot
+#### Continuous Integration
+- (**workflows**) add an actionlint check to the flake, ci and lefthook - (d5a22ac) - developmentbot
+
+- - -
+
 ## 0.10.0 - 2026-09-04
 #### Features
 - (**justfile**) push tags to each remote in sync-remotes - (9618dec) - macbook-pro
