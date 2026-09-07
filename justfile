@@ -179,6 +179,7 @@ image-all:
     just image lokimcp-server
     just image hamcp-server
     just image wpmcp-server
+    just image alertmanagermcp-server
 
 # Run a built image, loading env from .env (e.g. `just run-image pbsmcp-server`)
 run-image bin tag="dev" port="8080":
