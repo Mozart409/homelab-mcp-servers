@@ -24,6 +24,7 @@ Built in Rust on [`rmcp`](https://github.com/modelcontextprotocol/rust-sdk)
 | [`loki-mcp`](crates/loki-mcp/README.md)          | Grafana Loki          | `lokimcp`, `lokimcp-server` | implemented |
 | [`homeassistant-mcp`](crates/homeassistant-mcp/README.md) | Home Assistant | `hamcp`, `hamcp-server` | implemented |
 | [`woodpecker-mcp`](crates/woodpecker-mcp/README.md) | Woodpecker CI      | `wpmcp`, `wpmcp-server`     | implemented |
+| [`alertmanager-mcp`](crates/alertmanager-mcp/README.md) | Alertmanager     | `alertmanagermcp`, `alertmanagermcp-server` | implemented |
 
 Each server is split into a **library** crate (REST/DB client + MCP tool
 definitions and wiring) and a thin **`-server`** binary that serves the tools
@@ -85,6 +86,22 @@ lease — see the crate README's post-mortem section for the full workflow.
 Full configuration and tool details are in the
 [crate README](crates/woodpecker-mcp/README.md).
 
+### alertmanager-mcp — Prometheus Alertmanager
+
+Inspect alerts as Alertmanager sees them, the routing groups and receivers they
+resolve to, and the silences in effect. Read-only tools: `list_alerts`,
+`alert_groups`, `list_silences`, `get_silence`, `list_receivers`, `status`.
+Prometheus can tell you an alert is firing; these tools cover what happened to
+the notification afterwards — whether it was silenced, inhibited, or actually
+delivered, and to which receiver.
+
+Two further tools, `create_silence` and `expire_silence`, mutate the target and
+are registered **only** when `ALERTMANAGER_ALLOW_SILENCE` is set; with it unset
+they do not appear in `tools/list` at all. This is the second deliberate
+exception to the read-only rule (see [`AGENTS.md`](AGENTS.md) Hard rules §1).
+Full configuration, matcher syntax, and the silence lifecycle are in the
+[crate README](crates/alertmanager-mcp/README.md).
+
 ## Quick start
 
 This repo ships a [Nix flake](flake.nix) that pins the Rust toolchain (1.96.1)
@@ -116,6 +133,7 @@ cargo run -p prommcp-server   # Prometheus, default endpoint http://127.0.0.1:80
 cargo run -p lokimcp-server   # Loki,       default endpoint http://127.0.0.1:8083/mcp
 cargo run -p hamcp-server     # Home Assistant, default endpoint http://127.0.0.1:8084/mcp
 cargo run -p wpmcp-server     # Woodpecker CI, default endpoint http://127.0.0.1:8085/mcp
+cargo run -p alertmanagermcp-server  # Alertmanager, default endpoint http://127.0.0.1:8086/mcp
 ```
 
 Both bind loopback-only by default and reject non-loopback `Host` headers
@@ -135,7 +153,8 @@ The servers use the streamable-HTTP transport, so point the client at the URL:
     "prometheus": { "type": "http", "url": "http://127.0.0.1:8082/mcp" },
     "loki": { "type": "http", "url": "http://127.0.0.1:8083/mcp" },
     "homeassistant": { "type": "http", "url": "http://127.0.0.1:8084/mcp" },
-    "woodpecker": { "type": "http", "url": "http://127.0.0.1:8085/mcp" }
+    "woodpecker": { "type": "http", "url": "http://127.0.0.1:8085/mcp" },
+    "alertmanager": { "type": "http", "url": "http://127.0.0.1:8086/mcp" }
   }
 }
 ```
