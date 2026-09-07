@@ -27,6 +27,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "alertmanagermcp"
+version = "0.10.1"
+dependencies = [
+ "axum",
+ "chrono",
+ "color-eyre",
+ "mcp-common",
+ "percent-encoding",
+ "reqwest",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "wiremock",
+]
+
+[[package]]
+name = "alertmanagermcp-server"
+version = "0.10.1"
+dependencies = [
+ "alertmanagermcp",
+ "color-eyre",
+ "dotenvy",
+ "mcp-common",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -241,8 +273,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
  "iana-time-zone",
+ "js-sys",
  "num-traits",
  "serde",
+ "wasm-bindgen",
  "windows-link",
 ]
 
