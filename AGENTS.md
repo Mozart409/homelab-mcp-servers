@@ -16,7 +16,8 @@ deliberate exception (`homeassistant-mcp`; see Hard rules §1).
 - **Core deps:** [`rmcp`](https://github.com/modelcontextprotocol/rust-sdk) (MCP SDK),
   [`axum`](https://github.com/tokio-rs/axum), `tokio`, `serde`, `color-eyre`,
   `reqwest` (rustls) for REST targets, `sqlx` (rustls) for DB targets.
-- **Design rationale:** [`docs/overview.md`](docs/overview.md).
+- **Design rationale:** [`docs/overview.md`](docs/overview.md); binding
+  decisions and their reasoning in [`docs/adr/`](docs/adr/README.md).
 
 ## Layout
 
@@ -32,7 +33,9 @@ Existing servers: `crates/pbs-mcp` (Proxmox Backup Server, REST, port `8080`),
 `crates/postgres-mcp` (PostgreSQL, sqlx, `8081`), `crates/prometheus-mcp`
 (Prometheus, REST, `8082`), `crates/loki-mcp` (Grafana Loki, REST, `8083`),
 `crates/homeassistant-mcp` (Home Assistant, REST, `8084` — **not read-only**,
-see Hard rules §1), and `crates/woodpecker-mcp` (Woodpecker CI, REST, `8085`).
+see Hard rules §1), `crates/woodpecker-mcp` (Woodpecker CI, REST, `8085`), and
+`crates/alertmanager-mcp` (Prometheus Alertmanager, REST, `8086` — **not
+fully read-only**, see Hard rules §1).
 The library crate is the unit of substance; the `-server` binary is a near-empty
 `main` that calls `run()`. The Prometheus/Loki REST servers are the closest
 clone of `pbs-mcp` — copy that one when adding another REST-backed server.
@@ -56,15 +59,34 @@ Within a library crate the module split is consistent:
 
 ## Hard rules
 
-1. **Read-only only — hamcp excepted.** Every tool must be incapable of
-   mutating the target. Postgres runs queries in a `READ ONLY` transaction,
-   statement-timed and row-capped; REST servers only issue GETs. Never add a
-   write/DDL/mutating tool. **Exception:** `homeassistant-mcp` deliberately
-   exposes mutating tools (`set_state`, `call_service` — POSTs) because
-   controlling smart-home devices is its primary purpose; the owner opted it
-   out of this rule on purpose. The exception is per-server, not a precedent:
-   don't add mutating tools to any other server, and don't add more to hamcp
-   unless explicitly asked.
+1. **Read-only by default — two servers excepted.** Every tool must be
+   incapable of mutating the target. Postgres runs queries in a `READ ONLY`
+   transaction, statement-timed and row-capped; REST servers only issue GETs.
+   Never add a write/DDL/mutating tool to a server not named below.
+
+   **Exception 1 — `homeassistant-mcp`.** Exposes `set_state` and
+   `call_service` (POSTs) because controlling smart-home devices is its primary
+   purpose; the owner opted it out of this rule on purpose. Ungated: control is
+   the whole point of the server, so there is no meaningful "read-only mode" for
+   it to default to.
+
+   **Exception 2 — `alertmanager-mcp`.** Exposes `create_silence` and
+   `expire_silence`, because seeing that an alert is suppressed while being
+   unable to suppress one is the frustrating half of an operator's job. Six of
+   its eight tools are read-only GETs.
+
+   **The condition on any exception after hamcp: mutating tools must be gated
+   behind an env var that defaults to off, and must not be registered at all
+   when the gate is closed** — absent from `tools/list`, not present-and-
+   refusing. `alertmanager-mcp` does this with `ALERTMANAGER_ALLOW_SILENCE`,
+   merging a second `#[tool_router]` only when the flag is set. hamcp is
+   grandfathered out of this condition, not evidence against it.
+
+   Two exceptions are not a pattern. Don't add mutating tools to any other
+   server, don't add more to hamcp, and don't extend alertmanager-mcp's write
+   surface beyond silences unless explicitly asked. A third exception needs the
+   owner's say-so and a written reason, the way these two have. The reasoning
+   behind this rule is [`docs/adr/0001-gated-mutating-tools.md`](docs/adr/0001-gated-mutating-tools.md).
 2. **Loopback by default.** Servers bind `127.0.0.1` and rely on rmcp's
    DNS-rebinding protection (`allowed_hosts`). Don't change defaults to bind
    non-loopback; that's opt-in via `*_BIND` / `*_ALLOWED_HOSTS` env vars.
@@ -191,10 +213,15 @@ touching `[profile.*]` in the root `Cargo.toml`, the build-tuning env vars in
    `mymcp`/`mymcp-server` crates to `<svc>mcp`/`<svc>mcp-server`.
 2. Implement `config.rs` (env vars prefixed `<SVC>_`, pick the next free default
    port — pbs `8080`, postgres `8081`, prometheus `8082`, loki `8083`, ha `8084`,
-   wp `8085`),
+   wp `8085`, alertmanager `8086`),
    `client.rs`, `server.rs` (read-only tools), and `run()` in `lib.rs`.
 3. Register the crate (workspace `members` is `crates/*/*`, so it's automatic),
-   add deps to `[workspace.dependencies]` if new.
+   add deps to `[workspace.dependencies]` if new. Add the binary to `serverPkgs`
+   and `knownServers` in [`flake.nix`](flake.nix) — `serverPkgs` is what the
+   release workflow enumerates, so that one line is what gets the image built
+   and pushed. See
+   [`docs/adr/0002-flake-is-the-server-registry.md`](docs/adr/0002-flake-is-the-server-registry.md)
+   for what registration does and does not cover.
 4. Add the binary to `just image-all` and, if it should run in the local stack,
    to [`compose.yaml`](compose.yaml).
 5. Add a crate `README.md`, a row in the root README's Servers table, and an
