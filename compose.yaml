@@ -104,6 +104,27 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  alertmanagermcp:
+    build:
+      context: .
+      dockerfile: Containerfile
+      args:
+        BIN: alertmanagermcp-server
+    image: localhost/alertmanagermcp-server:dev
+    env_file: .env
+    environment:
+      ALERTMANAGER_BIND: 0.0.0.0:8086
+      RUST_LOG: info
+    ports:
+      - "8086:8086"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/server", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
   # --- Postgres MCP instance #1 -----------------------------------------------
   # Credentials come from .env (POSTGRES_PASSWORD is required; user/db default
   # to `pgmcp`). Loopback-only on the host; reachable as `postgres:5432` inside
