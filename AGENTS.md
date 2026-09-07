@@ -222,8 +222,10 @@ touching `[profile.*]` in the root `Cargo.toml`, the build-tuning env vars in
    and pushed. See
    [`docs/adr/0002-flake-is-the-server-registry.md`](docs/adr/0002-flake-is-the-server-registry.md)
    for what registration does and does not cover.
-4. Add the binary to `just image-all` and, if it should run in the local stack,
-   to [`compose.yaml`](compose.yaml).
+4. Add the binary to `just image-all`, to the `case` in
+   [`scripts/smoke.sh`](scripts/smoke.sh) (env prefix + port), and, if it should
+   run in the local stack, to [`compose.yaml`](compose.yaml). Then
+   `just smoke <bin>` to check the image actually serves.
 5. Add a crate `README.md`, a row in the root README's Servers table, and an
    entry in `.env.example`.
 6. `just ci`.
