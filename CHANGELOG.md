@@ -2,6 +2,30 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.11.0 - 2026-09-08
+#### Features
+- (**alertmanagermcp**) add an alertmanager mcp server with gated silences - (b55ae64) - developmentbot
+#### Bug Fixes
+- (**mcp-common**) install the crypto provider in the health test helper - (e90dc85) - developmentbot
+#### Documentation
+- (**adr**) add adrs for the write gate and the flake server registry - (76e804b) - developmentbot
+- (**agents**) allow gated mutating tools as the second read-only exception - (284084d) - developmentbot
+- (**readme**) document alertmanager-mcp - (ba3c36e) - developmentbot
+- (**specs**) add the alertmanager-mcp design - (2362965) - developmentbot
+- (**todos**) file the flaky hamcp set_state percent-encoding test - (66386a1) - developmentbot
+- (**todos**) file the container images missing the homelab ca root - (49db5e4) - developmentbot
+- (**todos**) file lifting the shared config helpers into mcp-common - (d7085a5) - developmentbot
+#### Build system
+- (**nix**) register alertmanagermcp-server in the flake and image list - (f930092) - developmentbot
+#### Refactoring
+- (**mcp-common**) lift normalize_base_url and parse_allowed_hosts - (80cdb15) - developmentbot
+- (**servers**) share parse_allowed_hosts in pbs, pg and wp too - (3d8cfe4) - developmentbot
+#### Miscellaneous Chores
+- (**compose**) add alertmanagermcp to the local stack - (f088243) - developmentbot
+- (**just**) add smoke recipes for built server images - (31b5075) - developmentbot
+
+- - -
+
 ## 0.10.1 - 2026-09-05
 #### Bug Fixes
 - (**github**) let the release workflow run for an existing tag - (2e05948) - developmentbot
