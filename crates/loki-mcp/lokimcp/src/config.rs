@@ -46,10 +46,10 @@ impl Config {
         );
         let bind = std::env::var("LOKI_BIND").unwrap_or_else(|_| "127.0.0.1:8083".to_string());
         let allowed_hosts =
-            parse_allowed_hosts(std::env::var("LOKI_ALLOWED_HOSTS").ok().as_deref());
+            mcp_common::parse_allowed_hosts(std::env::var("LOKI_ALLOWED_HOSTS").ok().as_deref());
 
         Ok(Self {
-            base_url: normalize_base_url(&host),
+            base_url: mcp_common::normalize_base_url(&host, 3100),
             token,
             org_id,
             insecure,
@@ -57,37 +57,6 @@ impl Config {
             allowed_hosts,
         })
     }
-}
-
-/// Turn a user-supplied host into a full base URL, defaulting scheme to `http`
-/// and port to Loki's `3100` when not already specified.
-fn normalize_base_url(host: &str) -> String {
-    let h = host.trim().trim_end_matches('/');
-    if h.starts_with("http://") || h.starts_with("https://") {
-        h.to_string()
-    } else if h.contains(':') {
-        format!("http://{h}")
-    } else {
-        format!("http://{h}:3100")
-    }
-}
-
-/// Parse a comma-separated allow-list, treating "set but empty" as unset.
-///
-/// Returning `Some(vec![])` here would be actively dangerous: `run()` passes it
-/// to rmcp's `with_allowed_hosts`, and an empty allow-list rejects *every*
-/// inbound `Host` header. A value like `" , "` — a typo, or a template that
-/// expanded to nothing — would therefore produce a server that silently accepts
-/// no connections at all. Collapsing that to `None` falls back to rmcp's
-/// loopback-only default instead, which is the safe reading of "unset".
-fn parse_allowed_hosts(raw: Option<&str>) -> Option<Vec<String>> {
-    let hosts: Vec<String> = raw?
-        .split(',')
-        .map(|h| h.trim().to_string())
-        .filter(|h| !h.is_empty())
-        .collect();
-
-    if hosts.is_empty() { None } else { Some(hosts) }
 }
 
 #[cfg(test)]
@@ -233,13 +202,5 @@ mod tests {
         }
 
         clear_env();
-    }
-
-    #[test]
-    fn normalize_base_url_fills_in_scheme_and_port() {
-        assert_eq!(normalize_base_url("loki.lan"), "http://loki.lan:3100");
-        assert_eq!(normalize_base_url("loki.lan:3200"), "http://loki.lan:3200");
-        assert_eq!(normalize_base_url("http://loki.lan/"), "http://loki.lan");
-        assert_eq!(normalize_base_url(" https://loki.lan "), "https://loki.lan");
     }
 }
