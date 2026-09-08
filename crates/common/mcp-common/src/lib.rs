@@ -42,6 +42,51 @@ pub fn install_crypto_provider() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 }
 
+// ---- Config helpers ---------------------------------------------------------
+
+/// Turn a user-supplied host into a full base URL, defaulting the scheme to
+/// `http` and the port to `default_port` when they are not already present.
+///
+/// Accepts the three spellings an operator actually types: a full URL
+/// (`https://target.lan:9090`), a host with a port (`target.lan:9090`), and a
+/// bare host (`target.lan`). Only the last gets `default_port` appended.
+///
+/// **The scheme default is `http`.** That suits the servers whose targets are
+/// plain-HTTP internal services (Prometheus, Loki, Alertmanager). `pbsmcp` and
+/// `wpmcp` default to `https` instead and deliberately do **not** use this
+/// helper — folding their scheme rule in here would mean a second parameter
+/// that exists solely to say "no, the other one".
+#[must_use]
+pub fn normalize_base_url(host: &str, default_port: u16) -> String {
+    let h = host.trim().trim_end_matches('/');
+    if h.starts_with("http://") || h.starts_with("https://") {
+        h.to_string()
+    } else if h.contains(':') {
+        format!("http://{h}")
+    } else {
+        format!("http://{h}:{default_port}")
+    }
+}
+
+/// Parse a comma-separated `Host` allow-list, treating "set but empty" as unset.
+///
+/// Returning `Some(vec![])` here would be actively dangerous: callers pass the
+/// result to rmcp's `with_allowed_hosts`, and an empty allow-list rejects
+/// *every* inbound `Host` header. A value like `" , "` — a typo, or a template
+/// that expanded to nothing — would therefore produce a server that silently
+/// accepts no connections at all. Collapsing that to `None` falls back to rmcp's
+/// loopback-only default instead, which is the safe reading of "unset".
+#[must_use]
+pub fn parse_allowed_hosts(raw: Option<&str>) -> Option<Vec<String>> {
+    let hosts: Vec<String> = raw?
+        .split(',')
+        .map(|h| h.trim().to_string())
+        .filter(|h| !h.is_empty())
+        .collect();
+
+    if hosts.is_empty() { None } else { Some(hosts) }
+}
+
 // ---- Doc resource helpers ---------------------------------------------------
 
 /// Constructs the conventional URI for a server's operator guide.
@@ -300,6 +345,55 @@ mod tests {
     }
 
     // ---- Doc resource tests -------------------------------------------------
+
+    #[test]
+    fn normalize_base_url_appends_the_default_port_to_a_bare_host() {
+        assert_eq!(
+            normalize_base_url("target.lan", 9090),
+            "http://target.lan:9090"
+        );
+    }
+
+    #[test]
+    fn normalize_base_url_keeps_an_explicit_port() {
+        assert_eq!(
+            normalize_base_url("target.lan:3100", 9090),
+            "http://target.lan:3100"
+        );
+    }
+
+    #[test]
+    fn normalize_base_url_preserves_an_explicit_scheme_and_trims_trailing_slash() {
+        assert_eq!(
+            normalize_base_url("https://target.example.com/", 9090),
+            "https://target.example.com"
+        );
+        assert_eq!(
+            normalize_base_url("  http://target.lan:9093  ", 9090),
+            "http://target.lan:9093"
+        );
+    }
+
+    #[test]
+    fn parse_allowed_hosts_treats_unset_and_blank_as_none() {
+        // `Some(vec![])` would reject every inbound Host header; see the doc
+        // comment on `parse_allowed_hosts`.
+        assert!(parse_allowed_hosts(None).is_none());
+        assert!(parse_allowed_hosts(Some("")).is_none());
+        assert!(parse_allowed_hosts(Some(" , ")).is_none());
+    }
+
+    #[test]
+    fn parse_allowed_hosts_splits_and_trims() {
+        assert_eq!(
+            parse_allowed_hosts(Some("a.lan, b.lan ,c.lan")),
+            Some(vec![
+                "a.lan".to_string(),
+                "b.lan".to_string(),
+                "c.lan".to_string()
+            ])
+        );
+    }
 
     #[test]
     fn test_doc_resource_uri_format() {
