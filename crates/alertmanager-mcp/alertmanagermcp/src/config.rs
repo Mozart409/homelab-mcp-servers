@@ -57,12 +57,13 @@ impl Config {
         let insecure = is_truthy(std::env::var("ALERTMANAGER_INSECURE").as_deref().ok());
         let bind =
             std::env::var("ALERTMANAGER_BIND").unwrap_or_else(|_| "127.0.0.1:8086".to_string());
-        let allowed_hosts =
-            parse_allowed_hosts(std::env::var("ALERTMANAGER_ALLOWED_HOSTS").ok().as_deref());
+        let allowed_hosts = mcp_common::parse_allowed_hosts(
+            std::env::var("ALERTMANAGER_ALLOWED_HOSTS").ok().as_deref(),
+        );
         let allow_silence = is_truthy(std::env::var("ALERTMANAGER_ALLOW_SILENCE").as_deref().ok());
 
         Ok(Self {
-            base_url: normalize_base_url(&host),
+            base_url: mcp_common::normalize_base_url(&host, 9093),
             token,
             insecure,
             bind,
@@ -80,37 +81,6 @@ fn is_truthy(raw: Option<&str>) -> bool {
         raw.map(str::trim),
         Some("1" | "true" | "TRUE" | "True" | "yes" | "YES" | "Yes")
     )
-}
-
-/// Turn a user-supplied host into a full base URL, defaulting scheme to `http`
-/// and port to Alertmanager's `9093` when not already specified.
-fn normalize_base_url(host: &str) -> String {
-    let h = host.trim().trim_end_matches('/');
-    if h.starts_with("http://") || h.starts_with("https://") {
-        h.to_string()
-    } else if h.contains(':') {
-        format!("http://{h}")
-    } else {
-        format!("http://{h}:9093")
-    }
-}
-
-/// Parse a comma-separated allow-list, treating "set but empty" as unset.
-///
-/// Returning `Some(vec![])` here would be actively dangerous: `run()` passes it
-/// to rmcp's `with_allowed_hosts`, and an empty allow-list rejects *every*
-/// inbound `Host` header. A value like `" , "` — a typo, or a template that
-/// expanded to nothing — would therefore produce a server that silently accepts
-/// no connections at all. Collapsing that to `None` falls back to rmcp's
-/// loopback-only default instead, which is the safe reading of "unset".
-fn parse_allowed_hosts(raw: Option<&str>) -> Option<Vec<String>> {
-    let hosts: Vec<String> = raw?
-        .split(',')
-        .map(|h| h.trim().to_string())
-        .filter(|h| !h.is_empty())
-        .collect();
-
-    if hosts.is_empty() { None } else { Some(hosts) }
 }
 
 #[cfg(test)]
@@ -201,31 +171,5 @@ mod tests {
         }
 
         clear_env();
-    }
-
-    #[test]
-    fn normalize_base_url_variants() {
-        assert_eq!(
-            normalize_base_url("alertmanager.lan"),
-            "http://alertmanager.lan:9093"
-        );
-        assert_eq!(
-            normalize_base_url("alertmanager.lan:9999"),
-            "http://alertmanager.lan:9999"
-        );
-        assert_eq!(
-            normalize_base_url("https://am.example.com/"),
-            "https://am.example.com"
-        );
-    }
-
-    #[test]
-    fn parse_allowed_hosts_collapses_empty_to_none() {
-        assert!(parse_allowed_hosts(None).is_none());
-        assert!(parse_allowed_hosts(Some(" , ")).is_none());
-        assert_eq!(
-            parse_allowed_hosts(Some("a.lan, b.lan")),
-            Some(vec!["a.lan".to_string(), "b.lan".to_string()])
-        );
     }
 }

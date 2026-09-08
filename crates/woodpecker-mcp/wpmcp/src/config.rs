@@ -57,7 +57,8 @@ impl Config {
             Ok("1" | "true" | "yes")
         );
         let bind = std::env::var("WP_BIND").unwrap_or_else(|_| "127.0.0.1:8085".to_string());
-        let allowed_hosts = parse_allowed_hosts(std::env::var("WP_ALLOWED_HOSTS").ok().as_deref());
+        let allowed_hosts =
+            mcp_common::parse_allowed_hosts(std::env::var("WP_ALLOWED_HOSTS").ok().as_deref());
         let max_log_lines = std::env::var("WP_MAX_LOG_LINES")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -85,24 +86,6 @@ fn normalize_base_url(host: &str) -> String {
     } else {
         format!("https://{h}")
     }
-}
-
-/// Parse a comma-separated allow-list, treating "set but empty" as unset.
-///
-/// Returning `Some(vec![])` here would be actively dangerous: `run()` passes it
-/// to rmcp's `with_allowed_hosts`, and an empty allow-list rejects *every*
-/// inbound `Host` header. A value like `" , "` — a typo, or a template that
-/// expanded to nothing — would therefore produce a server that silently accepts
-/// no connections at all. Collapsing that to `None` falls back to rmcp's
-/// loopback-only default instead, which is the safe reading of "unset".
-fn parse_allowed_hosts(raw: Option<&str>) -> Option<Vec<String>> {
-    let hosts: Vec<String> = raw?
-        .split(',')
-        .map(|h| h.trim().to_string())
-        .filter(|h| !h.is_empty())
-        .collect();
-
-    if hosts.is_empty() { None } else { Some(hosts) }
 }
 
 #[cfg(test)]
