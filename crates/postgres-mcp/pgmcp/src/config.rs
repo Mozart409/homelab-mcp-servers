@@ -45,7 +45,8 @@ impl Config {
                  (e.g. postgres://user:pass@host:5432/dbname)",
             )?;
         let bind = std::env::var("PG_BIND").unwrap_or_else(|_| "127.0.0.1:8081".to_string());
-        let allowed_hosts = parse_allowed_hosts(std::env::var("PG_ALLOWED_HOSTS").ok().as_deref());
+        let allowed_hosts =
+            mcp_common::parse_allowed_hosts(std::env::var("PG_ALLOWED_HOSTS").ok().as_deref());
         let max_connections = parse_env("PG_MAX_CONNECTIONS", 5)?;
         let statement_timeout_ms = parse_env("PG_STATEMENT_TIMEOUT_MS", 5_000)?;
         let max_rows = parse_env("PG_MAX_ROWS", 1_000)?;
@@ -75,24 +76,6 @@ where
             .map_err(|e| eyre!("{key} must be a valid number: {e}")),
         Err(_) => Ok(default),
     }
-}
-
-/// Parse a comma-separated allow-list, treating "set but empty" as unset.
-///
-/// Returning `Some(vec![])` here would be actively dangerous: `run()` passes it
-/// to rmcp's `with_allowed_hosts`, and an empty allow-list rejects *every*
-/// inbound `Host` header. A value like `" , "` — a typo, or a template that
-/// expanded to nothing — would therefore produce a server that silently accepts
-/// no connections at all. Collapsing that to `None` falls back to rmcp's
-/// loopback-only default instead, which is the safe reading of "unset".
-fn parse_allowed_hosts(raw: Option<&str>) -> Option<Vec<String>> {
-    let hosts: Vec<String> = raw?
-        .split(',')
-        .map(|h| h.trim().to_string())
-        .filter(|h| !h.is_empty())
-        .collect();
-
-    if hosts.is_empty() { None } else { Some(hosts) }
 }
 
 #[cfg(test)]
