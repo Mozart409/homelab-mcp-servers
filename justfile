@@ -179,6 +179,7 @@ image-all:
     just image lokimcp-server
     just image hamcp-server
     just image wpmcp-server
+    just image alertmanagermcp-server
 
 # Run a built image, loading env from .env (e.g. `just run-image pbsmcp-server`)
 run-image bin tag="dev" port="8080":
@@ -187,6 +188,14 @@ run-image bin tag="dev" port="8080":
 # Build an image, then scan it for vulnerabilities with trivy (e.g. `just scan pbsmcp-server`)
 scan bin tag="dev": (image bin tag)
     trivy image --skip-version-check {{ bin }}:{{ tag }}
+
+# Build an image, then smoke-test the container offline (e.g. `just smoke wpmcp-server`)
+smoke bin tag="dev": (image bin tag)
+    ./scripts/smoke.sh {{ bin }} {{ tag }}
+
+# As `smoke`, but loads .env and calls one tool for real (needs the backend reachable)
+smoke-live bin tag="dev": (image bin tag)
+    ./scripts/smoke.sh {{ bin }} {{ tag }} --live
 
 # Build images sequentially (avoids IO storm from parallel podman builds),
 # then bring the whole stack up. On a small VM (6 cores, limited RAM),

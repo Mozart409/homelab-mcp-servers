@@ -87,6 +87,7 @@
         lokimcp-server = mkServer "lokimcp-server";
         hamcp-server = mkServer "hamcp-server";
         wpmcp-server = mkServer "wpmcp-server";
+        alertmanagermcp-server = mkServer "alertmanagermcp-server";
       };
 
       # Nix-native lint/test checks, sharing `cargoArtifacts` with the package
@@ -356,6 +357,13 @@
             # pipeline step, so the two namespaces are kept disjoint.
             prefix = "WP";
             port = 8085;
+            hasToken = true;
+          };
+          alertmanagermcp-server = {
+            # Spelled out rather than AM_: unlike WP_ there is no namespace to
+            # avoid, and AM_ reads as an abbreviation of nothing in particular.
+            prefix = "ALERTMANAGER";
+            port = 8086;
             hasToken = true;
           };
         };
