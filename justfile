@@ -1,12 +1,12 @@
 # https://just.systems
 
 set unstable
-set dotenv-load
 
 # Default recipe — list all available commands
 default:
     just --list
 
+secrets := "sops exec-env .sops.env"
 # ------------------------------------------------------------------------------
 # Development
 # ------------------------------------------------------------------------------
@@ -59,7 +59,7 @@ test-db:
 
 # Watch a specific package and re-run its binary (e.g. `just watch-pkg pbsmcp-server`)
 watch-pkg pkg:
-    cargo watch -c -x "run -p {{ pkg }}"
+    {{ secrets }}  'cargo watch -c -x "run -p {{ pkg }}"'
 
 # sccache hit rate. The dev shell sets RUSTC_WRAPPER, so this reflects real
 # usage. Compile requests that are "non-cacheable" are expected and not a
@@ -219,113 +219,6 @@ dev:
 # Update flake inputs
 update:
     nix flake update
-
-# ------------------------------------------------------------------------------
-# Binary cache (Attic)
-# ------------------------------------------------------------------------------
-
-# Attic push target, as <server>:<cache>. Writes need a JWT (`attic login`);
-# reads are public, which is why CI can substitute without any secret.
-attic_target := "homelab:homelab"
-
-# The binary-cache URL Nix substitutes from — must match `extra-substituters`
-# in .woodpecker/test.yaml and `substituters` in /etc/nix/nix.conf.
-attic_url := "https://cache.homelab.local/homelab"
-
-# The profile path is load-bearing: .woodpecker/test.yaml runs
-# `nix develop --profile ./.ci-profile .#ci`, so pushing that same profile gives
-# CI exact-path hits rather than near-misses. Building `.#ci` (not the default
-# shell) matters too — the default shell drags in podman, trivy, claude-code and
-# the rest of the workstation toolbox, none of which CI ever asks for.
-#
-# Requires `attic login` beforehand. Worth re-running after `just update`, since
-# new flake inputs are exactly when CI would otherwise face a cold cache.
-#
-# Push the CI shell closure to the Attic cache so a cold pipeline doesn't realise it
-seed-cache:
-    @echo "==> realising the CI shell closure (same command the pipeline runs)"
-    nix develop --profile ./.ci-profile .#ci --command true
-    @echo "==> building the compiled dependency tree the crane checks consume"
-    nix build --no-link .#legacyPackages.x86_64-linux.cargo-artifacts
-    @echo "==> pushing both to {{ attic_target }}"
-    # `-j 2` deliberately. The dependency tree's closure is ~325 paths / ~670 MiB,
-    # 318 of them small `cargo-package-*` vendored sources. Pushing those at
-    # attic's default concurrency made the server return `InternalServerError`
-    # for a scattered subset while neighbours succeeded — interleaving like that
-    # points at load or a flaky storage backend, not at one bad path. Slower, but
-    # a push that completes beats a fast one that leaves the cache half-populated,
-    # because a partial closure cannot be substituted and CI recompiles anyway.
-    attic push -j 2 {{ attic_target }} ./.ci-profile \
-        "$(nix build --no-link --print-out-paths .#legacyPackages.x86_64-linux.cargo-artifacts)"
-    @just verify-cache
-
-# Queries the binary-cache URL directly, which is the same request Nix makes when
-# substituting — so it tests the URL that actually matters rather than trusting
-# `attic cache info`, whose "Binary Cache Endpoint" line renders as
-# `...localhomelab` (host and cache name joined with no separator). If this
-# passes, that display is cosmetic.
-#
-# Two things this deliberately does NOT treat as failure:
-#
-#   * A path the cache does not store. This Attic has `cache.nixos.org-1` in its
-#     Upstream Cache Keys, so it SKIPS anything already available upstream —
-#     that is the "N in upstream" line from `attic push`. Those paths 404 here
-#     and CI still gets them, just from cache.nixos.org. Checking a single path
-#     (the profile's own) therefore proves nothing: an earlier version of this
-#     recipe did exactly that and reported a false failure right after a
-#     successful push.
-#   * A timeout on one path. That is a slow negative lookup, not a miss, and it
-#     is reported separately because the two have different causes.
-#
-# The real question is "will CI get hits on the paths only this cache has", so
-# sample the closure and require at least one hit.
-#
-# Check the Attic cache actually serves the seeded CI closure
-verify-cache:
-    #!/usr/bin/env bash
-    set -uo pipefail
-
-    echo "==> checking the cache is reachable"
-    if ! curl -fsS --max-time 10 "{{ attic_url }}/nix-cache-info" > /dev/null; then
-        echo "==> FAILED: {{ attic_url }} is unreachable." >&2
-        echo "    From a container this is usually the step-ca root missing from the" >&2
-        echo "    trust store; see .woodpecker/homelab-ca.crt." >&2
-        exit 1
-    fi
-
-    profile="$(readlink -f ./.ci-profile)"
-    mapfile -t paths < <(nix path-info --recursive "$profile" 2>/dev/null | head -40)
-    if [ "${#paths[@]}" -eq 0 ]; then
-        echo "==> FAILED: could not read the closure of $profile (run 'just seed-cache' first)" >&2
-        exit 1
-    fi
-
-    echo "==> sampling ${#paths[@]} closure paths"
-    served=0; upstream=0; slow=0
-    for p in "${paths[@]}"; do
-        h="$(basename "$p" | cut -d- -f1)"
-        code="$(curl -s -o /dev/null --max-time 8 -w '%{http_code}' "{{ attic_url }}/${h}.narinfo")"
-        if [ $? -eq 28 ]; then slow=$((slow + 1))
-        elif [ "$code" = "200" ]; then served=$((served + 1))
-        else upstream=$((upstream + 1)); fi
-    done
-
-    echo "    served by this cache : $served"
-    echo "    not stored (upstream): $upstream"
-    echo "    timed out            : $slow"
-
-    if [ "$served" -eq 0 ]; then
-        echo "==> FAILED: the cache served none of the sampled paths." >&2
-        echo "    Reachable but empty — check that 'attic push' actually succeeded." >&2
-        exit 1
-    fi
-    echo "==> OK: cache serves the closure; a cold pipeline will hit it"
-    if [ "$slow" -gt 0 ]; then
-        echo "==> NOTE: $slow lookup(s) timed out. Attic can be slow answering for paths"
-        echo "    it does not hold. Harmless in small numbers; if it is most of them,"
-        echo "    substitution in CI will drag and the cache is worth looking at."
-    fi
-
 # ------------------------------------------------------------------------------
 # Clean
 # ------------------------------------------------------------------------------
