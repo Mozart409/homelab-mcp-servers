@@ -13,18 +13,19 @@ Two crates:
 
 ## Configuration
 
-The server reads its configuration from environment variables. A
-[`.env.example`](../../.env.example) lives at the repo root — copy it and fill
-it in:
+The server reads its configuration from environment variables. In this repo
+they live encrypted in [`.sops.env`](../../.sops.env) at the root (sops dotenv
+store — see the root README) and are injected by the `just` recipes:
 
 ```sh
-cp .env.example .env
-$EDITOR .env
+sops .sops.env                 # edit (decrypts into $EDITOR, re-encrypts on save)
+just watch-pkg pgmcp-server          # run with the variables injected
 ```
 
-On startup the binary loads `.env` from the working directory (via `dotenvy`);
-real environment variables take precedence, and a missing `.env` is fine (e.g.
-when an MCP client injects the variables itself).
+On startup the binary also loads a plain `.env` from the working directory
+(via `dotenvy`) if one exists — copy [`.env.example`](../../.env.example) for
+that. Real environment variables take precedence, and a missing `.env` is
+fine (e.g. when an MCP client injects the variables itself).
 
 | Variable                  | Required | Default          | Description                                                            |
 | ------------------------- | -------- | ---------------- | --------------------------------------------------------------------- |
@@ -65,7 +66,8 @@ point the server at a Postgres role that only has `SELECT` privileges.
 
 ## Running
 
-With a `.env` in place:
+Via the `justfile` (`just watch-pkg pgmcp-server`), with a `.env` in place, or by
+setting the variables in the environment:
 
 ```sh
 cargo run -p pgmcp-server

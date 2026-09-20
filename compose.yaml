@@ -1,7 +1,9 @@
 # Local homelab stack. Build + run with:  podman-compose up --build
 #
 # Secrets are read from .env (copy .env.example -> .env and fill it in); they
-# are injected at runtime via env_file, never baked into the image.
+# are injected at runtime via env_file, never baked into the image. ENV_FILE
+# is set by `just up`/`just down` to a sops-decrypted temp file; it falls back
+# to a plain .env for hosts that deploy one.
 #
 # Multiple Postgres databases: run one pgmcp-server per database. Each pair
 # below is a postgres container + a pgmcp-server container pointing at it.
@@ -17,7 +19,7 @@ x-pgmcp-base: &pgmcp-base
     args:
       BIN: pgmcp-server
   image: localhost/pgmcp-server:dev
-  env_file: .env
+  env_file: ${ENV_FILE:-.env}
   healthcheck:
     test: ["CMD", "/usr/local/bin/server", "--healthcheck"]
     interval: 30s
@@ -47,7 +49,7 @@ services:
       args:
         BIN: pbsmcp-server
     image: localhost/pbsmcp-server:dev
-    env_file: .env
+    env_file: ${ENV_FILE:-.env}
     environment:
       # Default bind is loopback-only; override so the port is reachable.
       PBS_BIND: 0.0.0.0:8080
@@ -69,7 +71,7 @@ services:
       args:
         BIN: hamcp-server
     image: localhost/hamcp-server:dev
-    env_file: .env
+    env_file: ${ENV_FILE:-.env}
     environment:
       HA_BIND: 0.0.0.0:8084
       RUST_LOG: info
@@ -90,7 +92,7 @@ services:
       args:
         BIN: wpmcp-server
     image: localhost/wpmcp-server:dev
-    env_file: .env
+    env_file: ${ENV_FILE:-.env}
     environment:
       WP_BIND: 0.0.0.0:8085
       RUST_LOG: info
@@ -111,7 +113,7 @@ services:
       args:
         BIN: alertmanagermcp-server
     image: localhost/alertmanagermcp-server:dev
-    env_file: .env
+    env_file: ${ENV_FILE:-.env}
     environment:
       ALERTMANAGER_BIND: 0.0.0.0:8086
       RUST_LOG: info

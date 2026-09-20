@@ -285,7 +285,7 @@ Ahead of the Nix `dockerTools` path, there's a working **podman** build for loca
 
 ```sh
 just image pbsmcp-server      # podman build --build-arg BIN=pbsmcp-server -t pbsmcp-server:dev .
-just run-image pbsmcp-server  # podman run with .env, PBS_BIND=0.0.0.0:8080
+just run-image pbsmcp-server  # podman run with env decrypted from .sops.env, PBS_BIND=0.0.0.0:8080
 just up                       # podman-compose up --build (whole stack)
 ```
 
@@ -294,7 +294,7 @@ Decisions baked in (validated end-to-end against live PBS — 13.2 MB image, rus
 - **rustls everywhere, no OpenSSL/native-tls.** `reqwest` pins `default-features = false, features = ["json","query","rustls"]`; `sqlx` uses `tls-rustls-ring-webpki`. This is what makes a static, libc-free image possible. Per binary: `pbsmcp-server` carries the **aws-lc-rs** provider (via reqwest), `pgmcp-server` carries **ring** (via sqlx).
 - **Static musl → `distroless/static:nonroot`.** Built with `cargo-zigbuild` targeting `x86_64-unknown-linux-musl`; `cmake` is installed in the builder for aws-lc-rs. distroless/static (not `scratch`) because it bundles the CA cert bundle reqwest's platform-verifier needs, plus a non-root UID and tzdata.
 - **Builder toolchain pinned to 1.95.0** (matches `flake.nix`) — the `cargo-zigbuild` base image's bundled rustc (1.85) is too old for the dep tree.
-- **Config is runtime env only.** Secrets come from `.env` via `env_file`/`--env-file`, never baked into the image; bind must be `0.0.0.0` inside the container.
+- **Config is runtime env only.** Secrets come from `.sops.env` (sops, decrypted per recipe) via `env_file`/`--env-file`, never baked into the image; bind must be `0.0.0.0` inside the container.
 
 `pgmcp-server` serves over streamable HTTP in [`compose.yaml`](../compose.yaml), which also includes a commented second `postgres`/`pgmcp` pair as a template for one-MCP-per-database deployments.
 

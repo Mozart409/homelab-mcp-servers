@@ -17,9 +17,8 @@ Developed and verified against **Woodpecker 3.16.0**.
 ## Quick start
 
 ```sh
-cp .env.example .env        # at the repo root
-$EDITOR .env                # set WP_HOST and WP_TOKEN
-cargo run -p wpmcp-server
+sops .sops.env              # at the repo root: set WP_HOST and WP_TOKEN
+just watch-pkg wpmcp-server
 ```
 
 The MCP endpoint is then served at `http://127.0.0.1:8085/mcp`. Point your client
@@ -35,10 +34,12 @@ at it:
 
 ## Configuration
 
-All settings come from environment variables. On startup the binary loads `.env`
-from the working directory (via `dotenvy`); real environment variables take
-precedence, and a missing `.env` is fine (e.g. when an MCP client injects the
-variables itself).
+All settings come from environment variables. In this repo they live encrypted
+in [`.sops.env`](../../.sops.env) (sops dotenv store — see the root README) and
+are injected by the `just` recipes. On startup the binary also loads a plain
+`.env` from the working directory (via `dotenvy`) if one exists; real
+environment variables take precedence, and a missing `.env` is fine (e.g. when
+an MCP client injects the variables itself).
 
 | Variable           | Required | Default          | Description                                                                 |
 | ------------------ | -------- | ---------------- | --------------------------------------------------------------------------- |
@@ -87,7 +88,7 @@ variables during `just ci`. `WP_` keeps the two namespaces disjoint.
 1. Log in to your Woodpecker instance (e.g. `https://ci.homelab.local`).
 2. Open your user settings page (avatar menu → **Settings**).
 3. Copy the personal access token shown there, or create a new one.
-4. Paste it into `.env` as `WP_TOKEN`.
+4. Paste it into `.sops.env` as `WP_TOKEN` (`sops .sops.env`).
 
 The token carries your own permissions — it is not separately scopeable, so the
 server sees exactly what you see in the web UI.
@@ -334,7 +335,8 @@ Some `GET`s are excluded even though read-only:
 ### Locally
 
 ```sh
-cargo run -p wpmcp-server                      # reads .env
+just watch-pkg wpmcp-server                    # secrets from .sops.env
+cargo run -p wpmcp-server                      # reads a plain .env if present
 WP_HOST=https://ci.homelab.local WP_TOKEN=… cargo run -p wpmcp-server
 RUST_LOG=debug cargo run -p wpmcp-server       # verbose tracing
 ```
