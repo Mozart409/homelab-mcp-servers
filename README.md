@@ -115,14 +115,25 @@ nix develop        # or: just dev   — drops you into the dev shell
 Without Nix you'll need a Rust 1.96+ toolchain (edition 2024) and the tools
 referenced by the [`justfile`](justfile) (`just`, `cargo`, `podman` / `podman-compose`).
 
-Configuration is via environment variables, loaded from a `.env` at the repo
-root (`dotenvy`); real environment variables take precedence and a missing
-`.env` is fine. Copy the example and fill it in:
+Configuration is via environment variables. Secrets live encrypted in
+[`.sops.env`](.sops.env) — a [sops](https://github.com/getsops/sops) dotenv
+store: variable names are visible, values are `ENC[...]`, and the file is
+committed. The `just` recipes that need them (`watch-pkg`, `run-image`,
+`smoke-live`, `up`, `test-db`) decrypt into that one child process via
+`sops exec-env` / `sops exec-file`; nothing is written to disk or exported
+into the shell, so there is no plaintext `.env` for a tool or an agent to read.
 
 ```sh
-cp .env.example .env
-$EDITOR .env
+sops .sops.env                  # edit: decrypts into $EDITOR, re-encrypts on save
+just watch-pkg pbsmcp-server    # run with secrets injected
 ```
+
+The binaries themselves know nothing about sops: they read the environment,
+and additionally load a `.env` from the working directory via `dotenvy` if one
+exists (real environment variables take precedence). So without access to the
+sops recipients — or on a host that deploys secrets some other way — copy
+[`.env.example`](.env.example) to `.env` and fill it in; it is gitignored and
+`compose.yaml` / `scripts/smoke.sh` fall back to it when `ENV_FILE` is unset.
 
 Then run a server:
 
@@ -193,7 +204,7 @@ Each binary builds into a static-musl / distroless image via the shared
 ```sh
 just image pbsmcp-server          # build one image
 just image-all                    # build images for every server
-just run-image pbsmcp-server      # run it, loading env from .env
+just run-image pbsmcp-server      # run it, env decrypted from .sops.env
 just scan pbsmcp-server           # build, then scan with trivy
 ```
 
@@ -201,12 +212,12 @@ The local stack (the MCP servers + a Postgres 18 instance) runs via
 [`compose.yaml`](compose.yaml):
 
 ```sh
-just up      # podman-compose up --build -d
+just up      # build all images, then podman-compose up -d with env from .sops.env
 just down
 ```
 
-Secrets are read from `.env` and injected at runtime via `env_file` — never
-baked into images. [`push_harbor.sh`](push_harbor.sh) pushes images to the
+Secrets are decrypted from `.sops.env` at run time and injected via
+`env_file` / `--env-file` — never baked into images. [`push_harbor.sh`](push_harbor.sh) pushes images to the
 internal Harbor registry from a workstation.
 
 ### Releases

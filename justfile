@@ -6,7 +6,18 @@ set unstable
 default:
     just --list
 
+# Secrets live encrypted in .sops.env (sops + gpg-agent; values ENC[...], names
+# visible, safe to commit) and are decrypted into ONE child process per recipe.
+# Nothing is written to disk or exported into the shell -- `set dotenv-load` and
+# a plaintext .env are gone on purpose. Edit with `sops .sops.env`.
 secrets := "sops exec-env .sops.env"
+
+# Same, for consumers that need an env FILE (podman --env-file, compose
+# env_file). `{}` in the command is replaced by a 0600 temp file that exists
+# only while the command runs. It lives in XDG_RUNTIME_DIR because that is
+# tmpfs and /tmp here is not -- the plaintext never touches the NVMe. A FIFO
+# would be cleaner but compose reads the file once per service.
+secrets-file := "TMPDIR=" + env("XDG_RUNTIME_DIR", "/dev/shm") + " sops exec-file --no-fifo .sops.env"
 # ------------------------------------------------------------------------------
 # Development
 # ------------------------------------------------------------------------------
@@ -53,9 +64,9 @@ test:
 test-pkg pkg:
     cargo test -p {{ pkg }}
 
-# Run the pgmcp DB integration tests (needs PGMCP_TEST_DATABASE_URL; `just test` marks them ignored)
+# Run the pgmcp DB integration tests (needs PGMCP_TEST_DATABASE_URL, from .sops.env or the shell; `just test` marks them ignored)
 test-db:
-    cargo test -p pgmcp --test integration -- --ignored
+    {{ secrets }} 'cargo test -p pgmcp --test integration -- --ignored'
 
 # Watch a specific package and re-run its binary (e.g. `just watch-pkg pbsmcp-server`)
 watch-pkg pkg:
@@ -181,9 +192,9 @@ image-all:
     just image wpmcp-server
     just image alertmanagermcp-server
 
-# Run a built image, loading env from .env (e.g. `just run-image pbsmcp-server`)
+# Run a built image, loading env from .sops.env (e.g. `just run-image pbsmcp-server`)
 run-image bin tag="dev" port="8080":
-    podman run --rm -it --env-file .env -e PBS_BIND=0.0.0.0:8080 -p {{ port }}:8080 {{ bin }}:{{ tag }}
+    {{ secrets-file }} 'podman run --rm -it --env-file {} -e PBS_BIND=0.0.0.0:8080 -p {{ port }}:8080 {{ bin }}:{{ tag }}'
 
 # Build an image, then scan it for vulnerabilities with trivy (e.g. `just scan pbsmcp-server`)
 scan bin tag="dev": (image bin tag)
@@ -193,20 +204,26 @@ scan bin tag="dev": (image bin tag)
 smoke bin tag="dev": (image bin tag)
     ./scripts/smoke.sh {{ bin }} {{ tag }}
 
-# As `smoke`, but loads .env and calls one tool for real (needs the backend reachable)
+# As `smoke`, but loads .sops.env and calls one tool for real (needs the backend reachable)
 smoke-live bin tag="dev": (image bin tag)
-    ./scripts/smoke.sh {{ bin }} {{ tag }} --live
+    {{ secrets-file }} 'ENV_FILE={} ./scripts/smoke.sh {{ bin }} {{ tag }} --live'
 
 # Build images sequentially (avoids IO storm from parallel podman builds),
 # then bring the whole stack up. On a small VM (6 cores, limited RAM),
 # parallel builds saturate btrfs IO and choke the system.
+#
+# compose.yaml reads `env_file: ${ENV_FILE:-.env}`, so the decrypted temp file
+# serves both the per-service env_file and the `${POSTGRES_PASSWORD:?}`
+# interpolation (--env-file). That `:?` is deliberate: without it a missing
+# secrets file would boot postgres with a placeholder password.
 up:
     just image-all
-    podman-compose up -d
+    {{ secrets-file }} 'ENV_FILE={} podman-compose --env-file {} up -d'
 
-# Tear the stack down
+# Tear the stack down. Interpolation runs on every compose command, but `down`
+# never uses the values, so a dummy satisfies `:?` without touching secrets.
 down:
-    podman-compose down
+    POSTGRES_PASSWORD=unused podman-compose down
 
 # ------------------------------------------------------------------------------
 # Nix

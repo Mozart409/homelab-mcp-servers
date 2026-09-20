@@ -14,7 +14,9 @@ delivered. That is what this server reads.
 
 ## Configuration
 
-All settings come from environment variables, loaded from `.env` via `dotenvy`.
+All settings come from environment variables — in this repo from the encrypted
+[`.sops.env`](../../.sops.env) via the `just` recipes (see the root README), or
+from a plain `.env` loaded by `dotenvy` if one exists.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |

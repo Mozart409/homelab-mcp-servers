@@ -16,7 +16,8 @@
 #
 # Without --live the container is started with a placeholder host, so the checks
 # are entirely local: nothing outside the machine is contacted. With --live the
-# image is given the real `.env` and one tool is called, which exercises TLS and
+# image is given the real env (ENV_FILE, decrypted from .sops.env by `just
+# smoke-live`) and one tool is called, which exercises TLS and
 # the backend credentials.
 set -uo pipefail
 
@@ -68,8 +69,11 @@ echo "== smoke: $IMG (prefix ${PREFIX}_, port $PORT, live=$LIVE) =="
 RUN_ARGS=(-d --name "$NAME" -e "${PREFIX}_BIND=0.0.0.0:$PORT" -e RUST_LOG=info
           -p "$HOSTPORT:$PORT")
 if [ "$LIVE" = true ]; then
-    [ -f .env ] || { echo ".env is required for --live" >&2; exit 2; }
-    RUN_ARGS+=(--env-file .env)
+    # ENV_FILE is a sops-decrypted temp file when run via `just smoke-live`;
+    # -r rather than -f so a FIFO or tmpfs file is accepted as well.
+    ENV_FILE=${ENV_FILE:-.env}
+    [ -r "$ENV_FILE" ] || { echo "$ENV_FILE is required for --live (set ENV_FILE or run via just smoke-live)" >&2; exit 2; }
+    RUN_ARGS+=(--env-file "$ENV_FILE")
 else
     # Enough config to boot without reaching anything real.
     RUN_ARGS+=(-e "${PREFIX}_HOST=http://127.0.0.1:1"

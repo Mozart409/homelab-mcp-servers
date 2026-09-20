@@ -111,8 +111,14 @@ Within a library crate the module split is consistent:
    exactly as before. The one capability ring lacks is verifying **ECDSA P-521**
    certificates; if a target ever presents one, that is the thing to check
    first. See [`docs/build-performance.md`](docs/build-performance.md).
-4. **Config is runtime env only.** All settings come from env vars (`<SVC>_*`),
-   loaded from `.env` via `dotenvy`. Secrets are never baked into images. Update
+4. **Config is runtime env only.** All settings come from env vars (`<SVC>_*`);
+   the binaries also load a `.env` via `dotenvy` if present. Secrets are never
+   baked into images and never kept in plaintext here: they live encrypted in
+   [`.sops.env`](.sops.env) (sops dotenv store, committed; names visible,
+   values `ENC[...]`) and the `justfile` decrypts them into the one child
+   process that needs them (`sops exec-env` / `sops exec-file`). Do not `cat`,
+   `sops -d`, `printenv` or otherwise try to read the values — they are off
+   limits by design. Edit with `sops .sops.env`; update
    [`.env.example`](.env.example) when adding a variable.
 5. **Workspace-inherited deps.** Add shared deps to root `[workspace.dependencies]`
    and reference them with `<dep>.workspace = true`. Keep the `# keep-sorted`
