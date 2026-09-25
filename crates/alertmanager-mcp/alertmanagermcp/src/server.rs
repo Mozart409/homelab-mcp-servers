@@ -7,7 +7,7 @@ use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    Implementation, ListResourcesResult, PromptMessage, Role, ServerCapabilities, ServerInfo,
+    Implementation, ListResourcesResult, PromptMessage, Role, ServerCapabilities, ServerConfig,
 };
 use rmcp::{
     ErrorData, ServerHandler, prompt, prompt_handler, prompt_router, schemars, tool, tool_handler,
@@ -494,9 +494,9 @@ impl AlertmanagerServer {
 #[tool_handler(router = self.tool_router)]
 #[prompt_handler(router = self.prompt_router)]
 impl ServerHandler for AlertmanagerServer {
-    fn get_info(&self) -> ServerInfo {
-        // `ServerInfo` is `#[non_exhaustive]`, so build from default and assign.
-        let mut info = ServerInfo::default();
+    fn get_info(&self) -> ServerConfig {
+        // `ServerConfig` is `#[non_exhaustive]`, so build from default and assign.
+        let mut info = ServerConfig::default();
 
         // State the write posture in the instructions. A client that cannot see
         // `create_silence` should be told the capability is gated off rather than
