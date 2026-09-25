@@ -17,7 +17,7 @@ color-eyre = "0.6"
 dotenvy = "0.15"
 percent-encoding = "2"
 reqwest = { version = "0.13", default-features = false, features = ["json", "query", "rustls-no-provider"] }
-rmcp = { version = "3.1", features = ["transport-streamable-http-server", "schemars"] }
+rmcp = { version = "3.4", features = ["transport-streamable-http-server", "schemars"] }
 rustls = { version = "0.23", default-features = false, features = ["logging", "ring", "std", "tls12"] }
 schemars = "1.2"
 serde = { version = "1", features = ["derive"] }
@@ -29,9 +29,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 ulid = "3"
 url = "2.5"
-utoipa = "5"
-utoipa-axum = "0.2"
-utoipa-scalar = { version = "0.3", features = ["axum"] }
+utoipa = "6"
+utoipa-axum = "0.3"
+utoipa-scalar = { version = "0.4", features = ["axum"] }
 wiremock = "0.6"
 # keep-sorted end
 

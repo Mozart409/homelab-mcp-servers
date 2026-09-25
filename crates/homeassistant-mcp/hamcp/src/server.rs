@@ -4,7 +4,7 @@ use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    Implementation, ListResourcesResult, PromptMessage, Role, ServerCapabilities, ServerInfo,
+    Implementation, ListResourcesResult, PromptMessage, Role, ServerCapabilities, ServerConfig,
 };
 use rmcp::{
     ErrorData, ServerHandler, prompt, prompt_handler, prompt_router, schemars, tool, tool_handler,
@@ -376,8 +376,8 @@ impl HaServer {
 #[tool_handler(router = self.tool_router)]
 #[prompt_handler(router = self.prompt_router)]
 impl ServerHandler for HaServer {
-    fn get_info(&self) -> ServerInfo {
-        let mut info = ServerInfo::default();
+    fn get_info(&self) -> ServerConfig {
+        let mut info = ServerConfig::default();
         info.instructions = Some(
             "Home Assistant MCP server for controlling your smart home. \
              Provides tools to query entities, call services, set states, \

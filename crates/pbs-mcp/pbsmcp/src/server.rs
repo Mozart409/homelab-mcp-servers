@@ -6,7 +6,7 @@ use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    Implementation, ListResourcesResult, PromptMessage, Role, ServerCapabilities, ServerInfo,
+    Implementation, ListResourcesResult, PromptMessage, Role, ServerCapabilities, ServerConfig,
 };
 use rmcp::{
     ErrorData, ServerHandler, prompt, prompt_handler, prompt_router, schemars, tool, tool_handler,
@@ -470,9 +470,9 @@ impl PbsServer {
 #[tool_handler(router = self.tool_router)]
 #[prompt_handler(router = self.prompt_router)]
 impl ServerHandler for PbsServer {
-    fn get_info(&self) -> ServerInfo {
-        // `ServerInfo` is `#[non_exhaustive]`, so build from default and assign.
-        let mut info = ServerInfo::default();
+    fn get_info(&self) -> ServerConfig {
+        // `ServerConfig` is `#[non_exhaustive]`, so build from default and assign.
+        let mut info = ServerConfig::default();
         info.instructions = Some(
             "Read-only access to a Proxmox Backup Server. Use these tools to inspect \
              datastores, backup snapshots, and task history to check backup status."
