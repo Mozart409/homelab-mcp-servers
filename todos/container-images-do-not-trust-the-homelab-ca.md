@@ -43,7 +43,8 @@ Any server whose target uses the internal CA is affected the moment it runs from
 a container rather than the host. This is a pre-existing gap that adding
 `alertmanager-mcp` surfaced; it did not introduce it.
 
-Prior art, and why it does not cover this: `.woodpecker/homelab-ca.crt` and the
+Prior art, and why it does not cover this: the since-removed
+`.woodpecker/homelab-ca.crt` (see git history) and the
 commits `trust the step-ca root and probe from busybox, curl, and nix images`
 and `scope the step-ca note to homelab.local, not tailnet certs` solved the
 trust problem for the **CI pipeline**, not for the shipped runtime images.

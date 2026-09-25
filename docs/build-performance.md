@@ -73,8 +73,8 @@ A cold `cargo build --workspace --release`: **325 s wall, 1406 s CPU, 421 units*
 | `ring` (2 units) | 61 s |
 
 `aws-lc-sys` was twice the next-largest unit, and being a C build, none of the
-Rust-level caching touched it. CI felt it most: `.woodpecker/test.yaml` pins Nix
-to `cores = 1`, so anything the Attic cache cannot serve is rebuilt
+Rust-level caching touched it. CI felt it most: the (since decommissioned) Woodpecker
+pipeline pinned Nix to `cores = 1`, so anything the Attic cache cannot serve is rebuilt
 single-threaded.
 
 It was in the tree because reqwest 0.13's `rustls` feature selects the aws-lc-rs

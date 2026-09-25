@@ -26,7 +26,7 @@ ARG TARGET=x86_64-unknown-linux-musl
 # same-named ARG when `${...}` is expanded in a RUN instruction. So a build arg
 # called RUST_VERSION silently resolves to the image's 1.85.0 no matter what you
 # pass — which is why this file previously carried a hardcoded literal instead.
-ARG RUST_TOOLCHAIN=1.98.0
+ARG RUST_TOOLCHAIN=1.98.1
 
 # ---- build ------------------------------------------------------------------
 FROM ${BUILDER_IMAGE} AS build
