@@ -213,6 +213,25 @@ touching `[profile.*]` in the root `Cargo.toml`, the build-tuning env vars in
 - **Tone of docs:** module/`run()`/config doc comments are thorough and explain
   *why* (see `config.rs`, `lib.rs`). Match that density.
 
+
+## Testing Philosophy
+
+- **NEVER write unit tests after you write code.** Unit tests written after the
+  fact tend to just re-describe the implementation rather than verify
+  behavior.
+- **Highly prefer E2E tests as the sole testing mechanism.** Use them to
+  verify complex features work end-to-end. At the end of an E2E test, produce
+  a verifiable and repeatable artifact (e.g. a downloaded/verified file, a
+  persisted DB row, an API response fixture) rather than just asserting a
+  process exited cleanly.
+- **If you must test a system in isolation**, first write down all the ways
+  it could fail, *then* write the code to guard against those failure modes.
+  Do not write the code first and backfill unit tests against it.
+- **When writing an E2E test, don't pick the simplest possible scenario to
+  prove the happy path works.** Pick a medium-to-hard scenario when verifying
+  the work.
+
+
 ## Adding a new server
 
 1. Copy `templates/server-mcp/` to `crates/<service>-mcp/`, rename the
