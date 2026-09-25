@@ -165,6 +165,16 @@
           actionlint .github/workflows/*.yml
           touch $out
         '';
+
+        # The Containerfile's RUST_TOOLCHAIN must equal this flake's rustc; see
+        # scripts/check-toolchain-pin.sh for why the image cannot just read the
+        # lock. `toolchain` is the same derivation every shell and check uses,
+        # so this compares against what actually builds and lints the code.
+        # Referenced by path because crane's source filter drops both files.
+        toolchain-pin = pkgs.runCommand "toolchain-pin" {nativeBuildInputs = [toolchain pkgs.gawk];} ''
+          bash ${./scripts/check-toolchain-pin.sh} ${./Containerfile}
+          touch $out
+        '';
       };
     in {
       inherit checks;

@@ -1,10 +1,9 @@
 # Pull-request / main-branch CI.
 #
-# This is the GitHub half of a two-CI arrangement. `origin` is the homelab
-# Forgejo instance and `.woodpecker/test.yaml` runs there; GitHub is the mirror
-# `just sync-remotes` pushes to, and it is the only side with a registry that
-# can be pulled from outside the tailnet — so it owns releases
-# (`release.yml`) and re-runs the same checks on every pull request.
+# The only CI. `origin` is the homelab Forgejo instance, which runs no
+# pipelines; GitHub is the mirror `just sync-remotes` pushes to, and it is the
+# only side with a registry that can be pulled from outside the tailnet — so it
+# owns releases (`release.yml`) and runs the checks on every pull request.
 #
 # The Rust checks themselves live in `nix-checks.yml`, which release.yml calls
 # too. Everything below is the part that is specific to a pull request.
@@ -68,8 +67,7 @@ jobs:
   # this is here.
   #
   # Run through the pinned image rather than a scanner action, so the findings
-  # match `just scan` on a workstation and the trivy step in
-  # .woodpecker/test.yaml exactly.
+  # match `just scan` on a workstation exactly.
   trivy:
     name: trivy (advisory)
     runs-on: ubuntu-latest

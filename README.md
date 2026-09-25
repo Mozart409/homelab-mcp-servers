@@ -245,10 +245,10 @@ then `push-all`) is the same thing for ordinary work between releases.
 [`push_harbor.sh`](push_harbor.sh) stays manual: Harbor is on the tailnet, where
 no hosted runner can reach it.
 
-CI runs in two places against the same flake: `.woodpecker/` on the homelab
-Forgejo, and [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on pull
-requests to the GitHub mirror. Both run `checks.{fmt,clippy,test}` from
-[`flake.nix`](flake.nix), so `just ci-nix` reproduces either locally.
+CI runs on GitHub: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on
+pull requests and pushes to `main`. It runs
+`checks.{fmt,clippy,test,actionlint,toolchain-pin}` from [`flake.nix`](flake.nix),
+so `just ci-nix` reproduces it locally.
 
 ### Multiple instances — several Postgres databases
 

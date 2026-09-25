@@ -8,8 +8,8 @@
 #
 # WHY NIX RATHER THAN A `rust:1.x` SETUP ACTION: the toolchain is pinned by
 # `flake.lock` (fenix), with no rustc version literal anywhere in the repo
-# except the Containerfile's build arg — which the `toolchain pin` step below
-# exists to keep honest. Naming a version here would create a second,
+# except the Containerfile's build arg — which `checks.toolchain-pin` exists to
+# keep honest. Naming a version here would create a second,
 # hand-maintained pin that drifts the moment anyone runs `nix flake update`,
 # and because clippy runs with `-D clippy::pedantic`, a CI toolchain even one
 # minor ahead of the workstation fails on lints that do not exist locally.
@@ -17,8 +17,8 @@
 # failure structurally impossible, and makes a green run here mean exactly what
 # a green `just ci-nix` means locally.
 #
-# WHY NOT THE ATTIC CACHE: .woodpecker/test.yaml substitutes from
-# https://cache.homelab.local/homelab, which resolves only inside the homelab.
+# WHY NOT THE ATTIC CACHE: the homelab binary cache at
+# https://cache.homelab.local/homelab resolves only inside the homelab.
 # GitHub runners cannot reach it — pointing at it here would cost a connect
 # timeout per query and never hit — so the Nix store is carried between runs in
 # the GitHub Actions cache instead.
@@ -86,8 +86,7 @@ jobs:
       # Realising the CI shell is the first thing that touches substituters, so
       # a broken network shows up here rather than as "the whole run hung".
       # `--profile` also materialises the closure as a GC root, which is what
-      # keeps the cache step above from collecting it. Same path
-      # .woodpecker/test.yaml uses, so the two pipelines stay comparable.
+      # keeps the cache step above from collecting it.
       - name: realise devShells.ci
         run: nix develop --profile ./.ci-profile .#ci --command true
 
@@ -105,13 +104,14 @@ jobs:
       # the shellcheck pass it bundles. It is a check rather than a
       # devShells.ci package because its closure is 236 MiB — see the comment on
       # the check in flake.nix.
-      - name: fmt, clippy, test, actionlint
+      - name: fmt, clippy, test, actionlint, toolchain pin
         run: |
           nix build --no-link --print-build-logs \
             .#checks.x86_64-linux.fmt \
             .#checks.x86_64-linux.clippy \
             .#checks.x86_64-linux.test \
-            .#checks.x86_64-linux.actionlint
+            .#checks.x86_64-linux.actionlint \
+            .#checks.x86_64-linux.toolchain-pin
 
       # cargo-deny fetches the RustSec advisory database over the network, and
       # Nix builds run sandboxed without network access — so it cannot be a
@@ -119,21 +119,3 @@ jobs:
       # realised by this point, so it costs seconds.
       - name: cargo-deny
         run: nix develop --profile ./.ci-profile .#ci --command cargo deny check
-
-      # The Containerfile carries the only rustc version literal in the repo:
-      # the cargo-zigbuild base image ships a rustc too old for edition 2024, so
-      # the image installs a toolchain by number and cannot read `flake.lock`.
-      # Its comment says "keep in sync with flake.nix", and nothing enforced
-      # that — the pin had already drifted a minor behind. Left alone, the drift
-      # surfaces at release time as MSRV errors from unrelated dependencies,
-      # which points at the wrong thing entirely.
-      - name: toolchain pin matches the flake
-        run: |
-          flake_rustc="$(nix develop --profile ./.ci-profile .#ci --command rustc --version | cut -d' ' -f2)"
-          pinned="$(awk -F= '/^ARG RUST_TOOLCHAIN=/ { print $2; exit }' Containerfile)"
-          if [ "$flake_rustc" != "$pinned" ]; then
-            echo "error: Containerfile pins RUST_TOOLCHAIN=$pinned but devShells.ci ships rustc $flake_rustc." >&2
-            echo "       Update the ARG in Containerfile to $flake_rustc." >&2
-            exit 1
-          fi
-          echo "toolchain pin OK: $pinned"
