@@ -1,0 +1,30 @@
+---
+source: crates/prometheus-mcp/prommcp/tests/e2e.rs
+assertion_line: 333
+expression: refusals
+---
+{
+  "prompts": {
+    "alert_triage": {
+      "code": -32602,
+      "message": "Failed to parse parameters: unknown field `limitt`, expected `severity` or `matcher`"
+    },
+    "target_health": {
+      "code": -32602,
+      "message": "Failed to parse parameters: unknown field `limitt`, expected `job`"
+    }
+  },
+  "tools": {
+    "alerts": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "build_info": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "label_values": "failed to deserialize parameters: unknown field `limitt`, expected `label`",
+    "labels": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "metadata": "failed to deserialize parameters: unknown field `limitt`, expected `metric`",
+    "query": "failed to deserialize parameters: unknown field `limitt`, expected `query` or `time`",
+    "query_range": "failed to deserialize parameters: unknown field `limitt`, expected one of `query`, `start`, `end`, `step`",
+    "rules": "failed to deserialize parameters: unknown field `limitt`, expected `rule_type`",
+    "series": "failed to deserialize parameters: unknown field `limitt`, expected one of `selectors`, `start`, `end`",
+    "targets": "failed to deserialize parameters: unknown field `limitt`, expected `state`",
+    "tsdb_status": "failed to deserialize parameters: unknown field `limitt`, there are no fields"
+  }
+}

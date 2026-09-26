@@ -1,5 +1,6 @@
 ---
 source: crates/postgres-mcp/pgmcp/tests/e2e.rs
+assertion_line: 226
 expression: "json!({\n    \"initialize\": client.initialize_result(), \"tools\":\n    client.list_tools().await.unwrap(), \"prompts\":\n    client.list_prompts().await.unwrap(), \"resources\":\n    client.list_resources().await.unwrap(), \"prompt/schema_overview\":\n    client.get_prompt(\"schema_overview\",\n    json!({ \"schema\": \"forge\" })).await.unwrap(), \"prompt/table_health\":\n    client.get_prompt(\"table_health\",\n    json!({ \"table\": \"issues\", \"schema\": \"forge\" })).await.unwrap(),\n})"
 ---
 {
@@ -79,6 +80,8 @@ expression: "json!({\n    \"initialize\": client.initialize_result(), \"tools\":
     {
       "description": "Current database name and total on-disk size (pretty and in bytes).",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -88,6 +91,7 @@ expression: "json!({\n    \"initialize\": client.initialize_result(), \"tools\":
       "description": "Describe a table's columns: name, position, data type, nullability, default, and length/precision.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "schema": {
             "default": null,
@@ -113,6 +117,7 @@ expression: "json!({\n    \"initialize\": client.initialize_result(), \"tools\":
       "description": "List a table's foreign keys: constraint name, local column, and the referenced table/column.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "schema": {
             "default": null,
@@ -138,6 +143,7 @@ expression: "json!({\n    \"initialize\": client.initialize_result(), \"tools\":
       "description": "List indexes on a table, with their definitions.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "schema": {
             "default": null,
@@ -162,6 +168,8 @@ expression: "json!({\n    \"initialize\": client.initialize_result(), \"tools\":
     {
       "description": "List user schemas (excludes system schemas like pg_catalog).",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -171,6 +179,7 @@ expression: "json!({\n    \"initialize\": client.initialize_result(), \"tools\":
       "description": "List tables and views with their schema and type. Optionally restrict to a single schema.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "schema": {
             "default": null,
@@ -189,6 +198,7 @@ expression: "json!({\n    \"initialize\": client.initialize_result(), \"tools\":
       "description": "Run an arbitrary read-only SELECT and return the rows as JSON. The query executes in a READ ONLY transaction with a statement timeout; writes, DDL, and long-running queries are rejected. Results are capped at the configured row limit.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "limit": {
             "default": null,
@@ -215,6 +225,7 @@ expression: "json!({\n    \"initialize\": client.initialize_result(), \"tools\":
       "description": "Per-table statistics: estimated live/dead rows, scan counts, total on-disk size, and last (auto)vacuum/analyze times. Optionally restrict to a single schema.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "schema": {
             "default": null,

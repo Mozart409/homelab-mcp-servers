@@ -2,6 +2,7 @@
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use mcp_common::NoArguments;
 use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
@@ -55,6 +56,7 @@ impl WpServer {
 // ---- Tool parameter types ---------------------------------------------------
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct ListReposParams {
     /// Whether to list all accessible repos (default: only the user's personal repos).
     #[serde(default)]
@@ -65,6 +67,7 @@ struct ListReposParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct LookupRepoParams {
     /// Repository owner.
     owner: String,
@@ -73,12 +76,14 @@ struct LookupRepoParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct GetRepoParams {
     /// Repository ID.
     repo_id: i64,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct ListBranchesParams {
     /// Repository ID.
     repo_id: i64,
@@ -91,6 +96,7 @@ struct ListBranchesParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct ListPullRequestsParams {
     /// Repository ID.
     repo_id: i64,
@@ -103,6 +109,7 @@ struct ListPullRequestsParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct ListPipelinesParams {
     /// Repository ID.
     repo_id: i64,
@@ -133,6 +140,7 @@ struct ListPipelinesParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct GetPipelineParams {
     /// Repository ID.
     repo_id: i64,
@@ -141,6 +149,7 @@ struct GetPipelineParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct PipelineConfigParams {
     /// Repository ID.
     repo_id: i64,
@@ -149,6 +158,7 @@ struct PipelineConfigParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct PipelineMetadataParams {
     /// Repository ID.
     repo_id: i64,
@@ -157,6 +167,7 @@ struct PipelineMetadataParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct StepLogsParams {
     /// Repository ID.
     repo_id: i64,
@@ -173,6 +184,7 @@ struct StepLogsParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct ListCronsParams {
     /// Repository ID.
     repo_id: i64,
@@ -185,6 +197,7 @@ struct ListCronsParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct ListAgentsParams {
     /// Page number for pagination (default: 1).
     #[serde(default)]
@@ -195,6 +208,7 @@ struct ListAgentsParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct ListAgentTasksParams {
     /// Agent ID, as reported by `list_agents`.
     agent_id: i64,
@@ -239,6 +253,7 @@ struct TruncatedLogs {
 // ---- Prompt arguments -------------------------------------------------------
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct PipelinePostmortemArgs {
     /// Repository slug in the form `owner/name`.
     repo: String,
@@ -252,6 +267,7 @@ struct PipelinePostmortemArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct CiHealthTriageArgs {
     /// Optional repository slug to focus the triage (e.g., `owner/name`).
     /// Omit to scan all repositories in the user's feed.
@@ -269,19 +285,19 @@ impl WpServer {
     // the SPA's index.html with a 200, which then fails to parse as JSON. Verified
     // against Woodpecker 3.16.0: `/version` returns JSON and `/healthz` returns 204.
     #[tool(description = "Get the Woodpecker CI server version and build information.")]
-    async fn version(&self) -> Result<String, ErrorData> {
+    async fn version(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call("/version", &[]).await
     }
 
     #[tool(
         description = "Check server health. A successful call (no error) indicates the Woodpecker server is up; the endpoint returns 204 No Content, so the result is `null`."
     )]
-    async fn healthz(&self) -> Result<String, ErrorData> {
+    async fn healthz(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call("/healthz", &[]).await
     }
 
     #[tool(description = "Get queue information: pending, running, and waiting pipeline counts.")]
-    async fn queue_info(&self) -> Result<String, ErrorData> {
+    async fn queue_info(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call("/api/queue/info", &[]).await
     }
 
@@ -574,7 +590,7 @@ impl WpServer {
     #[tool(
         description = "Get the user's pipeline feed: recent pipelines across all their repositories."
     )]
-    async fn pipeline_feed(&self) -> Result<String, ErrorData> {
+    async fn pipeline_feed(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call("/api/user/feed", &[]).await
     }
 }

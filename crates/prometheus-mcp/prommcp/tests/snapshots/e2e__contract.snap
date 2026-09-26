@@ -1,5 +1,6 @@
 ---
 source: crates/prometheus-mcp/prommcp/tests/e2e.rs
+assertion_line: 66
 expression: "e2e::contract(&client).await.unwrap()"
 ---
 {
@@ -103,6 +104,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "List currently active alerts with their state (pending/firing), labels, and annotations.",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -111,6 +114,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "Get Prometheus build information: version, revision, branch, build date, and Go version.",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -120,6 +125,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List all values for a given label name (e.g. all `job` or `instance` values).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "label": {
             "description": "Label name to list values for, e.g. `job` or `instance`.",
@@ -136,6 +142,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "List all label names present in the Prometheus database.",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -145,6 +153,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Get metric metadata (type, help text, unit). Optionally restrict to a single metric name.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "metric": {
             "default": null,
@@ -163,6 +172,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Evaluate a PromQL expression at a single instant. Returns the current value(s) of the query (a vector or scalar).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "query": {
             "description": "`PromQL` expression to evaluate, e.g. `up` or `rate(http_requests_total[5m])`.",
@@ -188,6 +198,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Evaluate a PromQL expression over a time range, returning a time series matrix. Provide start, end, and step.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "end": {
             "description": "Range end: RFC3339 or Unix timestamp (seconds).",
@@ -220,6 +231,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List configured alerting and recording rules with their state and health. Filter by type: alert or record.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "rule_type": {
             "default": null,
@@ -238,6 +250,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Find series matching one or more selectors, returning the label sets of matching series (not their values).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "end": {
             "default": null,
@@ -274,6 +287,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List scrape targets and their health (up/down), last scrape time, and labels. Filter by state: active, dropped, or any.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "state": {
             "default": null,
@@ -291,6 +305,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "Get TSDB stats: head series/chunks, label cardinality, and per-metric series counts.",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },

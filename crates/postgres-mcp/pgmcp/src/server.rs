@@ -1,6 +1,7 @@
 //! MCP server: exposes a Postgres database as read-only introspection and
 //! query tools.
 
+use mcp_common::NoArguments;
 use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
@@ -47,6 +48,7 @@ impl PgServer {
 // ---- Tool parameter types ---------------------------------------------------
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct SchemaFilterParams {
     /// Restrict to a single schema (default: all user schemas).
     #[serde(default)]
@@ -54,6 +56,7 @@ struct SchemaFilterParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct TableParams {
     /// Schema the table lives in (default: `public`).
     #[serde(default)]
@@ -63,6 +66,7 @@ struct TableParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct QueryParams {
     /// A single read-only `SELECT` statement. Writes and DDL are rejected at
     /// execution time (the query runs in a `READ ONLY` transaction).
@@ -76,6 +80,7 @@ struct QueryParams {
 // ---- Prompt parameter types ---
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct SchemaOverviewArgs {
     /// Schema to analyze (default: all non-system schemas).
     #[serde(default)]
@@ -83,6 +88,7 @@ struct SchemaOverviewArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct TableHealthArgs {
     /// Schema-qualified table name, e.g. `public.users` or just `users` (defaults
     /// to `public`).
@@ -184,7 +190,7 @@ const SQL_DATABASE_SIZE: &str = "SELECT current_database() AS database, \
 #[tool_router]
 impl PgServer {
     #[tool(description = "List user schemas (excludes system schemas like pg_catalog).")]
-    async fn list_schemas(&self) -> Result<String, ErrorData> {
+    async fn list_schemas(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call(SQL_LIST_SCHEMAS, &[], self.client.max_rows).await
     }
 
@@ -251,7 +257,7 @@ impl PgServer {
     }
 
     #[tool(description = "Current database name and total on-disk size (pretty and in bytes).")]
-    async fn database_size(&self) -> Result<String, ErrorData> {
+    async fn database_size(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call(SQL_DATABASE_SIZE, &[], 1).await
     }
 

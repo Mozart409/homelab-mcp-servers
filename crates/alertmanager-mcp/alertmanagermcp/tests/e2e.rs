@@ -372,3 +372,14 @@ async fn insecure_flag_is_applied_both_ways() {
     .await
     .unwrap();
 }
+
+/// A misspelt argument is refused before anything is sent upstream, instead
+/// of being dropped so that the call quietly answers a different question.
+#[tokio::test]
+async fn unknown_arguments_are_refused() {
+    let mock = MockServer::start().await;
+    let (_server, client) = serve(&config(&mock.uri(), true)).await.unwrap();
+
+    let refusals = e2e::unknown_arguments(&client, Some(&mock)).await.unwrap();
+    insta::assert_json_snapshot!("unknown_arguments", refusals);
+}

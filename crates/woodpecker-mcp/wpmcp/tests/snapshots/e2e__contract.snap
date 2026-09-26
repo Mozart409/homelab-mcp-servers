@@ -1,5 +1,6 @@
 ---
 source: crates/woodpecker-mcp/wpmcp/tests/e2e.rs
+assertion_line: 74
 expression: "e2e::contract(&client).await.unwrap()"
 ---
 {
@@ -104,6 +105,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Get detailed information about a specific pipeline, including its steps, status, and configuration. To determine WHY a pipeline stopped, read the `cancel_info` object first — it is the fastest answer: `canceled_by_user` set means a human cancelled it; `superseded_by` set means it was auto-cancelled by a newer pipeline (the repo's cancel_previous_pipeline_events setting); `canceled_by_step` set means a step cancelled it. If `status` is \"killed\" but `cancel_info` is null or empty, NOBODY cancelled it — the server's queue expired the task. That reason appears only in the Woodpecker server/agent journal (\"queue: task expired\", \"failed to extend workflow lease\"), never in this API, so stop looking for it here.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "number": {
             "description": "Pipeline number.",
@@ -128,6 +130,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Get full details of a repository by ID.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "repo_id": {
             "description": "Repository ID.",
@@ -145,6 +148,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "Check server health. A successful call (no error) indicates the Woodpecker server is up; the endpoint returns 204 No Content, so the result is `null`.",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -154,6 +159,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List the tasks an agent is currently holding. This is a LIVE view of the queue only: tasks are removed once they complete or expire, so a finished pipeline shows nothing here — use get_pipeline and step_logs for post-mortems. Its use is catching a wedge while it is happening, e.g. an agent still holding a task the server has already dropped. Each task carries its pipeline_id, repo_id, pid, name, dependencies, dep_status, labels, and created timestamp. Note: requires admin rights and may return 401 or 403 if permission is denied.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "agent_id": {
             "description": "Agent ID, as reported by `list_agents`.",
@@ -172,6 +178,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List all agents registered with the Woodpecker CI server. Note: requires admin rights and may return 403 if permission is denied.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "page": {
             "default": null,
@@ -200,6 +207,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List branches in a repository. Use pagination to browse large branch lists.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "page": {
             "default": null,
@@ -236,6 +244,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List cron jobs configured for a repository. Use pagination to browse large cron lists.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "page": {
             "default": null,
@@ -272,6 +281,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List pipelines in a repository, optionally filtered by branch, event, status, and timestamp. Use pagination for large pipeline histories.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "after": {
             "default": null,
@@ -356,6 +366,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List pull requests in a repository. Use pagination to browse large PR lists.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "page": {
             "default": null,
@@ -392,6 +403,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List repositories accessible to the user, optionally filtering by name.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "all": {
             "default": null,
@@ -418,6 +430,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Look up a repository by owner and name, returning its full details.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "name": {
             "description": "Repository name.",
@@ -440,6 +453,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Get the YAML configuration used to run a specific pipeline.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "number": {
             "description": "Pipeline number.",
@@ -463,6 +477,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "Get the user's pipeline feed: recent pipelines across all their repositories.",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -472,6 +488,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Get metadata about a pipeline, including execution time and environment details.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "number": {
             "description": "Pipeline number.",
@@ -495,6 +512,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "Get queue information: pending, running, and waiting pipeline counts.",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -504,6 +523,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Get log output from a pipeline step — use this to diagnose why a step failed. Returns an array of log entries whose `data` field holds the line's text (Woodpecker base64-encodes it on the wire; this tool decodes it). If the log exceeds max_lines, the last N entries are returned with truncation metadata.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "max_lines": {
             "default": null,
@@ -543,6 +563,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "Get the Woodpecker CI server version and build information.",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },

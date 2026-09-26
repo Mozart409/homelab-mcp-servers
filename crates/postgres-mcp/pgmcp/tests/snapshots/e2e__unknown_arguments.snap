@@ -1,0 +1,27 @@
+---
+source: crates/postgres-mcp/pgmcp/tests/e2e.rs
+assertion_line: 663
+expression: refusals
+---
+{
+  "prompts": {
+    "schema_overview": {
+      "code": -32602,
+      "message": "Failed to parse parameters: unknown field `limitt`, expected `schema`"
+    },
+    "table_health": {
+      "code": -32602,
+      "message": "Failed to parse parameters: unknown field `limitt`, expected `table` or `schema`"
+    }
+  },
+  "tools": {
+    "database_size": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "describe_table": "failed to deserialize parameters: unknown field `limitt`, expected `schema` or `table`",
+    "list_foreign_keys": "failed to deserialize parameters: unknown field `limitt`, expected `schema` or `table`",
+    "list_indexes": "failed to deserialize parameters: unknown field `limitt`, expected `schema` or `table`",
+    "list_schemas": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "list_tables": "failed to deserialize parameters: unknown field `limitt`, expected `schema`",
+    "run_query": "failed to deserialize parameters: unknown field `limitt`, expected `sql` or `limit`",
+    "table_stats": "failed to deserialize parameters: unknown field `limitt`, expected `schema`"
+  }
+}

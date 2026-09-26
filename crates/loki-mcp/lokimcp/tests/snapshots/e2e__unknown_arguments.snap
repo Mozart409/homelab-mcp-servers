@@ -1,0 +1,25 @@
+---
+source: crates/loki-mcp/lokimcp/tests/e2e.rs
+assertion_line: 315
+expression: refusals
+---
+{
+  "prompts": {
+    "error_scan": {
+      "code": -32602,
+      "message": "Failed to parse parameters: unknown field `limitt`, expected one of `service`, `label`, `window`"
+    },
+    "label_explorer": {
+      "code": -32602,
+      "message": "Failed to parse parameters: unknown field `limitt`, expected `label`"
+    }
+  },
+  "tools": {
+    "index_stats": "failed to deserialize parameters: unknown field `limitt`, expected one of `query`, `start`, `end`",
+    "label_values": "failed to deserialize parameters: unknown field `limitt`, expected one of `label`, `start`, `end`",
+    "labels": "failed to deserialize parameters: unknown field `limitt`, expected `start` or `end`",
+    "query": "failed to deserialize parameters: unknown field `limitt`, expected one of `query`, `time`, `limit`, `direction`",
+    "query_range": "failed to deserialize parameters: unknown field `limitt`, expected one of `query`, `start`, `end`, `limit`, `step`, `direction`",
+    "series": "failed to deserialize parameters: unknown field `limitt`, expected one of `selectors`, `start`, `end`"
+  }
+}

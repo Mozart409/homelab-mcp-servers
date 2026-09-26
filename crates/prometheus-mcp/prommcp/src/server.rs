@@ -2,6 +2,7 @@
 
 use std::fmt::Write;
 
+use mcp_common::NoArguments;
 use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
@@ -52,6 +53,7 @@ impl PromServer {
 // ---- Tool parameter types ---------------------------------------------------
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct InstantQueryParams {
     /// `PromQL` expression to evaluate, e.g. `up` or `rate(http_requests_total[5m])`.
     query: String,
@@ -62,6 +64,7 @@ struct InstantQueryParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct RangeQueryParams {
     /// `PromQL` expression to evaluate over the range.
     query: String,
@@ -74,6 +77,7 @@ struct RangeQueryParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct SeriesParams {
     /// One or more series selectors, e.g. `["up", "process_cpu_seconds_total{job=\"node\"}"]`.
     selectors: Vec<String>,
@@ -86,12 +90,14 @@ struct SeriesParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct LabelValuesParams {
     /// Label name to list values for, e.g. `job` or `instance`.
     label: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct TargetsParams {
     /// Filter by target state: `active`, `dropped`, or `any` (default `any`).
     #[serde(default)]
@@ -99,6 +105,7 @@ struct TargetsParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct RulesParams {
     /// Filter by rule type: `alert` or `record` (default: both).
     #[serde(default)]
@@ -106,6 +113,7 @@ struct RulesParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct MetadataParams {
     /// Restrict metadata to a single metric name (default: all metrics).
     #[serde(default)]
@@ -115,6 +123,7 @@ struct MetadataParams {
 // ---- Prompt arguments -------------------------------------------------------
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct AlertTriageArgs {
     /// Alert severity to filter on, e.g. `critical` or `warning`. Omit to show all severities.
     #[serde(default)]
@@ -125,6 +134,7 @@ struct AlertTriageArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct TargetHealthArgs {
     /// Restrict to a single scrape job. Omit to check all jobs.
     #[serde(default)]
@@ -192,7 +202,7 @@ impl PromServer {
     }
 
     #[tool(description = "List all label names present in the Prometheus database.")]
-    async fn labels(&self) -> Result<String, ErrorData> {
+    async fn labels(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call("/api/v1/labels", &[]).await
     }
 
@@ -224,7 +234,7 @@ impl PromServer {
     #[tool(
         description = "List currently active alerts with their state (pending/firing), labels, and annotations."
     )]
-    async fn alerts(&self) -> Result<String, ErrorData> {
+    async fn alerts(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call("/api/v1/alerts", &[]).await
     }
 
@@ -259,14 +269,14 @@ impl PromServer {
     #[tool(
         description = "Get TSDB stats: head series/chunks, label cardinality, and per-metric series counts."
     )]
-    async fn tsdb_status(&self) -> Result<String, ErrorData> {
+    async fn tsdb_status(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call("/api/v1/status/tsdb", &[]).await
     }
 
     #[tool(
         description = "Get Prometheus build information: version, revision, branch, build date, and Go version."
     )]
-    async fn build_info(&self) -> Result<String, ErrorData> {
+    async fn build_info(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call("/api/v1/status/buildinfo", &[]).await
     }
 }

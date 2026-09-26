@@ -39,7 +39,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 use color_eyre::eyre::{Result, WrapErr, eyre};
-use mcp_common::e2e::{McpClient, TestServer, ToolResult};
+use mcp_common::e2e::{self, McpClient, TestServer, ToolResult};
 use pgmcp::Config;
 use serde_json::{Value, json};
 use sqlx::PgPool;
@@ -650,4 +650,15 @@ async fn unreachable_database_fails_calls_promptly_but_the_server_runs() {
         msg.contains("transaction") || msg.contains("connect"),
         "{msg}"
     );
+}
+
+/// A misspelt argument is refused before anything is sent upstream, instead
+/// of being dropped so that the call quietly answers a different question.
+#[tokio::test]
+async fn unknown_arguments_are_refused() {
+    let db = TestDb::create().await.unwrap();
+    let (_server, client) = serve(&db.config()).await.unwrap();
+
+    let refusals = e2e::unknown_arguments(&client, None).await.unwrap();
+    insta::assert_json_snapshot!("unknown_arguments", refusals);
 }
