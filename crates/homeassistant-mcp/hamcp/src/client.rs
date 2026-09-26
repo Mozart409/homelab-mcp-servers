@@ -23,13 +23,16 @@ use crate::models::{
 /// Default request timeout in seconds.
 const DEFAULT_TIMEOUT_SECS: u64 = 10;
 
-/// Percent-encode a single URL path segment.
+/// Percent-encode one URL path segment, refusing values that would address a
+/// different endpoint.
 ///
 /// Entity IDs, service names, and timestamps are interpolated into request
-/// paths; encoding them keeps reserved characters (`/`, `?`, `#`, `%`, `\`)
-/// from changing the URL's structure.
-fn seg(s: &str) -> impl std::fmt::Display + '_ {
-    percent_encoding::utf8_percent_encode(s, percent_encoding::NON_ALPHANUMERIC)
+/// paths. [`mcp_common::path_segment`] encodes structural characters (`/`, `?`,
+/// `#`, `%`, `\`) and refuses empty, `.` and `..` — the last two are
+/// normalised away by the URL parser even when percent-encoded, so
+/// `set_state("..")` would otherwise POST to `/api/`.
+fn seg(s: &str) -> Result<String> {
+    mcp_common::path_segment(s).map_err(|e| ClientError::InvalidPathSegment(e.to_string()))
 }
 
 /// HTTP client for interacting with the Home Assistant REST API.
@@ -67,6 +70,10 @@ pub enum ClientError {
     /// Invalid URL.
     #[error("Invalid URL: {0}")]
     InvalidUrl(String),
+
+    /// A caller-supplied ID cannot be used as a URL path segment.
+    #[error("Invalid argument: {0}")]
+    InvalidPathSegment(String),
 
     /// Service call failed.
     #[error("Service call failed: {0}")]
@@ -121,7 +128,14 @@ async fn ensure_success(response: reqwest::Response) -> Result<reqwest::Response
 
     let mut body = body.trim().to_string();
     if body.len() > MAX_ERROR_BODY {
-        body.truncate(MAX_ERROR_BODY);
+        // Cut at a char boundary: `String::truncate` panics on a byte index
+        // inside a multi-byte character, and error pages are not ASCII-only
+        // (an umlaut at byte 512 used to panic the request handler).
+        let cut = (0..=MAX_ERROR_BODY)
+            .rev()
+            .find(|&i| body.is_char_boundary(i))
+            .unwrap_or(0);
+        body.truncate(cut);
         body.push_str("... (truncated)");
     }
     if body.is_empty() {
@@ -137,10 +151,16 @@ pub type Result<T> = std::result::Result<T, ClientError>;
 impl HaClient {
     /// Creates a new Home Assistant API client.
     ///
+    /// `insecure` accepts invalid / self-signed TLS certificates (`HA_INSECURE`).
+    /// It used to be parsed from the environment and never passed here, so the
+    /// documented flag had no effect; `tests/e2e.rs`
+    /// (`insecure_flag_is_applied_both_ways`) now proves it against a
+    /// self-signed upstream.
+    ///
     /// # Errors
     ///
     /// Returns an error if the URL is invalid or the HTTP client cannot be created.
-    pub fn new(base_url: &str, token: &str) -> Result<Self> {
+    pub fn new(base_url: &str, token: &str, insecure: bool) -> Result<Self> {
         let base_url = Url::parse(base_url)
             .map_err(|e| ClientError::InvalidUrl(format!("{base_url}: {e}")))?;
 
@@ -156,6 +176,7 @@ impl HaClient {
 
         let client = Client::builder()
             .default_headers(headers)
+            .danger_accept_invalid_certs(insecure)
             .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
             .pool_max_idle_per_host(10)
             .build()
@@ -245,7 +266,7 @@ impl HaClient {
 
     /// Gets a specific entity's state.
     pub async fn get_entity(&self, entity_id: &str) -> Result<EntityState> {
-        let url = self.api_url(&format!("/api/states/{}", seg(entity_id)))?;
+        let url = self.api_url(&format!("/api/states/{}", seg(entity_id)?))?;
         let response = self
             .client
             .get(url.as_str())
@@ -269,7 +290,7 @@ impl HaClient {
         entity_id: &str,
         state_update: &StateUpdate,
     ) -> Result<EntityState> {
-        let url = self.api_url(&format!("/api/states/{}", seg(entity_id)))?;
+        let url = self.api_url(&format!("/api/states/{}", seg(entity_id)?))?;
         let response = self
             .client
             .post(url.as_str())
@@ -286,7 +307,7 @@ impl HaClient {
 
     /// Deletes an entity state.
     pub async fn delete_state(&self, entity_id: &str) -> Result<()> {
-        let url = self.api_url(&format!("/api/states/{}", seg(entity_id)))?;
+        let url = self.api_url(&format!("/api/states/{}", seg(entity_id)?))?;
         let response = self
             .client
             .delete(url.as_str())
@@ -325,7 +346,7 @@ impl HaClient {
         entity_id: Option<&str>,
         return_response: bool,
     ) -> Result<ServiceResponse> {
-        let mut url = self.api_url(&format!("/api/services/{}/{}", seg(domain), seg(service)))?;
+        let mut url = self.api_url(&format!("/api/services/{}/{}", seg(domain)?, seg(service)?))?;
         if return_response {
             url.set_query(Some("return_response"));
         }
@@ -396,7 +417,7 @@ impl HaClient {
         event_type: &str,
         event_data: Option<HashMap<String, serde_json::Value>>,
     ) -> Result<HashMap<String, String>> {
-        let url = self.api_url(&format!("/api/events/{}", seg(event_type)))?;
+        let url = self.api_url(&format!("/api/events/{}", seg(event_type)?))?;
         let response = self
             .client
             .post(url.as_str())
@@ -425,14 +446,12 @@ impl HaClient {
             .await
             .map_err(ClientError::Http)?;
 
-        if response.status().is_success() {
-            response.text().await.map_err(ClientError::Http)
-        } else {
-            Err(ClientError::TemplateError(format!(
-                "Template rendering failed with status: {}",
-                response.status()
-            )))
-        }
+        // Keep Home Assistant's reason (`UndefinedError: 'foo' is undefined`):
+        // it is the only thing the caller can fix its template with.
+        let response = ensure_success(response)
+            .await
+            .map_err(|e| ClientError::TemplateError(e.to_string()))?;
+        response.text().await.map_err(ClientError::Http)
     }
 
     /// Gets all calendars.
@@ -458,7 +477,7 @@ impl HaClient {
         start: &str,
         end: &str,
     ) -> Result<Vec<CalendarEvent>> {
-        let mut url = self.api_url(&format!("/api/calendars/{}", seg(entity_id)))?;
+        let mut url = self.api_url(&format!("/api/calendars/{}", seg(entity_id)?))?;
         url.query_pairs_mut()
             .append_pair("start", start)
             .append_pair("end", end);
@@ -502,7 +521,7 @@ impl HaClient {
         no_attributes: bool,
     ) -> Result<Vec<Vec<HistoryEntry>>> {
         let path = match start_time {
-            Some(start) => format!("/api/history/period/{}", seg(start)),
+            Some(start) => format!("/api/history/period/{}", seg(start)?),
             None => "/api/history/period".to_string(),
         };
         let mut url = self.api_url(&path)?;
@@ -552,7 +571,7 @@ impl HaClient {
 
     /// Gets camera image data.
     pub async fn get_camera_image(&self, entity_id: &str) -> Result<Vec<u8>> {
-        let url = self.api_url(&format!("/api/camera_proxy/{}", seg(entity_id)))?;
+        let url = self.api_url(&format!("/api/camera_proxy/{}", seg(entity_id)?))?;
         let response = self
             .client
             .get(url.as_str())
@@ -568,78 +587,5 @@ impl HaClient {
             .await
             .map(|b| b.to_vec())
             .map_err(ClientError::Http)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_client_creation_valid() {
-        let client = HaClient::new("http://localhost:8123", "test_token");
-        assert!(client.is_ok());
-        let client = client.unwrap();
-        assert_eq!(client.base_url().as_str(), "http://localhost:8123/");
-    }
-
-    #[test]
-    fn test_client_creation_invalid_url() {
-        let result = HaClient::new("not a valid url", "test_token");
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, ClientError::InvalidUrl(_)));
-    }
-
-    #[test]
-    fn test_api_url_building() {
-        let client = HaClient::new("http://localhost:8123", "test_token").unwrap();
-        let url = client.api_url("/api/states").unwrap();
-        assert_eq!(url.as_str(), "http://localhost:8123/api/states");
-    }
-
-    #[test]
-    fn test_url_with_trailing_slash() {
-        let client = HaClient::new("http://localhost:8123/", "test_token").unwrap();
-        let url = client.api_url("/api/states").unwrap();
-        assert_eq!(url.as_str(), "http://localhost:8123/api/states");
-    }
-
-    #[test]
-    fn test_seg_encodes_reserved_characters() {
-        // A `/` in an entity ID must not split one path segment into two.
-        assert_eq!(seg("light/foo bar").to_string(), "light%2Ffoo%20bar");
-    }
-
-    #[test]
-    fn test_seg_encodes_iso_timestamp() {
-        // History period timestamps carry `:` and `+`; all must be encoded.
-        assert_eq!(
-            seg("2026-07-28T11:46:34+00:00").to_string(),
-            "2026%2D07%2D28T11%3A46%3A34%2B00%3A00"
-        );
-    }
-
-    #[test]
-    fn test_seg_encodes_plain_entity_id() {
-        // `.` and `_` are non-alphanumeric, so they are encoded too; Home
-        // Assistant decodes percent-encoded segments, so this is safe.
-        assert_eq!(
-            seg("light.living_room").to_string(),
-            "light%2Eliving%5Froom"
-        );
-    }
-
-    #[test]
-    fn test_seg_encoded_segment_enters_url_unchanged() {
-        // Url::join must not reinterpret the already-encoded segment.
-        let client = HaClient::new("http://localhost:8123", "test_token").unwrap();
-        let url = client
-            .api_url(&format!("/api/states/{}", seg("light/foo?bar#baz")))
-            .unwrap();
-        assert_eq!(
-            url.as_str(),
-            "http://localhost:8123/api/states/light%2Ffoo%3Fbar%23baz"
-        );
     }
 }

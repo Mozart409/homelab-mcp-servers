@@ -1,0 +1,329 @@
+---
+source: crates/homeassistant-mcp/hamcp/tests/e2e.rs
+expression: "e2e::contract(&client).await.unwrap()"
+---
+{
+  "initialize": {
+    "capabilities": {
+      "prompts": {},
+      "resources": {},
+      "tools": {}
+    },
+    "instructions": "Home Assistant MCP server for controlling your smart home. Provides tools to query entities, call services, set states, inspect calendars, render templates, and check configuration.",
+    "protocolVersion": "2025-06-18",
+    "serverInfo": {
+      "name": "hamcp",
+      "version": "[version]"
+    }
+  },
+  "prompts": [
+    {
+      "arguments": [
+        {
+          "description": "Restrict the survey to one domain, e.g. `automation`, `light`, `sensor`.\nOmit to survey the whole installation.",
+          "name": "domain",
+          "required": false
+        }
+      ],
+      "description": "Read-only survey of a Home Assistant installation: unavailable entities, automations that never fire, and orphaned leftovers.",
+      "name": "automation_audit"
+    },
+    {
+      "arguments": [
+        {
+          "description": "Entity to diagnose, e.g. `sensor.living_room_temperature`.",
+          "name": "entity_id",
+          "required": true
+        },
+        {
+          "description": "How many hours of history to review (default: 24).\n\nA string, not a number: MCP prompt arguments are always strings on the\nwire (`{[name]: string}`), so a numeric type here would reject every\nspec-compliant client's `\"48\"`. A value that is not a positive whole\nnumber falls back to the default.",
+          "name": "hours",
+          "required": false
+        }
+      ],
+      "description": "Diagnose one Home Assistant entity from its current state and history: healthy, stuck, flapping, or unavailable.",
+      "name": "entity_diagnostic"
+    }
+  ],
+  "rendered_prompts": {
+    "automation_audit/full": {
+      "messages": [
+        {
+          "content": {
+            "text": "Audit the `<domain>` domain and tell me what has quietly stopped working.\n\nWork in this order:\n1. Call `get_config` for the version and basic setup, then `check_config` to confirm the configuration itself is valid. A broken config explains failures that would otherwise look like unrelated dead entities, so establish this first.\n2. Call `get_states` to enumerate entities in scope.\n3. Pick the entities that look wrong and call `get_history` on a sample. Use `render_template` when a Jinja expression answers a question more directly than enumerating states would.\n\nSurface specifically:\n- Entities in `unavailable` or `unknown` state, and how long they have been so. Group them by integration — several dead entities from one integration is one fault, not several.\n- Automations that appear never to have triggered.\n- Duplicate or orphaned entities left behind by integrations that were removed.\n\nFinish with recommendations the operator can act on. This audit is read-only: do not call `set_state` or `call_service`, and present every corrective action as something for a human to approve rather than a step you take.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "automation_audit/minimal": {
+      "messages": [
+        {
+          "content": {
+            "text": "Audit the whole installation and tell me what has quietly stopped working.\n\nWork in this order:\n1. Call `get_config` for the version and basic setup, then `check_config` to confirm the configuration itself is valid. A broken config explains failures that would otherwise look like unrelated dead entities, so establish this first.\n2. Call `get_states` to enumerate entities in scope.\n3. Pick the entities that look wrong and call `get_history` on a sample. Use `render_template` when a Jinja expression answers a question more directly than enumerating states would.\n\nSurface specifically:\n- Entities in `unavailable` or `unknown` state, and how long they have been so. Group them by integration — several dead entities from one integration is one fault, not several.\n- Automations that appear never to have triggered.\n- Duplicate or orphaned entities left behind by integrations that were removed.\n\nFinish with recommendations the operator can act on. This audit is read-only: do not call `set_state` or `call_service`, and present every corrective action as something for a human to approve rather than a step you take.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "entity_diagnostic/full": {
+      "messages": [
+        {
+          "content": {
+            "text": "Diagnose the health of the Home Assistant entity `<entity_id>` over the last 24 hours.\n\nWork in this order:\n1. Call `get_entity` for `<entity_id>`. Report its current state verbatim and its `last_changed` timestamp. If the entity does not exist, stop and say so — do not guess at a similarly named one.\n2. Call `get_history` for the same entity over 24 hours. The history is the evidence; the current state alone cannot distinguish the cases below.\n3. Classify what you see into exactly one of:\n- **Healthy** — the value moves as the device plausibly should.\n- **Unavailable / unknown** — state is `unavailable` or `unknown`. This almost always means the integration or device dropped off, not that the reading is genuinely absent. Say how long it has been in that state.\n- **Stuck** — the value has not changed across the whole window although this kind of device should vary. Critically, a stuck sensor and a genuinely steady one look identical if you only read the current state, which is why step 2 is not optional.\n- **Flapping** — changing far more often than the device plausibly could.\n\nReport the actual state and timestamps you observed, not a summary judgement. If the history is too short or too sparse to separate 'steady' from 'stuck', say that plainly instead of picking one.\n\nThis is a read-only diagnosis. Do not call `set_state` or `call_service`. If a fix is warranted, describe it as a recommendation for the operator to approve.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "entity_diagnostic/minimal": {
+      "messages": [
+        {
+          "content": {
+            "text": "Diagnose the health of the Home Assistant entity `<entity_id>` over the last 24 hours.\n\nWork in this order:\n1. Call `get_entity` for `<entity_id>`. Report its current state verbatim and its `last_changed` timestamp. If the entity does not exist, stop and say so — do not guess at a similarly named one.\n2. Call `get_history` for the same entity over 24 hours. The history is the evidence; the current state alone cannot distinguish the cases below.\n3. Classify what you see into exactly one of:\n- **Healthy** — the value moves as the device plausibly should.\n- **Unavailable / unknown** — state is `unavailable` or `unknown`. This almost always means the integration or device dropped off, not that the reading is genuinely absent. Say how long it has been in that state.\n- **Stuck** — the value has not changed across the whole window although this kind of device should vary. Critically, a stuck sensor and a genuinely steady one look identical if you only read the current state, which is why step 2 is not optional.\n- **Flapping** — changing far more often than the device plausibly could.\n\nReport the actual state and timestamps you observed, not a summary judgement. If the history is too short or too sparse to separate 'steady' from 'stuck', say that plainly instead of picking one.\n\nThis is a read-only diagnosis. Do not call `set_state` or `call_service`. If a fix is warranted, describe it as a recommendation for the operator to approve.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    }
+  },
+  "resources": [
+    {
+      "description": "README for homeassistant-mcp: entity/service usage, and the deliberate exception that makes this the one server with mutating tools.",
+      "mimeType": "text/markdown",
+      "name": "Home Assistant MCP operator guide",
+      "uri": "doc://hamcp/guide"
+    }
+  ],
+  "tools": [
+    {
+      "description": "Call a Home Assistant service to control devices. Examples: domain='light', service='turn_on', entity_id='light.living_room'",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "domain": {
+            "description": "The service domain (e.g., `light`, `switch`, `climate`).",
+            "type": "string"
+          },
+          "entity_id": {
+            "default": null,
+            "description": "Optional entity ID to target (e.g., `light.living_room`).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "service": {
+            "description": "The service name (e.g., `turn_on`, `turn_off`, `set_temperature`).",
+            "type": "string"
+          },
+          "service_data": {
+            "additionalProperties": true,
+            "default": null,
+            "description": "Optional service data parameters (e.g., `{\"brightness\": 255}`).",
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "domain",
+          "service"
+        ],
+        "type": "object"
+      },
+      "name": "call_service"
+    },
+    {
+      "description": "Validate the Home Assistant configuration.yaml file",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "check_config"
+    },
+    {
+      "description": "Get events from a specific calendar within a time range",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "end": {
+            "description": "End time in ISO 8601 format (e.g., `2024-12-31T23:59:59`).",
+            "type": "string"
+          },
+          "entity_id": {
+            "description": "The calendar entity ID (e.g., `calendar.personal`).",
+            "type": "string"
+          },
+          "start": {
+            "description": "Start time in ISO 8601 format (e.g., `2024-01-01T00:00:00`).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entity_id",
+          "start",
+          "end"
+        ],
+        "type": "object"
+      },
+      "name": "get_calendar_events"
+    },
+    {
+      "description": "Get all available calendar entities",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_calendars"
+    },
+    {
+      "description": "Get Home Assistant configuration including location, unit system, and loaded components",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_config"
+    },
+    {
+      "description": "Get the current state of a specific Home Assistant entity by ID",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "entity_id": {
+            "description": "The entity ID (e.g., `light.living_room`).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entity_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_entity"
+    },
+    {
+      "description": "Get historical state data for one or more entities within a time range",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "end_time": {
+            "default": null,
+            "description": "Optional end time in ISO 8601 format.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "entity_ids": {
+            "description": "Entity IDs to fetch history for (e.g., `[\"sensor.temperature\"]`).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "minimal_response": {
+            "default": false,
+            "description": "Return only changed states (faster, default: false).",
+            "type": "boolean"
+          },
+          "no_attributes": {
+            "default": false,
+            "description": "Skip returning attributes (faster, default: false).",
+            "type": "boolean"
+          },
+          "start_time": {
+            "default": null,
+            "description": "Optional start time in ISO 8601 format.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "entity_ids"
+        ],
+        "type": "object"
+      },
+      "name": "get_history"
+    },
+    {
+      "description": "Get all available Home Assistant services grouped by domain",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_services"
+    },
+    {
+      "description": "Get all Home Assistant entity states including lights, sensors, switches, etc.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_states"
+    },
+    {
+      "description": "Check if the Home Assistant API is running and healthy",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "health_check"
+    },
+    {
+      "description": "Render a Home Assistant template string. Example: 'The temperature is {{ states(\"sensor.temperature\") }}C'",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "template": {
+            "description": "The template string to render.\n\nExample: `\"The temperature is {{ states('sensor.temperature') }}C\"`",
+            "type": "string"
+          }
+        },
+        "required": [
+          "template"
+        ],
+        "type": "object"
+      },
+      "name": "render_template"
+    },
+    {
+      "description": "Set or update a state for a Home Assistant entity. Creates the entity if it doesn't exist.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "attributes": {
+            "additionalProperties": true,
+            "default": null,
+            "description": "Optional attributes to set.",
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "entity_id": {
+            "description": "The entity ID (e.g., `sensor.custom_sensor`).",
+            "type": "string"
+          },
+          "state": {
+            "description": "The state value to set.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entity_id",
+          "state"
+        ],
+        "type": "object"
+      },
+      "name": "set_state"
+    }
+  ]
+}
