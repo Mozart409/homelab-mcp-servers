@@ -1,0 +1,22 @@
+---
+source: crates/tempo-mcp/tempomcp/tests/e2e.rs
+expression: surface
+---
+{
+  "metrics_query_range": [
+    "GET"
+  ],
+  "search": [
+    "GET"
+  ],
+  "search_tag_values": [
+    "GET"
+  ],
+  "search_tags": [
+    "GET"
+  ],
+  "status": [
+    "GET"
+  ],
+  "trace": []
+}

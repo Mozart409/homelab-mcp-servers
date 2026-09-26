@@ -1,0 +1,16 @@
+---
+source: crates/tempo-mcp/tempomcp-server/tests/binary.rs
+expression: upstream_requests(&mock).await.unwrap()
+---
+[
+  {
+    "authorization": "Bearer otel-query-7f3a",
+    "method": "GET",
+    "path": "/api/v2/search/tags",
+    "x-scope-orgid": "homelab"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/search/tags"
+  }
+]

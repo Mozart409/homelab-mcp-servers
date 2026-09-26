@@ -1,0 +1,153 @@
+---
+source: crates/tempo-mcp/tempomcp/tests/e2e.rs
+expression: steps
+---
+[
+  {
+    "call": {
+      "arguments": {
+        "trace_id": "1"
+      },
+      "tool": "trace"
+    },
+    "response": {
+      "ok": {
+        "durationMs": 18.0,
+        "errorCount": 1,
+        "errors": [
+          {
+            "name": "self-parented",
+            "service": "wpmcp",
+            "spanID": "00000000000000b2"
+          }
+        ],
+        "rootName": "root",
+        "rootService": "wpmcp",
+        "services": {
+          "wpmcp": 5
+        },
+        "slowest": [
+          {
+            "durationMs": 10.0,
+            "name": "root",
+            "service": "wpmcp",
+            "spanID": "00000000000000a1"
+          },
+          {
+            "durationMs": 10.0,
+            "name": "child",
+            "service": "wpmcp",
+            "spanID": "00000000000000e5"
+          },
+          {
+            "durationMs": 10.0,
+            "name": "self-parented",
+            "service": "wpmcp",
+            "spanID": "00000000000000b2"
+          },
+          {
+            "durationMs": 10.0,
+            "name": "cycle-a",
+            "service": "wpmcp",
+            "spanID": "00000000000000c3"
+          },
+          {
+            "durationMs": 10.0,
+            "name": "cycle-b",
+            "service": "wpmcp",
+            "spanID": "00000000000000d4"
+          }
+        ],
+        "spanCount": 5,
+        "spans": [
+          {
+            "depth": 0,
+            "durationMs": 10.0,
+            "kind": "server",
+            "name": "root",
+            "service": "wpmcp",
+            "spanID": "00000000000000a1",
+            "startMs": 0.0
+          },
+          {
+            "depth": 1,
+            "durationMs": 10.0,
+            "kind": "consumer",
+            "name": "child",
+            "parentSpanID": "00000000000000a1",
+            "service": "wpmcp",
+            "spanID": "00000000000000e5",
+            "startMs": 1.0
+          },
+          {
+            "depth": 0,
+            "durationMs": 10.0,
+            "kind": "internal",
+            "name": "self-parented",
+            "parentSpanID": "00000000000000b2",
+            "service": "wpmcp",
+            "spanID": "00000000000000b2",
+            "startMs": 5.0,
+            "status": "error"
+          },
+          {
+            "depth": 0,
+            "durationMs": 10.0,
+            "kind": "client",
+            "name": "cycle-a",
+            "parentSpanID": "00000000000000d4",
+            "service": "wpmcp",
+            "spanID": "00000000000000c3",
+            "startMs": 7.0,
+            "status": "ok"
+          },
+          {
+            "depth": 1,
+            "durationMs": 10.0,
+            "kind": "client",
+            "name": "cycle-b",
+            "parentSpanID": "00000000000000c3",
+            "service": "wpmcp",
+            "spanID": "00000000000000d4",
+            "startMs": 8.0
+          }
+        ],
+        "startTime": "2024-09-25T02:14:01.000Z",
+        "tempoMessage": "trace exceeds max size (max bytes: 5000000), partial trace returned",
+        "tempoStatus": "PARTIAL",
+        "traceID": "1",
+        "truncated": false
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/v2/traces/1",
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "trace_id": "2"
+      },
+      "tool": "trace"
+    },
+    "response": {
+      "ok": {
+        "spanCount": 0,
+        "traceID": "2"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/v2/traces/2",
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  }
+]

@@ -1,0 +1,754 @@
+---
+source: crates/tempo-mcp/tempomcp/tests/e2e.rs
+expression: steps
+---
+[
+  {
+    "call": {
+      "arguments": {},
+      "tool": "status"
+    },
+    "response": {
+      "ok": {
+        "buildinfo": {
+          "ok": {
+            "branch": "HEAD",
+            "goVersion": "go1.24.2",
+            "revision": "a1f9b3c",
+            "version": "2.8.1"
+          }
+        },
+        "echo": "echo",
+        "ready": {
+          "ok": "ready"
+        }
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/echo",
+        "x-scope-orgid": "homelab"
+      },
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/ready",
+        "x-scope-orgid": "homelab"
+      },
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/status/buildinfo",
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "tag": "resource.service.name"
+      },
+      "tool": "search_tag_values"
+    },
+    "response": {
+      "ok": {
+        "tagValues": [
+          {
+            "type": "string",
+            "value": "garage"
+          },
+          {
+            "type": "string",
+            "value": "hofvarpnir"
+          }
+        ]
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/v2/search/tag/resource.service.name/values",
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "q": "{ resource.service.name = \"hofvarpnir\" }",
+        "scope": "span",
+        "start": "2024-09-25T02:00:00Z"
+      },
+      "tool": "search_tags"
+    },
+    "response": {
+      "ok": {
+        "scopes": [
+          {
+            "name": "span",
+            "tags": [
+              "db.statement",
+              "db.system",
+              "http.route",
+              "url.full"
+            ]
+          }
+        ]
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/v2/search/tags",
+        "query": [
+          [
+            "scope",
+            "span"
+          ],
+          [
+            "q",
+            "{ resource.service.name = \"hofvarpnir\" }"
+          ],
+          [
+            "start",
+            "1727229600"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "end": "2024-09-25T04:30:00+02:00",
+        "q": "{ resource.service.name = \"hofvarpnir\" && kind = server && duration > 2s }",
+        "start": "2024-09-25T02:00:00Z"
+      },
+      "tool": "search"
+    },
+    "response": {
+      "ok": {
+        "limit": 20,
+        "limitReached": false,
+        "metrics": {
+          "completedJobs": 12,
+          "inspectedBytes": "1048576",
+          "inspectedTraces": 412,
+          "totalJobs": 12
+        },
+        "returned": 2,
+        "traces": [
+          {
+            "durationMs": 2350,
+            "matchedSpans": 1,
+            "rootServiceName": "hofvarpnir",
+            "rootTraceName": "GET /api/download/{id}",
+            "serviceStats": {
+              "garage": {
+                "errorCount": 1,
+                "spanCount": 5
+              },
+              "hofvarpnir": {
+                "errorCount": 1,
+                "spanCount": 5
+              }
+            },
+            "startTime": "2024-09-25T02:14:01.000Z",
+            "traceID": "af7651916cd43dd8448eb211c80319c"
+          },
+          {
+            "durationMs": 2104,
+            "matchedSpans": 1,
+            "rootServiceName": "hofvarpnir",
+            "rootTraceName": "GET /api/download/{id}",
+            "startTime": "2024-09-25T02:23:32.345Z",
+            "traceID": "5b8efff798038103d269b633813fc60c"
+          }
+        ]
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/search",
+        "query": [
+          [
+            "q",
+            "{ resource.service.name = \"hofvarpnir\" && kind = server && duration > 2s }"
+          ],
+          [
+            "limit",
+            "20"
+          ],
+          [
+            "start",
+            "1727229600"
+          ],
+          [
+            "end",
+            "1727231400"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "attributes": [
+          "http.route",
+          "url.full",
+          "db.statement",
+          "service.version"
+        ],
+        "max_spans": 3,
+        "trace_id": "af7651916cd43dd8448eb211c80319c"
+      },
+      "tool": "trace"
+    },
+    "response": {
+      "ok": {
+        "durationMs": 2350.0,
+        "errorCount": 2,
+        "errors": [
+          {
+            "message": "reqwest::Error: error sending request: operation timed out",
+            "name": "GET",
+            "service": "hofvarpnir",
+            "spanID": "3c4d5e6f708192a3"
+          },
+          {
+            "message": "context canceled",
+            "name": "GetObject",
+            "service": "garage",
+            "spanID": "4d5e6f708192a3b4"
+          }
+        ],
+        "note": "showing the first 3 of 10 spans in tree order; raise max_spans (or pass raw: true) to see the rest. errors and slowest cover the whole trace.",
+        "omittedSpans": 7,
+        "rootName": "GET /api/download/{id}",
+        "rootService": "hofvarpnir",
+        "services": {
+          "garage": 5,
+          "hofvarpnir": 5
+        },
+        "slowest": [
+          {
+            "durationMs": 2350.0,
+            "name": "GET /api/download/{id}",
+            "service": "hofvarpnir",
+            "spanID": "1a2b3c4d5e6f7081"
+          },
+          {
+            "durationMs": 1500.0,
+            "name": "GET",
+            "service": "hofvarpnir",
+            "spanID": "3c4d5e6f708192a3"
+          },
+          {
+            "durationMs": 1490.0,
+            "name": "GetObject",
+            "service": "garage",
+            "spanID": "4d5e6f708192a3b4"
+          },
+          {
+            "durationMs": 1480.0,
+            "name": "read_block",
+            "service": "garage",
+            "spanID": "5e6f708192a3b4c5"
+          },
+          {
+            "durationMs": 810.0,
+            "name": "GET",
+            "service": "hofvarpnir",
+            "spanID": "6f708192a3b4c5d6"
+          }
+        ],
+        "spanCount": 10,
+        "spans": [
+          {
+            "attributes": {
+              "http.route": "/api/download/{id}",
+              "service.version": "0.14.2"
+            },
+            "depth": 0,
+            "durationMs": 2350.0,
+            "kind": "server",
+            "name": "GET /api/download/{id}",
+            "service": "hofvarpnir",
+            "spanID": "1a2b3c4d5e6f7081",
+            "startMs": 0.0
+          },
+          {
+            "attributes": {
+              "db.statement": "SELECT id, blob_key, size FROM files WHERE id = $1",
+              "service.version": "0.14.2"
+            },
+            "depth": 1,
+            "durationMs": 6.25,
+            "kind": "client",
+            "name": "SELECT files",
+            "parentSpanID": "1a2b3c4d5e6f7081",
+            "service": "hofvarpnir",
+            "spanID": "2b3c4d5e6f708192",
+            "startMs": 3.0
+          },
+          {
+            "attributes": {
+              "service.version": "0.14.2",
+              "url.full": "http://garage:3900/hofvarpnir/blobs/9f1c2e7a"
+            },
+            "depth": 1,
+            "durationMs": 1500.0,
+            "events": 1,
+            "kind": "client",
+            "name": "GET",
+            "parentSpanID": "1a2b3c4d5e6f7081",
+            "service": "hofvarpnir",
+            "spanID": "3c4d5e6f708192a3",
+            "startMs": 12.0,
+            "status": "error",
+            "statusMessage": "reqwest::Error: error sending request: operation timed out"
+          }
+        ],
+        "startTime": "2024-09-25T02:14:01.000Z",
+        "traceID": "af7651916cd43dd8448eb211c80319c",
+        "truncated": true
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/v2/traces/af7651916cd43dd8448eb211c80319c",
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "end": "1727233200",
+        "raw": true,
+        "start": "1727229600",
+        "trace_id": "AF7651916CD43DD8448EB211C80319C"
+      },
+      "tool": "trace"
+    },
+    "response": {
+      "ok": {
+        "trace": {
+          "resourceSpans": [
+            {
+              "resource": {
+                "attributes": [
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "garage"
+                    }
+                  },
+                  {
+                    "key": "service.version",
+                    "value": {
+                      "stringValue": "1.0.1"
+                    }
+                  },
+                  {
+                    "key": "host.name",
+                    "value": {
+                      "stringValue": "nas-01"
+                    }
+                  }
+                ]
+              },
+              "scopeSpans": [
+                {
+                  "scope": {
+                    "name": "garage_api"
+                  },
+                  "spans": [
+                    {
+                      "attributes": [
+                        {
+                          "key": "s3.bucket",
+                          "value": {
+                            "stringValue": "hofvarpnir"
+                          }
+                        }
+                      ],
+                      "endTimeUnixNano": "1727230442510000000",
+                      "kind": "SPAN_KIND_SERVER",
+                      "name": "GetObject",
+                      "parentSpanId": "PE1eb3CBkqM=",
+                      "spanId": "TV5vcIGSo7Q=",
+                      "startTimeUnixNano": "1727230441020000000",
+                      "status": {
+                        "code": "STATUS_CODE_ERROR",
+                        "message": "context canceled"
+                      },
+                      "traceId": "CvdlGRbNQ92ESOshHIAxnA=="
+                    },
+                    {
+                      "attributes": [
+                        {
+                          "key": "block.id",
+                          "value": {
+                            "stringValue": "b7e0"
+                          }
+                        },
+                        {
+                          "key": "block.disk",
+                          "value": {
+                            "stringValue": "/dev/sdb"
+                          }
+                        }
+                      ],
+                      "endTimeUnixNano": "1727230442505000000",
+                      "kind": "SPAN_KIND_INTERNAL",
+                      "name": "read_block",
+                      "parentSpanId": "TV5vcIGSo7Q=",
+                      "spanId": "Xm9wgZKjtMU=",
+                      "startTimeUnixNano": "1727230441025000000",
+                      "status": {},
+                      "traceId": "CvdlGRbNQ92ESOshHIAxnA=="
+                    },
+                    {
+                      "attributes": [
+                        {
+                          "key": "s3.bucket",
+                          "value": {
+                            "stringValue": "hofvarpnir"
+                          }
+                        }
+                      ],
+                      "endTimeUnixNano": "1727230443325000000",
+                      "kind": "SPAN_KIND_SERVER",
+                      "name": "GetObject",
+                      "parentSpanId": "b3CBkqO0xdY=",
+                      "spanId": "cIGSo7TF1uc=",
+                      "startTimeUnixNano": "1727230442525000000",
+                      "status": {},
+                      "traceId": "CvdlGRbNQ92ESOshHIAxnA=="
+                    },
+                    {
+                      "attributes": [
+                        {
+                          "key": "block.id",
+                          "value": {
+                            "stringValue": "b7e2"
+                          }
+                        },
+                        {
+                          "key": "block.disk",
+                          "value": {
+                            "stringValue": "/dev/sdc"
+                          }
+                        }
+                      ],
+                      "endTimeUnixNano": "1727230443320000000",
+                      "kind": "SPAN_KIND_INTERNAL",
+                      "name": "read_block",
+                      "parentSpanId": "cIGSo7TF1uc=",
+                      "spanId": "kqO0xdbn+Ak=",
+                      "startTimeUnixNano": "1727230442932000000",
+                      "status": {},
+                      "traceId": "CvdlGRbNQ92ESOshHIAxnA=="
+                    },
+                    {
+                      "attributes": [
+                        {
+                          "key": "block.id",
+                          "value": {
+                            "stringValue": "b7e1"
+                          }
+                        },
+                        {
+                          "key": "block.disk",
+                          "value": {
+                            "stringValue": "/dev/sdb"
+                          }
+                        }
+                      ],
+                      "endTimeUnixNano": "1727230442930000000",
+                      "kind": "SPAN_KIND_INTERNAL",
+                      "name": "read_block",
+                      "parentSpanId": "cIGSo7TF1uc=",
+                      "spanId": "gZKjtMXW5/g=",
+                      "startTimeUnixNano": "1727230442530000000",
+                      "status": {},
+                      "traceId": "CvdlGRbNQ92ESOshHIAxnA=="
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "resource": {
+                "attributes": [
+                  {
+                    "key": "service.name",
+                    "value": {
+                      "stringValue": "hofvarpnir"
+                    }
+                  },
+                  {
+                    "key": "service.version",
+                    "value": {
+                      "stringValue": "0.14.2"
+                    }
+                  },
+                  {
+                    "key": "host.name",
+                    "value": {
+                      "stringValue": "app-02"
+                    }
+                  }
+                ]
+              },
+              "scopeSpans": [
+                {
+                  "scope": {
+                    "name": "tracing-opentelemetry",
+                    "version": "0.31.0"
+                  },
+                  "spans": [
+                    {
+                      "attributes": [
+                        {
+                          "key": "url.full",
+                          "value": {
+                            "stringValue": "http://garage:3900/hofvarpnir/blobs/9f1c2e7a"
+                          }
+                        },
+                        {
+                          "key": "http.request.resend_count",
+                          "value": {
+                            "intValue": "1"
+                          }
+                        },
+                        {
+                          "key": "http.response.status_code",
+                          "value": {
+                            "intValue": "200"
+                          }
+                        }
+                      ],
+                      "endTimeUnixNano": "1727230443330000000",
+                      "kind": "SPAN_KIND_CLIENT",
+                      "name": "GET",
+                      "parentSpanId": "Gis8TV5vcIE=",
+                      "spanId": "b3CBkqO0xdY=",
+                      "startTimeUnixNano": "1727230442520000000",
+                      "status": {},
+                      "traceId": "CvdlGRbNQ92ESOshHIAxnA=="
+                    },
+                    {
+                      "attributes": [
+                        {
+                          "key": "http.route",
+                          "value": {
+                            "stringValue": "/api/download/{id}"
+                          }
+                        },
+                        {
+                          "key": "http.response.status_code",
+                          "value": {
+                            "intValue": "200"
+                          }
+                        },
+                        {
+                          "key": "url.path",
+                          "value": {
+                            "stringValue": "/api/download/9f1c2e7a"
+                          }
+                        }
+                      ],
+                      "endTimeUnixNano": "1727230443350000000",
+                      "kind": "SPAN_KIND_SERVER",
+                      "name": "GET /api/download/{id}",
+                      "spanId": "Gis8TV5vcIE=",
+                      "startTimeUnixNano": "1727230441000000000",
+                      "status": {},
+                      "traceId": "CvdlGRbNQ92ESOshHIAxnA=="
+                    },
+                    {
+                      "attributes": [
+                        {
+                          "key": "db.system",
+                          "value": {
+                            "stringValue": "postgresql"
+                          }
+                        },
+                        {
+                          "key": "db.statement",
+                          "value": {
+                            "stringValue": "SELECT id, blob_key, size FROM files WHERE id = $1"
+                          }
+                        }
+                      ],
+                      "endTimeUnixNano": "1727230441009250000",
+                      "kind": "SPAN_KIND_CLIENT",
+                      "name": "SELECT files",
+                      "parentSpanId": "Gis8TV5vcIE=",
+                      "spanId": "KzxNXm9wgZI=",
+                      "startTimeUnixNano": "1727230441003000000",
+                      "status": {},
+                      "traceId": "CvdlGRbNQ92ESOshHIAxnA=="
+                    },
+                    {
+                      "attributes": [
+                        {
+                          "key": "url.full",
+                          "value": {
+                            "stringValue": "http://garage:3900/hofvarpnir/blobs/9f1c2e7a"
+                          }
+                        }
+                      ],
+                      "endTimeUnixNano": "1727230442512000000",
+                      "events": [
+                        {
+                          "attributes": [
+                            {
+                              "key": "exception.type",
+                              "value": {
+                                "stringValue": "reqwest::Error"
+                              }
+                            },
+                            {
+                              "key": "exception.message",
+                              "value": {
+                                "stringValue": "error sending request: operation timed out"
+                              }
+                            }
+                          ],
+                          "name": "exception",
+                          "timeUnixNano": "1727230442512000000"
+                        }
+                      ],
+                      "kind": "SPAN_KIND_CLIENT",
+                      "name": "GET",
+                      "parentSpanId": "Gis8TV5vcIE=",
+                      "spanId": "PE1eb3CBkqM=",
+                      "startTimeUnixNano": "1727230441012000000",
+                      "status": {
+                        "code": "STATUS_CODE_ERROR"
+                      },
+                      "traceId": "CvdlGRbNQ92ESOshHIAxnA=="
+                    },
+                    {
+                      "attributes": [
+                        {
+                          "key": "cache.hit",
+                          "value": {
+                            "boolValue": false
+                          }
+                        }
+                      ],
+                      "endTimeUnixNano": "1727230441002500000",
+                      "kind": "SPAN_KIND_INTERNAL",
+                      "name": "cache.lookup",
+                      "parentSpanId": "AAAAAN6tvu8=",
+                      "spanId": "o7TF1uf4CRo=",
+                      "startTimeUnixNano": "1727230441001000000",
+                      "status": {},
+                      "traceId": "CvdlGRbNQ92ESOshHIAxnA=="
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/v2/traces/af7651916cd43dd8448eb211c80319c",
+        "query": [
+          [
+            "start",
+            "1727229600"
+          ],
+          [
+            "end",
+            "1727233200"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "end": "2024-09-25T02:30:00Z",
+        "q": "{ resource.service.name = \"hofvarpnir\" } | quantile_over_time(duration, .95) by (span.http.route)",
+        "start": "2024-09-25T02:00:00Z",
+        "step": "5m"
+      },
+      "tool": "metrics_query_range"
+    },
+    "response": {
+      "ok": {
+        "series": [
+          {
+            "labels": [
+              {
+                "key": "span.http.route",
+                "value": {
+                  "stringValue": "/api/download/{id}"
+                }
+              }
+            ],
+            "samples": [
+              {
+                "timestampMs": "1727229600000",
+                "value": 0.41
+              },
+              {
+                "timestampMs": "1727229900000",
+                "value": 2.35
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/metrics/query_range",
+        "query": [
+          [
+            "q",
+            "{ resource.service.name = \"hofvarpnir\" } | quantile_over_time(duration, .95) by (span.http.route)"
+          ],
+          [
+            "start",
+            "1727229600"
+          ],
+          [
+            "end",
+            "1727231400"
+          ],
+          [
+            "step",
+            "5m"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  }
+]
