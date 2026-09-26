@@ -1,0 +1,11 @@
+---
+source: crates/woodpecker-mcp/wpmcp-server/tests/binary.rs
+expression: upstream_requests(&mock).await.unwrap()
+---
+[
+  {
+    "authorization": "Bearer wp-pat-4c1d8e2f",
+    "method": "GET",
+    "path": "/api/repos/7/logs/1/2"
+  }
+]

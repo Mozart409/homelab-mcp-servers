@@ -1,0 +1,552 @@
+---
+source: crates/woodpecker-mcp/wpmcp/tests/e2e.rs
+expression: "e2e::contract(&client).await.unwrap()"
+---
+{
+  "initialize": {
+    "capabilities": {
+      "prompts": {},
+      "resources": {},
+      "tools": {}
+    },
+    "instructions": "Read-only access to a Woodpecker CI instance. Use these tools to inspect repositories, pipelines, steps, logs, queue, and agents. No tool can modify CI state; secrets and registries are deliberately not exposed.",
+    "protocolVersion": "2025-06-18",
+    "serverInfo": {
+      "name": "wpmcp",
+      "version": "[version]"
+    }
+  },
+  "prompts": [
+    {
+      "arguments": [
+        {
+          "description": "Optional repository slug to focus the triage (e.g., `owner/name`).\nOmit to scan all repositories in the user's feed.",
+          "name": "repo",
+          "required": false
+        }
+      ],
+      "description": "Health check: is the Woodpecker CI system itself degraded, or are specific pipelines just failing?",
+      "name": "ci_health_triage"
+    },
+    {
+      "arguments": [
+        {
+          "description": "Pipeline number to investigate. Omit to investigate the most recent failed pipeline.\n\nA string, not a number: MCP prompt arguments are always strings on the\nwire (`{[name]: string}`), so a numeric type here would reject every\nspec-compliant client's `\"212\"`.",
+          "name": "pipeline",
+          "required": false
+        },
+        {
+          "description": "Repository slug in the form `owner/name`.",
+          "name": "repo",
+          "required": true
+        }
+      ],
+      "description": "Investigate why a Woodpecker pipeline stopped: distinguish human cancellation from queue expiry, read step failures, and check agent health.",
+      "name": "pipeline_postmortem"
+    }
+  ],
+  "rendered_prompts": {
+    "ci_health_triage/full": {
+      "messages": [
+        {
+          "content": {
+            "text": "Give me a health check on this Woodpecker CI system in repo `<repo>`.\n\nWork in this order:\n\n1. **Server liveness.** Call `version` and `healthz` to confirm the CI server itself is running. If either fails, the system is down — stop here.\n\n2. **Queue depth.** Call `queue_info` to see how many pipelines are pending, running, and waiting. An unusually large backlog might indicate the system is overwhelmed. Normal depth depends on your setup; note the numbers.\n\n3. **Agent health.** Call `list_agents` (requires admin rights; if you get a 401/403, skip this and report it). For each agent, check `last_contact` and `last_work`:\n- Recent timestamps: agent is healthy.\n- `last_contact` recent but `last_work` frozen for hours: agent is *wedged* and should be restarted.\n- No recent contact at all: agent is offline or unreachable.\n\n4. **Recent failures across the system.** Call `pipeline_feed` to get the user's cross-repo pipeline feed. Scan for patterns:\n- Same step failing in many repos: likely a shared infrastructure problem (test runner down, dependency repo offline, etc.).\n- Failures scattered across different repos and steps: likely individual issues.\n- A recent failure surge compared to earlier in the feed: likely a deployment or config change.\n\n5. **Report the verdict.** Is the CI system itself degraded (server slow, agents offline, queue blocked) or are specific pipelines just failing? If specific, which repos or steps? Distinguish:\n- **System degradation**: server down, all/most agents wedged, queue unable to drain, widespread failures. → Escalate to infrastructure.\n- **Isolated failures**: specific pipelines failing on their own merits in otherwise healthy repos. → Route to teams running those pipelines.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "ci_health_triage/minimal": {
+      "messages": [
+        {
+          "content": {
+            "text": "Give me a health check on this Woodpecker CI system.\n\nWork in this order:\n\n1. **Server liveness.** Call `version` and `healthz` to confirm the CI server itself is running. If either fails, the system is down — stop here.\n\n2. **Queue depth.** Call `queue_info` to see how many pipelines are pending, running, and waiting. An unusually large backlog might indicate the system is overwhelmed. Normal depth depends on your setup; note the numbers.\n\n3. **Agent health.** Call `list_agents` (requires admin rights; if you get a 401/403, skip this and report it). For each agent, check `last_contact` and `last_work`:\n- Recent timestamps: agent is healthy.\n- `last_contact` recent but `last_work` frozen for hours: agent is *wedged* and should be restarted.\n- No recent contact at all: agent is offline or unreachable.\n\n4. **Recent failures across the system.** Call `pipeline_feed` to get the user's cross-repo pipeline feed. Scan for patterns:\n- Same step failing in many repos: likely a shared infrastructure problem (test runner down, dependency repo offline, etc.).\n- Failures scattered across different repos and steps: likely individual issues.\n- A recent failure surge compared to earlier in the feed: likely a deployment or config change.\n\n5. **Report the verdict.** Is the CI system itself degraded (server slow, agents offline, queue blocked) or are specific pipelines just failing? If specific, which repos or steps? Distinguish:\n- **System degradation**: server down, all/most agents wedged, queue unable to drain, widespread failures. → Escalate to infrastructure.\n- **Isolated failures**: specific pipelines failing on their own merits in otherwise healthy repos. → Route to teams running those pipelines.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "pipeline_postmortem/full": {
+      "messages": [
+        {
+          "content": {
+            "text": "Help me investigate why a Woodpecker pipeline in repo `<repo>` failed.\n\nWork in this order:\n\n1. **Resolve the pipeline.** Call `lookup_repo` with `<repo>` to get the repo_id. Then:\nCall `get_pipeline` with repo_id and pipeline number <pipeline>.\n\n2. **Read the `cancel_info` object in the response.** It is the fastest answer to why the pipeline stopped:\n- If `canceled_by_user` is set: a human cancelled it — case closed.\n- If `superseded_by` is set: auto-cancelled by a newer pipeline (repo's `cancel_previous_pipeline_events` setting).\n- If `canceled_by_step` is set: a step cancelled the pipeline.\n- If `status` is `\"killed\"` but `cancel_info` is null or empty: **Nobody cancelled it — the server's queue expired the task.** This is the signature: a killed pipeline with no error in the logs and nobody to blame. Queue expiry appears only in the Woodpecker server/agent journal (\"queue: task expired\", \"failed to extend workflow lease\"), never in this API.\n\n3. **Call `step_logs` for the failed step** to see the last part of the output. If the log just stops with no error at the end, queue expiry is confirmed (the agent lost its lease and never got to write an error).\n\n4. **Check agent liveness** via `list_agents`. Find the agent that was running the pipeline (from the pipeline's metadata if available, or guess from running workloads). Look at `last_contact` and `last_work`:\n- Both timestamps quiet and recent (within the last few minutes): agent is healthy, just idle.\n- `last_contact` recent but `last_work` frozen well *before* the pipeline died: agent is *wedged* (still checking in, but not finishing work).\n\n5. **Summarise what you found.** State the reason clearly:\n- For cancellation: WHO cancelled and WHY (user, auto-supersede, or step action).\n- For queue expiry: the pipeline's start/stop timestamps from `get_pipeline`, and a note that the real cause lives only in `journalctl` on the Woodpecker server/agent (search that window for \"expired\", \"lease\", \"database is locked\", or \"pull queue item\").\n- For a wedged agent: agent ID, when it last checked in and last completed work, and the implication (agent is stuck, likely needs a restart).\nDo not speculate beyond what these tools show. The server cannot tell you why the scheduler killed something — that evidence exists only in the Woodpecker journal.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "pipeline_postmortem/minimal": {
+      "messages": [
+        {
+          "content": {
+            "text": "Help me investigate why a Woodpecker pipeline in repo `<repo>` failed.\n\nWork in this order:\n\n1. **Resolve the pipeline.** Call `lookup_repo` with `<repo>` to get the repo_id. Then:\nCall `list_pipelines` with repo_id and `status: failure` to find the most recent failed pipeline, then call `get_pipeline` on it.\n\n2. **Read the `cancel_info` object in the response.** It is the fastest answer to why the pipeline stopped:\n- If `canceled_by_user` is set: a human cancelled it — case closed.\n- If `superseded_by` is set: auto-cancelled by a newer pipeline (repo's `cancel_previous_pipeline_events` setting).\n- If `canceled_by_step` is set: a step cancelled the pipeline.\n- If `status` is `\"killed\"` but `cancel_info` is null or empty: **Nobody cancelled it — the server's queue expired the task.** This is the signature: a killed pipeline with no error in the logs and nobody to blame. Queue expiry appears only in the Woodpecker server/agent journal (\"queue: task expired\", \"failed to extend workflow lease\"), never in this API.\n\n3. **Call `step_logs` for the failed step** to see the last part of the output. If the log just stops with no error at the end, queue expiry is confirmed (the agent lost its lease and never got to write an error).\n\n4. **Check agent liveness** via `list_agents`. Find the agent that was running the pipeline (from the pipeline's metadata if available, or guess from running workloads). Look at `last_contact` and `last_work`:\n- Both timestamps quiet and recent (within the last few minutes): agent is healthy, just idle.\n- `last_contact` recent but `last_work` frozen well *before* the pipeline died: agent is *wedged* (still checking in, but not finishing work).\n\n5. **Summarise what you found.** State the reason clearly:\n- For cancellation: WHO cancelled and WHY (user, auto-supersede, or step action).\n- For queue expiry: the pipeline's start/stop timestamps from `get_pipeline`, and a note that the real cause lives only in `journalctl` on the Woodpecker server/agent (search that window for \"expired\", \"lease\", \"database is locked\", or \"pull queue item\").\n- For a wedged agent: agent ID, when it last checked in and last completed work, and the implication (agent is stuck, likely needs a restart).\nDo not speculate beyond what these tools show. The server cannot tell you why the scheduler killed something — that evidence exists only in the Woodpecker journal.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    }
+  },
+  "resources": [
+    {
+      "description": "README for woodpecker-mcp: post-mortem reasoning, API authentication quirks, and server/agent diagnostics.",
+      "mimeType": "text/markdown",
+      "name": "Woodpecker MCP operator guide",
+      "uri": "doc://wpmcp/guide"
+    }
+  ],
+  "tools": [
+    {
+      "description": "Get detailed information about a specific pipeline, including its steps, status, and configuration. To determine WHY a pipeline stopped, read the `cancel_info` object first — it is the fastest answer: `canceled_by_user` set means a human cancelled it; `superseded_by` set means it was auto-cancelled by a newer pipeline (the repo's cancel_previous_pipeline_events setting); `canceled_by_step` set means a step cancelled it. If `status` is \"killed\" but `cancel_info` is null or empty, NOBODY cancelled it — the server's queue expired the task. That reason appears only in the Woodpecker server/agent journal (\"queue: task expired\", \"failed to extend workflow lease\"), never in this API, so stop looking for it here.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "number": {
+            "description": "Pipeline number.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "repo_id": {
+            "description": "Repository ID.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo_id",
+          "number"
+        ],
+        "type": "object"
+      },
+      "name": "get_pipeline"
+    },
+    {
+      "description": "Get full details of a repository by ID.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "repo_id": {
+            "description": "Repository ID.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_repo"
+    },
+    {
+      "description": "Check server health. A successful call (no error) indicates the Woodpecker server is up; the endpoint returns 204 No Content, so the result is `null`.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "healthz"
+    },
+    {
+      "description": "List the tasks an agent is currently holding. This is a LIVE view of the queue only: tasks are removed once they complete or expire, so a finished pipeline shows nothing here — use get_pipeline and step_logs for post-mortems. Its use is catching a wedge while it is happening, e.g. an agent still holding a task the server has already dropped. Each task carries its pipeline_id, repo_id, pid, name, dependencies, dep_status, labels, and created timestamp. Note: requires admin rights and may return 401 or 403 if permission is denied.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "agent_id": {
+            "description": "Agent ID, as reported by `list_agents`.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "agent_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_agent_tasks"
+    },
+    {
+      "description": "List all agents registered with the Woodpecker CI server. Note: requires admin rights and may return 403 if permission is denied.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "page": {
+            "default": null,
+            "description": "Page number for pagination (default: 1).",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "per_page": {
+            "default": null,
+            "description": "Number of items per page (default: 10). Sent as `perPage` to the API.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_agents"
+    },
+    {
+      "description": "List branches in a repository. Use pagination to browse large branch lists.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "page": {
+            "default": null,
+            "description": "Page number for pagination (default: 1).",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "per_page": {
+            "default": null,
+            "description": "Number of items per page (default: 10). Sent as `perPage` to the API.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "repo_id": {
+            "description": "Repository ID.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_branches"
+    },
+    {
+      "description": "List cron jobs configured for a repository. Use pagination to browse large cron lists.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "page": {
+            "default": null,
+            "description": "Page number for pagination (default: 1).",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "per_page": {
+            "default": null,
+            "description": "Number of items per page (default: 10). Sent as `perPage` to the API.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "repo_id": {
+            "description": "Repository ID.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_crons"
+    },
+    {
+      "description": "List pipelines in a repository, optionally filtered by branch, event, status, and timestamp. Use pagination for large pipeline histories.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "after": {
+            "default": null,
+            "description": "Return pipelines after this timestamp.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "before": {
+            "default": null,
+            "description": "Return pipelines before this timestamp.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "branch": {
+            "default": null,
+            "description": "Filter by branch name.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event": {
+            "default": null,
+            "description": "Filter by event type (e.g. `push`, `pull_request`, `cron`).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page": {
+            "default": null,
+            "description": "Page number for pagination (default: 1).",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "per_page": {
+            "default": null,
+            "description": "Number of items per page (default: 10). Sent as `perPage` to the API.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "ref": {
+            "default": null,
+            "description": "Filter by ref (commit, tag, branch). Sent as `ref` to the API.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "repo_id": {
+            "description": "Repository ID.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "default": null,
+            "description": "Filter by pipeline status (e.g., success, failure).",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "repo_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_pipelines"
+    },
+    {
+      "description": "List pull requests in a repository. Use pagination to browse large PR lists.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "page": {
+            "default": null,
+            "description": "Page number for pagination (default: 1).",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "per_page": {
+            "default": null,
+            "description": "Number of items per page (default: 10). Sent as `perPage` to the API.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "repo_id": {
+            "description": "Repository ID.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_pull_requests"
+    },
+    {
+      "description": "List repositories accessible to the user, optionally filtering by name.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "all": {
+            "default": null,
+            "description": "Whether to list all accessible repos (default: only the user's personal repos).",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "description": "Optional filter by repo name substring.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_repos"
+    },
+    {
+      "description": "Look up a repository by owner and name, returning its full details.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "name": {
+            "description": "Repository name.",
+            "type": "string"
+          },
+          "owner": {
+            "description": "Repository owner.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner",
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "lookup_repo"
+    },
+    {
+      "description": "Get the YAML configuration used to run a specific pipeline.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "number": {
+            "description": "Pipeline number.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "repo_id": {
+            "description": "Repository ID.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo_id",
+          "number"
+        ],
+        "type": "object"
+      },
+      "name": "pipeline_config"
+    },
+    {
+      "description": "Get the user's pipeline feed: recent pipelines across all their repositories.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "pipeline_feed"
+    },
+    {
+      "description": "Get metadata about a pipeline, including execution time and environment details.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "number": {
+            "description": "Pipeline number.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "repo_id": {
+            "description": "Repository ID.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo_id",
+          "number"
+        ],
+        "type": "object"
+      },
+      "name": "pipeline_metadata"
+    },
+    {
+      "description": "Get queue information: pending, running, and waiting pipeline counts.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "queue_info"
+    },
+    {
+      "description": "Get log output from a pipeline step — use this to diagnose why a step failed. Returns an array of log entries whose `data` field holds the line's text (Woodpecker base64-encodes it on the wire; this tool decodes it). If the log exceeds max_lines, the last N entries are returned with truncation metadata.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "max_lines": {
+            "default": null,
+            "description": "Maximum number of log lines to return. If omitted or `0`, uses the\nserver's configured default (`0` means \"default\", as it does for\n`WP_MAX_LOG_LINES`). If the actual log is longer than this cap, only the\nlast N entries are returned with metadata about truncation.",
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "number": {
+            "description": "Pipeline number.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "repo_id": {
+            "description": "Repository ID.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "step_id": {
+            "description": "Step ID.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo_id",
+          "number",
+          "step_id"
+        ],
+        "type": "object"
+      },
+      "name": "step_logs"
+    },
+    {
+      "description": "Get the Woodpecker CI server version and build information.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "version"
+    }
+  ]
+}

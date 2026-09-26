@@ -1,0 +1,723 @@
+---
+source: crates/woodpecker-mcp/wpmcp/tests/e2e.rs
+expression: s.transcript()
+---
+[
+  {
+    "call": {
+      "arguments": {},
+      "tool": "version"
+    },
+    "response": {
+      "ok": {
+        "source": "https://github.com/woodpecker-ci/woodpecker",
+        "version": "3.9.0"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/version"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "healthz"
+    },
+    "response": {
+      "ok": null
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/healthz"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "all": true,
+        "name": "mcp"
+      },
+      "tool": "list_repos"
+    },
+    "response": {
+      "ok": [
+        {
+          "full_name": "homelab/homelab-mcp-servers",
+          "id": 7
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/user/repos",
+        "query": [
+          [
+            "all",
+            "true"
+          ],
+          [
+            "name",
+            "mcp"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "name": "mcp+servers",
+        "owner": "home lab"
+      },
+      "tool": "lookup_repo"
+    },
+    "response": {
+      "ok": {
+        "id": 7
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/lookup/home%20lab/mcp%2Bservers"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "name": "homelab-mcp-servers",
+        "owner": "homelab"
+      },
+      "tool": "lookup_repo"
+    },
+    "response": {
+      "ok": {
+        "active": true,
+        "default_branch": "main",
+        "forge_remote_id": "42",
+        "full_name": "homelab/homelab-mcp-servers",
+        "id": 7,
+        "name": "homelab-mcp-servers",
+        "owner": "homelab",
+        "trusted": {
+          "network": false,
+          "security": false,
+          "volumes": false
+        }
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/lookup/homelab/homelab-mcp-servers"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "repo_id": 7
+      },
+      "tool": "get_repo"
+    },
+    "response": {
+      "ok": {
+        "full_name": "homelab/homelab-mcp-servers",
+        "id": 7,
+        "timeout": 60
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/7"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "after": "2024-09-25T00:00:00Z",
+        "before": "2024-09-26T00:00:00Z",
+        "branch": "main",
+        "event": "push",
+        "page": 1,
+        "per_page": 5,
+        "ref": "refs/heads/main",
+        "repo_id": 7,
+        "status": "failure"
+      },
+      "tool": "list_pipelines"
+    },
+    "response": {
+      "ok": [
+        {
+          "author": "amadeus",
+          "branch": "main",
+          "commit": "4f30910",
+          "event": "push",
+          "finished": 1727300544,
+          "id": 3301,
+          "message": "ci(nix): check containerfile toolchain pin",
+          "number": 212,
+          "ref": "refs/heads/main",
+          "started": 1727300000,
+          "status": "failure"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/7/pipelines",
+        "query": [
+          [
+            "page",
+            "1"
+          ],
+          [
+            "perPage",
+            "5"
+          ],
+          [
+            "branch",
+            "main"
+          ],
+          [
+            "event",
+            "push"
+          ],
+          [
+            "status",
+            "failure"
+          ],
+          [
+            "ref",
+            "refs/heads/main"
+          ],
+          [
+            "before",
+            "2024-09-26T00:00:00Z"
+          ],
+          [
+            "after",
+            "2024-09-25T00:00:00Z"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "repo_id": 7
+      },
+      "tool": "list_pipelines"
+    },
+    "response": {
+      "ok": [
+        {
+          "author": "amadeus",
+          "branch": "main",
+          "commit": "4f30910",
+          "event": "push",
+          "finished": 1727300544,
+          "id": 3301,
+          "message": "ci(nix): check containerfile toolchain pin",
+          "number": 212,
+          "ref": "refs/heads/main",
+          "started": 1727300000,
+          "status": "failure"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/7/pipelines"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "number": 212,
+        "repo_id": 7
+      },
+      "tool": "get_pipeline"
+    },
+    "response": {
+      "ok": {
+        "number": 212,
+        "status": "failure",
+        "workflows": [
+          {
+            "children": [
+              {
+                "exit_code": 101,
+                "id": 311,
+                "name": "cargo test",
+                "pid": 3,
+                "state": "failure"
+              },
+              {
+                "exit_code": 0,
+                "id": 312,
+                "name": "trivy",
+                "pid": 4,
+                "state": "skipped"
+              }
+            ],
+            "id": 610,
+            "name": "test",
+            "state": "failure"
+          }
+        ]
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/7/pipelines/212"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "number": 212,
+        "repo_id": 7
+      },
+      "tool": "pipeline_config"
+    },
+    "response": {
+      "ok": [
+        {
+          "data": "c3RlcHM6CiAgLSBuYW1lOiBjYXJnbyB0ZXN0Cg==",
+          "hash": "a91c",
+          "name": ".woodpecker/test.yaml"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/7/pipelines/212/config"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "number": 212,
+        "repo_id": 7
+      },
+      "tool": "pipeline_metadata"
+    },
+    "response": {
+      "ok": {
+        "curr": {
+          "event": "push",
+          "number": 212
+        },
+        "repo": {
+          "name": "homelab-mcp-servers"
+        }
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/7/pipelines/212/metadata"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "number": 212,
+        "repo_id": 7,
+        "step_id": 311
+      },
+      "tool": "step_logs"
+    },
+    "response": {
+      "ok": {
+        "entries": [
+          {
+            "data": "   Compiling crate-4 v0.1.0",
+            "id": 9004,
+            "line": 4,
+            "step_id": 311,
+            "time": 4,
+            "type": 0
+          },
+          {
+            "data": "   Compiling crate-5 v0.1.0",
+            "id": 9005,
+            "line": 5,
+            "step_id": 311,
+            "time": 5,
+            "type": 0
+          },
+          {
+            "data": null,
+            "id": 9006,
+            "line": 6
+          },
+          {
+            "data": "%%% not base64 %%%",
+            "id": 9007,
+            "line": 7
+          },
+          {
+            "data": "error: test failed, to rerun pass `-p pgmcp --test e2e`",
+            "id": 9008,
+            "line": 8,
+            "step_id": 311,
+            "time": 8,
+            "type": 0
+          }
+        ],
+        "note": "showing the last 5 of 8 log entries; raise max_lines or WP_MAX_LOG_LINES for more",
+        "returned_entries": 5,
+        "total_entries": 8,
+        "truncated": true
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/7/logs/212/311"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "max_lines": 20,
+        "number": 212,
+        "repo_id": 7,
+        "step_id": 311
+      },
+      "tool": "step_logs"
+    },
+    "response": {
+      "ok": [
+        {
+          "data": "   Compiling crate-1 v0.1.0",
+          "id": 9001,
+          "line": 1,
+          "step_id": 311,
+          "time": 1,
+          "type": 0
+        },
+        {
+          "data": "   Compiling crate-2 v0.1.0",
+          "id": 9002,
+          "line": 2,
+          "step_id": 311,
+          "time": 2,
+          "type": 0
+        },
+        {
+          "data": "   Compiling crate-3 v0.1.0",
+          "id": 9003,
+          "line": 3,
+          "step_id": 311,
+          "time": 3,
+          "type": 0
+        },
+        {
+          "data": "   Compiling crate-4 v0.1.0",
+          "id": 9004,
+          "line": 4,
+          "step_id": 311,
+          "time": 4,
+          "type": 0
+        },
+        {
+          "data": "   Compiling crate-5 v0.1.0",
+          "id": 9005,
+          "line": 5,
+          "step_id": 311,
+          "time": 5,
+          "type": 0
+        },
+        {
+          "data": null,
+          "id": 9006,
+          "line": 6
+        },
+        {
+          "data": "%%% not base64 %%%",
+          "id": 9007,
+          "line": 7
+        },
+        {
+          "data": "error: test failed, to rerun pass `-p pgmcp --test e2e`",
+          "id": 9008,
+          "line": 8,
+          "step_id": 311,
+          "time": 8,
+          "type": 0
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/7/logs/212/311"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "max_lines": 2,
+        "number": 212,
+        "repo_id": 7,
+        "step_id": 311
+      },
+      "tool": "step_logs"
+    },
+    "response": {
+      "ok": {
+        "entries": [
+          {
+            "data": "%%% not base64 %%%",
+            "id": 9007,
+            "line": 7
+          },
+          {
+            "data": "error: test failed, to rerun pass `-p pgmcp --test e2e`",
+            "id": 9008,
+            "line": 8,
+            "step_id": 311,
+            "time": 8,
+            "type": 0
+          }
+        ],
+        "note": "showing the last 2 of 8 log entries; raise max_lines or WP_MAX_LOG_LINES for more",
+        "returned_entries": 2,
+        "total_entries": 8,
+        "truncated": true
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/7/logs/212/311"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "page": 2,
+        "per_page": 50,
+        "repo_id": 7
+      },
+      "tool": "list_branches"
+    },
+    "response": {
+      "ok": [
+        "main",
+        "feat/e2e-test-harness"
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/7/branches",
+        "query": [
+          [
+            "page",
+            "2"
+          ],
+          [
+            "perPage",
+            "50"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "repo_id": 7
+      },
+      "tool": "list_pull_requests"
+    },
+    "response": {
+      "ok": [
+        {
+          "index": "18",
+          "title": "feat: e2e test harness"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/7/pull_requests"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "repo_id": 7
+      },
+      "tool": "list_crons"
+    },
+    "response": {
+      "ok": [
+        {
+          "branch": "main",
+          "id": 2,
+          "name": "nightly",
+          "schedule": "@daily"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/7/cron"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "per_page": 10
+      },
+      "tool": "list_agents"
+    },
+    "response": {
+      "ok": [
+        {
+          "capacity": 2,
+          "id": 1,
+          "last_contact": 1727300600,
+          "name": "homelab-agent-01",
+          "platform": "linux/amd64"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/agents",
+        "query": [
+          [
+            "perPage",
+            "10"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "agent_id": 1
+      },
+      "tool": "list_agent_tasks"
+    },
+    "response": {
+      "ok": [
+        {
+          "dependencies": [],
+          "id": "3302",
+          "pipeline_id": 3302
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/agents/1/tasks"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "queue_info"
+    },
+    "response": {
+      "ok": {
+        "paused": false,
+        "pending": null,
+        "running": [
+          {
+            "id": "3302"
+          }
+        ],
+        "stats": {
+          "pending_count": 0,
+          "running_count": 1,
+          "worker_count": 2
+        }
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/queue/info"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "pipeline_feed"
+    },
+    "response": {
+      "ok": [
+        {
+          "number": 212,
+          "repo_id": 7,
+          "status": "failure"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/user/feed"
+      }
+    ]
+  }
+]
