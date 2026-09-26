@@ -51,7 +51,12 @@
         src = ./.;
         filter = path: type:
           (craneLib.filterCargoSources path type)
-          || (builtins.elem (builtins.baseNameOf path) ["clippy.toml" "deny.toml" "README.md"]);
+          || (builtins.elem (builtins.baseNameOf path) ["clippy.toml" "deny.toml" "README.md"])
+          # E2E snapshot artifacts (`tests/snapshots/*.snap`) and fixtures: the
+          # test check compares against them, so dropping them here would turn
+          # every snapshot assertion into "new snapshot" — a failure under
+          # INSTA_UPDATE=no, but for the wrong reason.
+          || (pkgs.lib.hasInfix "/tests/" (toString path));
       };
 
       commonArgs = {
@@ -134,7 +139,24 @@
             # This is a sandbox artefact, not a product bug: the shipped
             # containers inherit certs from the distroless base.
             SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-            nativeCheckInputs = [pkgs.cacert];
+            nativeCheckInputs = [pkgs.cacert pkgs.postgresql];
+
+            # pgmcp's suite runs against a real Postgres, never a skipped one.
+            # The same script `just test` uses brings up a throwaway,
+            # durability-off cluster in the sandbox's TMPDIR (unix socket only,
+            # so no network is involved) and exports PGMCP_TEST_DATABASE_URL.
+            # start/stop rather than `run --`: crane's test command is a shell
+            # function a wrapper script cannot invoke.
+            preCheck = ''
+              eval "$(bash ${./scripts/test-pg.sh} start)"
+            '';
+            postCheck = ''
+              bash ${./scripts/test-pg.sh} stop
+            '';
+
+            # A snapshot mismatch or a missing snapshot fails the check; it must
+            # never be "accepted" inside a build.
+            INSTA_UPDATE = "no";
           });
 
         fmt = craneLib.cargoFmt {
@@ -211,6 +233,7 @@
             cargo-audit
             cargo-deny
             cargo-edit
+            cargo-insta
             cargo-watch
             cargo-workspaces
             claude-code
@@ -223,6 +246,7 @@
             opencode
             podman
             podman-compose
+            postgresql
             sccache
             sqlx-cli
             tailwindcss_4
@@ -295,7 +319,7 @@
       };
 
       # Minimal shell for CI: exactly what `just ci` (fmt + clippy + deny +
-      # test) invokes, and nothing else.
+      # test, the last with its throwaway Postgres) invokes, and nothing else.
       #
       # This exists because `devShells.default` carries the whole workstation
       # toolbox — editors' agents, podman, trivy, sqlx-cli, tailwind. A CI
@@ -312,6 +336,8 @@
         buildInputs = [
           pkgs.cargo-deny
           pkgs.just
+          # `just test` starts a throwaway cluster for pgmcp's suite.
+          pkgs.postgresql
           toolchain
         ];
       };

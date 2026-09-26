@@ -51,9 +51,17 @@ build-release:
 # artifacts. `--all-targets` is deliberately absent: it would silently drop
 # doctests from the run.
 #
+# The cargo invocation is wrapped, not changed: scripts/test-pg.sh brings up a
+# throwaway, durability-off Postgres on tmpfs (~1s), hands pgmcp's tests its
+# URL, and tears it down afterwards. Nothing is skipped or `#[ignore]`d — the
+# read-only guarantee is verified against a real server on every run.
+#
+# Snapshot tests (insta) write `*.snap.new` on a mismatch and fail; review with
+# `cargo insta review`, or accept everything with `INSTA_UPDATE=always just test`.
+#
 # Test everything
 test:
-    cargo test --workspace --all-features
+    scripts/test-pg.sh run -- cargo test --workspace --all-features
 
 # Narrowing to one package re-resolves features over just that package, so the
 # first run after a `just test` rebuilds a slice of the dependency tree (~16s
@@ -62,11 +70,7 @@ test:
 #
 # Test a specific package (e.g. `just test-pkg pgmcp`)
 test-pkg pkg:
-    cargo test -p {{ pkg }}
-
-# Run the pgmcp DB integration tests (needs PGMCP_TEST_DATABASE_URL, from .sops.env or the shell; `just test` marks them ignored)
-test-db:
-    {{ secrets }} 'cargo test -p pgmcp --test integration -- --ignored'
+    scripts/test-pg.sh run -- cargo test -p {{ pkg }}
 
 # Watch a specific package and re-run its binary (e.g. `just watch-pkg pbsmcp-server`)
 watch-pkg pkg:
