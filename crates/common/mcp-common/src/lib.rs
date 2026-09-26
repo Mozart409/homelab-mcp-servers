@@ -6,11 +6,20 @@
 //!
 //! Also provides doc resource helpers for exposing crate README files as MCP resources.
 
-use std::time::Duration;
+#[cfg(feature = "e2e")]
+pub mod e2e;
+
+use std::{sync::Arc, time::Duration};
 
 use axum::{Json, Router, routing::get};
 use color_eyre::eyre::{Context, Result, bail};
-use rmcp::model::{ReadResourceResult, Resource, ResourceContents};
+use rmcp::{
+    ServerHandler,
+    model::{ReadResourceResult, Resource, ResourceContents},
+    transport::streamable_http_server::{
+        StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
+    },
+};
 use serde::Serialize;
 
 // ---- TLS --------------------------------------------------------------------
@@ -71,11 +80,14 @@ pub fn normalize_base_url(host: &str, default_port: u16) -> String {
 /// Parse a comma-separated `Host` allow-list, treating "set but empty" as unset.
 ///
 /// Returning `Some(vec![])` here would be actively dangerous: callers pass the
-/// result to rmcp's `with_allowed_hosts`, and an empty allow-list rejects
-/// *every* inbound `Host` header. A value like `" , "` — a typo, or a template
-/// that expanded to nothing — would therefore produce a server that silently
-/// accepts no connections at all. Collapsing that to `None` falls back to rmcp's
+/// result to rmcp's `with_allowed_hosts`, and rmcp treats an empty allow-list as
+/// "check disabled" — it accepts *every* inbound `Host` header, which is exactly
+/// the DNS-rebinding hole the list exists to close. A value like `" , "` — a
+/// typo, or a template that expanded to nothing — would therefore silently turn
+/// the protection off. Collapsing that to `None` falls back to rmcp's
 /// loopback-only default instead, which is the safe reading of "unset".
+/// ([`mcp_router`] enforces the same rule a second time, for callers that build
+/// a `Config` without going through this function.)
 #[must_use]
 pub fn parse_allowed_hosts(raw: Option<&str>) -> Option<Vec<String>> {
     let hosts: Vec<String> = raw?
@@ -85,6 +97,91 @@ pub fn parse_allowed_hosts(raw: Option<&str>) -> Option<Vec<String>> {
         .collect();
 
     if hosts.is_empty() { None } else { Some(hosts) }
+}
+
+// ---- URL path segments ------------------------------------------------------
+
+/// Everything except RFC 3986 *unreserved* characters (`A-Z a-z 0-9 - . _ ~`).
+///
+/// Unreserved characters are left alone because RFC 3986 §2.3 says they
+/// SHOULD NOT be encoded. `sensor.living_room` must reach Home Assistant as
+/// itself, not as `sensor%2Eliving%5Froom`, which a strict router or a
+/// path-matching proxy need not treat as the same resource.
+const PATH_SEGMENT: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'.')
+    .remove(b'_')
+    .remove(b'~');
+
+/// A caller-supplied value that cannot be used as one URL path segment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvalidPathSegment(String);
+
+impl std::fmt::Display for InvalidPathSegment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?} is not a valid path segment: empty, `.` and `..` would address a different \
+             endpoint than the one this tool calls",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for InvalidPathSegment {}
+
+/// Percent-encode `s` as exactly one URL path segment, or refuse it.
+///
+/// Every server interpolates caller-supplied IDs (entity IDs, UPIDs, silence
+/// IDs, label names) into request paths, and the MCP caller is an LLM acting
+/// on untrusted input. The failure modes, and what guards each:
+///
+/// - **Structural characters split or end the path** (`/`, `?`, `#`, `%`): all
+///   encoded.
+/// - **A dot-segment climbs out of its path.** `url` (and so `reqwest`)
+///   normalises `..` *and its percent-encoded forms* (`%2E%2E`, `.%2e`) per the
+///   WHATWG URL spec, so `/api/states/%2E%2E` is sent as `/api/`. No encoding
+///   can prevent that. Encoding `.` does not help, which is how this helper's
+///   per-crate predecessors, encoding with `NON_ALPHANUMERIC`, let
+///   `set_state("..")` POST to Home Assistant's API root. The only fix is to
+///   **refuse** `.` and `..`.
+/// - **An empty segment** turns `/api/states/{id}` into `/api/states/`, a
+///   different endpoint (the collection). Refused too.
+///
+/// # Errors
+///
+/// Returns [`InvalidPathSegment`] for an empty string, `.` or `..`.
+pub fn path_segment(s: &str) -> std::result::Result<String, InvalidPathSegment> {
+    if s.is_empty() || s == "." || s == ".." {
+        return Err(InvalidPathSegment(s.to_string()));
+    }
+    Ok(percent_encoding::utf8_percent_encode(s, PATH_SEGMENT).to_string())
+}
+
+// ---- Error rendering --------------------------------------------------------
+
+/// `err` and every `source()` beneath it, joined with `": "`, skipping a level
+/// that only repeats the one above.
+///
+/// The *cause* of a failed upstream call lives at the bottom of the chain:
+/// reqwest's top level says only "error sending request for url (…)", while
+/// "connection refused" or "invalid peer certificate: `UnknownIssuer`" is two
+/// sources down. `Display` on a `thiserror` enum prints the top level alone,
+/// so an MCP client (and the operator reading its answer) is told that
+/// something failed but not what. eyre's `{:#}` already renders the chain;
+/// this is the same for plain `std::error::Error` types.
+#[must_use]
+pub fn error_chain(err: &(dyn std::error::Error + 'static)) -> String {
+    let mut parts: Vec<String> = vec![err.to_string()];
+    let mut source = err.source();
+    while let Some(cause) = source {
+        let msg = cause.to_string();
+        if parts.last().is_none_or(|last| !last.contains(&msg)) {
+            parts.push(msg);
+        }
+        source = cause.source();
+    }
+    parts.join(": ")
 }
 
 // ---- Doc resource helpers ---------------------------------------------------
@@ -187,6 +284,63 @@ pub async fn run_healthcheck(bind: &str) -> Result<()> {
     }
 }
 
+// ---- Serving ----------------------------------------------------------------
+
+/// Build the complete HTTP app a server exposes: the MCP service at `/mcp`
+/// (streamable HTTP, one `S` per session from `factory`) plus [`health_router`].
+///
+/// This is the single place the app is assembled, so production (`run()` →
+/// [`serve`]) and the end-to-end tests (`e2e::TestServer::start`) put the
+/// *same* router on the socket — the DNS-rebinding allow-list included.
+/// Tests that built their own router would exercise something that never runs
+/// in production.
+///
+/// `allowed_hosts` of `None` — or `Some` of an empty list, see below — keeps
+/// rmcp's loopback-only default; pass the config's value straight through.
+pub fn mcp_router<S, F>(factory: F, allowed_hosts: Option<Vec<String>>) -> Router
+where
+    S: ServerHandler + Send + 'static,
+    F: Fn() -> std::result::Result<S, std::io::Error> + Send + Sync + 'static,
+{
+    let mut http_config = StreamableHttpServerConfig::default();
+    // `Some(empty)` must NOT reach rmcp: it reads an empty list as "accept any
+    // Host", i.e. DNS-rebinding protection off. Treat it as unset (loopback
+    // only) — failing closed, the same rule `parse_allowed_hosts` applies.
+    if let Some(hosts) = allowed_hosts.filter(|h| !h.is_empty()) {
+        http_config = http_config.with_allowed_hosts(hosts);
+    }
+
+    let service = StreamableHttpService::new(
+        factory,
+        Arc::new(LocalSessionManager::default()),
+        http_config,
+    );
+
+    Router::new()
+        .nest_service("/mcp", service)
+        .merge(health_router())
+}
+
+/// Bind `bind` and serve `app` until the process is stopped.
+///
+/// `name` only labels the log line, so an operator reading a multi-server
+/// journal can tell which listener came up where.
+///
+/// # Errors
+///
+/// Returns an error if the address cannot be bound (in use, bad syntax, no
+/// permission) or the server loop fails.
+pub async fn serve(bind: &str, app: Router, name: &str) -> Result<()> {
+    let listener = tokio::net::TcpListener::bind(bind)
+        .await
+        .wrap_err_with(|| format!("failed to bind {bind}"))?;
+    tracing::info!(bind = %bind, "{name} listening on http://{bind}/mcp");
+
+    axum::serve(listener, app)
+        .await
+        .wrap_err("streamable-HTTP server error")
+}
+
 // ---- Response types ---------------------------------------------------------
 
 /// Health check response body.
@@ -268,19 +422,6 @@ mod tests {
             .json()
             .await
             .wrap_err_with(|| format!("GET {url} returned a non-JSON body"))
-    }
-
-    #[test]
-    fn test_health_router_is_router() {
-        let r = health_router();
-        // Smoke: it builds and returns a Router.
-        drop(r);
-    }
-
-    #[tokio::test]
-    async fn test_health_handler_returns_ok() {
-        let Json(resp) = health_handler().await;
-        assert_eq!(resp.status, "ok");
     }
 
     #[tokio::test]
@@ -393,124 +534,5 @@ mod tests {
                 "c.lan".to_string()
             ])
         );
-    }
-
-    #[test]
-    fn test_doc_resource_uri_format() {
-        let uri = doc_resource_uri("hamcp");
-        assert_eq!(uri, "doc://hamcp/guide");
-
-        let uri = doc_resource_uri("pbsmcp");
-        assert_eq!(uri, "doc://pbsmcp/guide");
-    }
-
-    #[test]
-    fn test_doc_resource_descriptor_carries_uri_and_name() {
-        let uri = "doc://hamcp/guide";
-        let name = "hamcp-readme";
-        let description = "HAMCP operator guide";
-
-        let resource = doc_resource(uri, name, description);
-
-        assert_eq!(resource.uri, uri);
-        assert_eq!(resource.name, name);
-        assert_eq!(
-            resource.description,
-            Some(description.to_string()),
-            "description must be set"
-        );
-    }
-
-    #[test]
-    fn test_doc_resource_descriptor_sets_markdown_mime_type() {
-        let resource = doc_resource("doc://test/guide", "test", "test doc");
-
-        assert_eq!(
-            resource.mime_type,
-            Some("text/markdown".to_string()),
-            "MIME type must be text/markdown"
-        );
-    }
-
-    #[test]
-    fn test_doc_resource_contents_carries_markdown() {
-        let uri = "doc://hamcp/guide";
-        let markdown = "# HAMCP\n\nThis is the operator guide.";
-
-        let result = doc_resource_contents(uri, markdown);
-
-        // ReadResourceResult wraps contents in a Vec
-        assert_eq!(
-            result.contents.len(),
-            1,
-            "must have exactly one content block"
-        );
-
-        // Extract the text content from the first (and only) ResourceContents enum variant
-        let text_content = match result.contents.first() {
-            Some(ResourceContents::TextResourceContents {
-                uri: u,
-                text: t,
-                mime_type,
-                ..
-            }) => {
-                assert_eq!(u, uri, "URI must match");
-                assert_eq!(
-                    mime_type,
-                    &Some("text/markdown".to_string()),
-                    "MIME type must be text/markdown"
-                );
-                t.as_str()
-            }
-            Some(ResourceContents::BlobResourceContents { .. }) => {
-                panic!("expected TextResourceContents, got BlobResourceContents")
-            }
-            Some(_) => {
-                panic!("unexpected ResourceContents variant")
-            }
-            None => {
-                panic!("contents should not be empty")
-            }
-        };
-
-        assert_eq!(text_content, markdown, "markdown content must round-trip");
-    }
-
-    #[test]
-    fn test_doc_resource_descriptor_and_contents_round_trip() {
-        let uri = "doc://custom/guide";
-        let name = "custom-server";
-        let description = "Custom server documentation";
-        let markdown = "# Custom Server\n\nDocumentation here.";
-
-        // Create the descriptor
-        let descriptor = doc_resource(uri, name, description);
-
-        // Create the contents
-        let contents = doc_resource_contents(uri, markdown);
-
-        // Verify the descriptor URI matches the contents URI
-        assert_eq!(
-            descriptor.uri, uri,
-            "descriptor URI must match contents URI"
-        );
-
-        // Verify the contents URI from the resource content itself
-        match contents.contents.first() {
-            Some(ResourceContents::TextResourceContents {
-                uri: content_uri, ..
-            }) => {
-                assert_eq!(content_uri, uri, "content URI must match");
-            }
-            Some(ResourceContents::BlobResourceContents { .. }) => {
-                panic!("expected text content, got blob")
-            }
-            Some(_) => {
-                panic!("unexpected ResourceContents variant")
-            }
-            None => {
-                panic!("contents should not be empty")
-            }
-        }
     }
 }

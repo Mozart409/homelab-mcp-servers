@@ -5,20 +5,27 @@ edition.workspace = true
 publish.workspace = true
 description = "Shared MCP server plumbing — healthchecks, router wiring, and common helpers"
 
+[features]
+# The end-to-end test harness (`mcp_common::e2e`). Test-only: server crates
+# enable it from `[dev-dependencies]`, so it — and wiremock, rcgen and
+# tokio-rustls (the self-signed TLS upstream) — never reach a release binary.
+e2e = ["dep:rcgen", "dep:tokio-rustls", "dep:wiremock"]
+
 [dependencies]
 # keep-sorted start
 axum.workspace = true
 color-eyre.workspace = true
+percent-encoding.workspace = true
+rcgen = { workspace = true, optional = true }
 reqwest.workspace = true
 rmcp.workspace = true
 rustls.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-# keep-sorted end
-
-[dev-dependencies]
-# keep-sorted start
+tokio-rustls = { workspace = true, optional = true }
 tokio.workspace = true
+tracing.workspace = true
+wiremock = { workspace = true, optional = true }
 # keep-sorted end
 
 [lints]
