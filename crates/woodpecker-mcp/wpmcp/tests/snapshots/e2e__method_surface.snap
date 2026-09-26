@@ -1,0 +1,57 @@
+---
+source: crates/woodpecker-mcp/wpmcp/tests/e2e.rs
+expression: surface
+---
+{
+  "get_pipeline": [
+    "GET"
+  ],
+  "get_repo": [
+    "GET"
+  ],
+  "healthz": [
+    "GET"
+  ],
+  "list_agent_tasks": [
+    "GET"
+  ],
+  "list_agents": [
+    "GET"
+  ],
+  "list_branches": [
+    "GET"
+  ],
+  "list_crons": [
+    "GET"
+  ],
+  "list_pipelines": [
+    "GET"
+  ],
+  "list_pull_requests": [
+    "GET"
+  ],
+  "list_repos": [
+    "GET"
+  ],
+  "lookup_repo": [
+    "GET"
+  ],
+  "pipeline_config": [
+    "GET"
+  ],
+  "pipeline_feed": [
+    "GET"
+  ],
+  "pipeline_metadata": [
+    "GET"
+  ],
+  "queue_info": [
+    "GET"
+  ],
+  "step_logs": [
+    "GET"
+  ],
+  "version": [
+    "GET"
+  ]
+}

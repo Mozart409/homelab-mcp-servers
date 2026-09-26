@@ -1,0 +1,178 @@
+---
+source: crates/woodpecker-mcp/wpmcp/tests/e2e.rs
+expression: s.transcript()
+---
+[
+  {
+    "call": {
+      "arguments": {
+        "repo_id": 404
+      },
+      "tool": "get_repo"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Woodpecker API http://upstream/api/repos/404 returned 404 Not Found"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/404"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "version"
+    },
+    "response": {
+      "ok": {
+        "version": "3.9.0"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/version"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "repo_id": 401
+      },
+      "tool": "get_repo"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Woodpecker API http://upstream/api/repos/401 returned 401 Unauthorized: token is expired"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/401"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "version"
+    },
+    "response": {
+      "ok": {
+        "version": "3.9.0"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/version"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "repo_id": 500
+      },
+      "tool": "get_repo"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Woodpecker API http://upstream/api/repos/500 returned 500 Internal Server Error: database is locked"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/500"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "version"
+    },
+    "response": {
+      "ok": {
+        "version": "3.9.0"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/version"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "repo_id": 200
+      },
+      "tool": "get_repo"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "invalid JSON from http://upstream/api/repos/200: EOF while parsing a string at line 1 column 18"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/api/repos/200"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "version"
+    },
+    "response": {
+      "ok": {
+        "version": "3.9.0"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer wp-pat-4c1d8e2f",
+        "method": "GET",
+        "path": "/version"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "name": "x",
+        "owner": ".."
+      },
+      "tool": "lookup_repo"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "\"..\" is not a valid path segment: empty, `.` and `..` would address a different endpoint than the one this tool calls"
+      }
+    },
+    "upstream": []
+  }
+]
