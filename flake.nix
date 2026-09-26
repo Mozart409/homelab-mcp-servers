@@ -93,6 +93,7 @@
         hamcp-server = mkServer "hamcp-server";
         wpmcp-server = mkServer "wpmcp-server";
         alertmanagermcp-server = mkServer "alertmanagermcp-server";
+        tempomcp-server = mkServer "tempomcp-server";
       };
 
       # Nix-native lint/test checks, sharing `cargoArtifacts` with the package
@@ -400,6 +401,12 @@
             # avoid, and AM_ reads as an abbreviation of nothing in particular.
             prefix = "ALERTMANAGER";
             port = 8086;
+            hasToken = true;
+          };
+          tempomcp-server = {
+            # 8092, not 8087: the homelab deployment allocated it first.
+            prefix = "TEMPO";
+            port = 8092;
             hasToken = true;
           };
         };

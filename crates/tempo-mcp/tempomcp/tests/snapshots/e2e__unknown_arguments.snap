@@ -1,0 +1,24 @@
+---
+source: crates/tempo-mcp/tempomcp/tests/e2e.rs
+expression: refusals
+---
+{
+  "prompts": {
+    "error_traces": {
+      "code": -32602,
+      "message": "Failed to parse parameters: unknown field `limitt`, expected `service`"
+    },
+    "slow_traces": {
+      "code": -32602,
+      "message": "Failed to parse parameters: unknown field `limitt`, expected `service` or `threshold`"
+    }
+  },
+  "tools": {
+    "metrics_query_range": "failed to deserialize parameters: unknown field `limitt`, expected one of `q`, `start`, `end`, `step`",
+    "search": "failed to deserialize parameters: unknown field `limitt`, expected one of `q`, `start`, `end`, `limit`",
+    "search_tag_values": "failed to deserialize parameters: unknown field `limitt`, expected one of `tag`, `q`, `start`, `end`",
+    "search_tags": "failed to deserialize parameters: unknown field `limitt`, expected one of `scope`, `q`, `start`, `end`",
+    "status": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "trace": "failed to deserialize parameters: unknown field `limitt`, expected one of `trace_id`, `start`, `end`, `max_spans`, `attributes`, `raw`"
+  }
+}
