@@ -42,6 +42,7 @@ case "$BIN" in
     hamcp-server)            PREFIX=HA;           PORT=8084 ;;
     wpmcp-server)            PREFIX=WP;           PORT=8085 ;;
     alertmanagermcp-server)  PREFIX=ALERTMANAGER; PORT=8086 ;;
+    tempomcp-server)         PREFIX=TEMPO;        PORT=8092 ;;
     *) echo "unknown server '$BIN' — add it to the case in scripts/smoke.sh" >&2; exit 2 ;;
 esac
 

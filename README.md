@@ -25,6 +25,7 @@ Built in Rust on [`rmcp`](https://github.com/modelcontextprotocol/rust-sdk)
 | [`homeassistant-mcp`](crates/homeassistant-mcp/README.md) | Home Assistant | `hamcp`, `hamcp-server` | implemented |
 | [`woodpecker-mcp`](crates/woodpecker-mcp/README.md) | Woodpecker CI      | `wpmcp`, `wpmcp-server`     | implemented |
 | [`alertmanager-mcp`](crates/alertmanager-mcp/README.md) | Alertmanager     | `alertmanagermcp`, `alertmanagermcp-server` | implemented |
+| [`tempo-mcp`](crates/tempo-mcp/README.md)        | Grafana Tempo         | `tempomcp`, `tempomcp-server` | implemented |
 
 Each server is split into a **library** crate (REST/DB client + MCP tool
 definitions and wiring) and a thin **`-server`** binary that serves the tools
@@ -102,6 +103,16 @@ exception to the read-only rule (see [`AGENTS.md`](AGENTS.md) Hard rules §1).
 Full configuration, matcher syntax, and the silence lifecycle are in the
 [crate README](crates/alertmanager-mcp/README.md).
 
+### tempo-mcp — Grafana Tempo
+
+Search traces with TraceQL and read individual traces. Tools: `search`,
+`trace`, `search_tags`, `search_tag_values`, `metrics_query_range`, `status` —
+all read-only GETs against the Tempo HTTP API. `trace` returns a compact span
+tree (hex IDs, depth, offsets and durations, the trace's error and slowest
+spans) instead of the raw OTLP document, so one lookup does not fill a context
+window. Full configuration and the trace format are in the
+[crate README](crates/tempo-mcp/README.md).
+
 ## Quick start
 
 This repo ships a [Nix flake](flake.nix) that pins the Rust toolchain (1.96.1)
@@ -145,6 +156,7 @@ cargo run -p lokimcp-server   # Loki,       default endpoint http://127.0.0.1:80
 cargo run -p hamcp-server     # Home Assistant, default endpoint http://127.0.0.1:8084/mcp
 cargo run -p wpmcp-server     # Woodpecker CI, default endpoint http://127.0.0.1:8085/mcp
 cargo run -p alertmanagermcp-server  # Alertmanager, default endpoint http://127.0.0.1:8086/mcp
+cargo run -p tempomcp-server  # Tempo,      default endpoint http://127.0.0.1:8092/mcp
 ```
 
 Both bind loopback-only by default and reject non-loopback `Host` headers
@@ -165,7 +177,8 @@ The servers use the streamable-HTTP transport, so point the client at the URL:
     "loki": { "type": "http", "url": "http://127.0.0.1:8083/mcp" },
     "homeassistant": { "type": "http", "url": "http://127.0.0.1:8084/mcp" },
     "woodpecker": { "type": "http", "url": "http://127.0.0.1:8085/mcp" },
-    "alertmanager": { "type": "http", "url": "http://127.0.0.1:8086/mcp" }
+    "alertmanager": { "type": "http", "url": "http://127.0.0.1:8086/mcp" },
+    "tempo": { "type": "http", "url": "http://127.0.0.1:8092/mcp" }
   }
 }
 ```

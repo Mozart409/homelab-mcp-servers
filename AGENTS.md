@@ -33,9 +33,10 @@ Existing servers: `crates/pbs-mcp` (Proxmox Backup Server, REST, port `8080`),
 `crates/postgres-mcp` (PostgreSQL, sqlx, `8081`), `crates/prometheus-mcp`
 (Prometheus, REST, `8082`), `crates/loki-mcp` (Grafana Loki, REST, `8083`),
 `crates/homeassistant-mcp` (Home Assistant, REST, `8084` — **not read-only**,
-see Hard rules §1), `crates/woodpecker-mcp` (Woodpecker CI, REST, `8085`), and
+see Hard rules §1), `crates/woodpecker-mcp` (Woodpecker CI, REST, `8085`),
 `crates/alertmanager-mcp` (Prometheus Alertmanager, REST, `8086` — **not
-fully read-only**, see Hard rules §1).
+fully read-only**, see Hard rules §1), and `crates/tempo-mcp` (Grafana
+Tempo, REST, `8092`).
 The library crate is the unit of substance; the `-server` binary is a near-empty
 `main` that calls `run()`. The Prometheus/Loki REST servers are the closest
 clone of `pbs-mcp` — copy that one when adding another REST-backed server.
@@ -284,7 +285,8 @@ database, so they run in parallel.
    `mymcp`/`mymcp-server` crates to `<svc>mcp`/`<svc>mcp-server`.
 2. Implement `config.rs` (env vars prefixed `<SVC>_`, pick the next free default
    port — pbs `8080`, postgres `8081`, prometheus `8082`, loki `8083`, ha `8084`,
-   wp `8085`, alertmanager `8086`),
+   wp `8085`, alertmanager `8086`, tempo `8092` — taken out of sequence
+   because the homelab deployment allocated it first; `8087` is next free),
    `client.rs`, `server.rs` (read-only tools), and `router()` + `run()` in
    `lib.rs`. Every path segment taken from a tool argument goes through
    `mcp_common::path_segment` (it refuses `.`/`..`, which URL normalization

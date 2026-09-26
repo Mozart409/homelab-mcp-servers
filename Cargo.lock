@@ -2683,6 +2683,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "tempomcp"
+version = "0.11.0"
+dependencies = [
+ "axum",
+ "base64 0.23.1",
+ "chrono",
+ "color-eyre",
+ "insta",
+ "mcp-common",
+ "reqwest",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "wiremock",
+]
+
+[[package]]
+name = "tempomcp-server"
+version = "0.11.0"
+dependencies = [
+ "color-eyre",
+ "dotenvy",
+ "insta",
+ "mcp-common",
+ "serde_json",
+ "tempomcp",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "wiremock",
+]
+
+[[package]]
 name = "thiserror"
 version = "2.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"

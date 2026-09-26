@@ -1,0 +1,325 @@
+{
+  "trace": {
+    "resourceSpans": [
+      {
+        "resource": {
+          "attributes": [
+            {
+              "key": "service.name",
+              "value": {
+                "stringValue": "garage"
+              }
+            },
+            {
+              "key": "service.version",
+              "value": {
+                "stringValue": "1.0.1"
+              }
+            },
+            {
+              "key": "host.name",
+              "value": {
+                "stringValue": "nas-01"
+              }
+            }
+          ]
+        },
+        "scopeSpans": [
+          {
+            "scope": {
+              "name": "garage_api"
+            },
+            "spans": [
+              {
+                "traceId": "CvdlGRbNQ92ESOshHIAxnA==",
+                "spanId": "TV5vcIGSo7Q=",
+                "name": "GetObject",
+                "kind": "SPAN_KIND_SERVER",
+                "startTimeUnixNano": "1727230441020000000",
+                "endTimeUnixNano": "1727230442510000000",
+                "attributes": [
+                  {
+                    "key": "s3.bucket",
+                    "value": {
+                      "stringValue": "hofvarpnir"
+                    }
+                  }
+                ],
+                "status": {
+                  "code": "STATUS_CODE_ERROR",
+                  "message": "context canceled"
+                },
+                "parentSpanId": "PE1eb3CBkqM="
+              },
+              {
+                "traceId": "CvdlGRbNQ92ESOshHIAxnA==",
+                "spanId": "Xm9wgZKjtMU=",
+                "name": "read_block",
+                "kind": "SPAN_KIND_INTERNAL",
+                "startTimeUnixNano": "1727230441025000000",
+                "endTimeUnixNano": "1727230442505000000",
+                "attributes": [
+                  {
+                    "key": "block.id",
+                    "value": {
+                      "stringValue": "b7e0"
+                    }
+                  },
+                  {
+                    "key": "block.disk",
+                    "value": {
+                      "stringValue": "/dev/sdb"
+                    }
+                  }
+                ],
+                "status": {},
+                "parentSpanId": "TV5vcIGSo7Q="
+              },
+              {
+                "traceId": "CvdlGRbNQ92ESOshHIAxnA==",
+                "spanId": "cIGSo7TF1uc=",
+                "name": "GetObject",
+                "kind": "SPAN_KIND_SERVER",
+                "startTimeUnixNano": "1727230442525000000",
+                "endTimeUnixNano": "1727230443325000000",
+                "attributes": [
+                  {
+                    "key": "s3.bucket",
+                    "value": {
+                      "stringValue": "hofvarpnir"
+                    }
+                  }
+                ],
+                "status": {},
+                "parentSpanId": "b3CBkqO0xdY="
+              },
+              {
+                "traceId": "CvdlGRbNQ92ESOshHIAxnA==",
+                "spanId": "kqO0xdbn+Ak=",
+                "name": "read_block",
+                "kind": "SPAN_KIND_INTERNAL",
+                "startTimeUnixNano": "1727230442932000000",
+                "endTimeUnixNano": "1727230443320000000",
+                "attributes": [
+                  {
+                    "key": "block.id",
+                    "value": {
+                      "stringValue": "b7e2"
+                    }
+                  },
+                  {
+                    "key": "block.disk",
+                    "value": {
+                      "stringValue": "/dev/sdc"
+                    }
+                  }
+                ],
+                "status": {},
+                "parentSpanId": "cIGSo7TF1uc="
+              },
+              {
+                "traceId": "CvdlGRbNQ92ESOshHIAxnA==",
+                "spanId": "gZKjtMXW5/g=",
+                "name": "read_block",
+                "kind": "SPAN_KIND_INTERNAL",
+                "startTimeUnixNano": "1727230442530000000",
+                "endTimeUnixNano": "1727230442930000000",
+                "attributes": [
+                  {
+                    "key": "block.id",
+                    "value": {
+                      "stringValue": "b7e1"
+                    }
+                  },
+                  {
+                    "key": "block.disk",
+                    "value": {
+                      "stringValue": "/dev/sdb"
+                    }
+                  }
+                ],
+                "status": {},
+                "parentSpanId": "cIGSo7TF1uc="
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "resource": {
+          "attributes": [
+            {
+              "key": "service.name",
+              "value": {
+                "stringValue": "hofvarpnir"
+              }
+            },
+            {
+              "key": "service.version",
+              "value": {
+                "stringValue": "0.14.2"
+              }
+            },
+            {
+              "key": "host.name",
+              "value": {
+                "stringValue": "app-02"
+              }
+            }
+          ]
+        },
+        "scopeSpans": [
+          {
+            "scope": {
+              "name": "tracing-opentelemetry",
+              "version": "0.31.0"
+            },
+            "spans": [
+              {
+                "traceId": "CvdlGRbNQ92ESOshHIAxnA==",
+                "spanId": "b3CBkqO0xdY=",
+                "name": "GET",
+                "kind": "SPAN_KIND_CLIENT",
+                "startTimeUnixNano": "1727230442520000000",
+                "endTimeUnixNano": "1727230443330000000",
+                "attributes": [
+                  {
+                    "key": "url.full",
+                    "value": {
+                      "stringValue": "http://garage:3900/hofvarpnir/blobs/9f1c2e7a"
+                    }
+                  },
+                  {
+                    "key": "http.request.resend_count",
+                    "value": {
+                      "intValue": "1"
+                    }
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "value": {
+                      "intValue": "200"
+                    }
+                  }
+                ],
+                "status": {},
+                "parentSpanId": "Gis8TV5vcIE="
+              },
+              {
+                "traceId": "CvdlGRbNQ92ESOshHIAxnA==",
+                "spanId": "Gis8TV5vcIE=",
+                "name": "GET /api/download/{id}",
+                "kind": "SPAN_KIND_SERVER",
+                "startTimeUnixNano": "1727230441000000000",
+                "endTimeUnixNano": "1727230443350000000",
+                "attributes": [
+                  {
+                    "key": "http.route",
+                    "value": {
+                      "stringValue": "/api/download/{id}"
+                    }
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "value": {
+                      "intValue": "200"
+                    }
+                  },
+                  {
+                    "key": "url.path",
+                    "value": {
+                      "stringValue": "/api/download/9f1c2e7a"
+                    }
+                  }
+                ],
+                "status": {}
+              },
+              {
+                "traceId": "CvdlGRbNQ92ESOshHIAxnA==",
+                "spanId": "KzxNXm9wgZI=",
+                "name": "SELECT files",
+                "kind": "SPAN_KIND_CLIENT",
+                "startTimeUnixNano": "1727230441003000000",
+                "endTimeUnixNano": "1727230441009250000",
+                "attributes": [
+                  {
+                    "key": "db.system",
+                    "value": {
+                      "stringValue": "postgresql"
+                    }
+                  },
+                  {
+                    "key": "db.statement",
+                    "value": {
+                      "stringValue": "SELECT id, blob_key, size FROM files WHERE id = $1"
+                    }
+                  }
+                ],
+                "status": {},
+                "parentSpanId": "Gis8TV5vcIE="
+              },
+              {
+                "traceId": "CvdlGRbNQ92ESOshHIAxnA==",
+                "spanId": "PE1eb3CBkqM=",
+                "name": "GET",
+                "kind": "SPAN_KIND_CLIENT",
+                "startTimeUnixNano": "1727230441012000000",
+                "endTimeUnixNano": "1727230442512000000",
+                "attributes": [
+                  {
+                    "key": "url.full",
+                    "value": {
+                      "stringValue": "http://garage:3900/hofvarpnir/blobs/9f1c2e7a"
+                    }
+                  }
+                ],
+                "status": {
+                  "code": "STATUS_CODE_ERROR"
+                },
+                "parentSpanId": "Gis8TV5vcIE=",
+                "events": [
+                  {
+                    "timeUnixNano": "1727230442512000000",
+                    "name": "exception",
+                    "attributes": [
+                      {
+                        "key": "exception.type",
+                        "value": {
+                          "stringValue": "reqwest::Error"
+                        }
+                      },
+                      {
+                        "key": "exception.message",
+                        "value": {
+                          "stringValue": "error sending request: operation timed out"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "traceId": "CvdlGRbNQ92ESOshHIAxnA==",
+                "spanId": "o7TF1uf4CRo=",
+                "name": "cache.lookup",
+                "kind": "SPAN_KIND_INTERNAL",
+                "startTimeUnixNano": "1727230441001000000",
+                "endTimeUnixNano": "1727230441002500000",
+                "attributes": [
+                  {
+                    "key": "cache.hit",
+                    "value": {
+                      "boolValue": false
+                    }
+                  }
+                ],
+                "status": {},
+                "parentSpanId": "AAAAAN6tvu8="
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

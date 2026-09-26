@@ -1,0 +1,343 @@
+---
+source: crates/tempo-mcp/tempomcp/tests/e2e.rs
+expression: steps
+---
+[
+  {
+    "call": {
+      "arguments": {
+        "q": "{ resource.service.name = hofvarpnir }"
+      },
+      "tool": "search"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Tempo API http://upstream/api/search returned 400 Bad Request: invalid TraceQL query: parse error at line 1, col 27: syntax error: unexpected IDENTIFIER"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/search",
+        "query": [
+          [
+            "q",
+            "{ resource.service.name = hofvarpnir }"
+          ],
+          [
+            "limit",
+            "20"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "search_tags"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Tempo API http://upstream/api/v2/search/tags returned 401 Unauthorized: (empty body)"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/v2/search/tags",
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "trace_id": "deadbeef"
+      },
+      "tool": "trace"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "trace deadbeef not found in Tempo. Check the ID (hex, as `search` returns it); traces older than Tempo's retention are deleted."
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/v2/traces/deadbeef",
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "end": "2024-09-25T03:00:00Z",
+        "start": "2024-09-25T02:00:00Z",
+        "trace_id": "deadbeef"
+      },
+      "tool": "trace"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "trace deadbeef not found in Tempo. Check the ID (hex, as `search` returns it) and that start/end contain the trace, or omit them to search all of Tempo's retention."
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/v2/traces/deadbeef",
+        "query": [
+          [
+            "start",
+            "1727229600"
+          ],
+          [
+            "end",
+            "1727233200"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "tag": "span.http.route"
+      },
+      "tool": "search_tag_values"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Tempo API http://upstream/api/v2/search/tag/span.http.route/values returned 502 Bad Gateway: <!DOCTYPE html><html><head><title>502 Bad Gateway</title></head><body><p>upstream tempo-query-frontend:3200 is unreachable</p><p>upstream tempo-query-frontend:3200 is unreachable</p><p>upstream tempo-query-frontend:3200 is unreachable</p><p>upstream tempo-query-frontend:3200 is unreachable</p><p>upstream tempo-query-frontend:3200 is unreachable</p><p>upstream tempo-query-frontend:3200 is unreachable</p><p>upstream tempo-query-frontend:3200 is unreachable</p><p>upstream tempo-query-frontend:3200 is unreachab… (3444 bytes total)"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/v2/search/tag/span.http.route/values",
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "q": "{} | rate()"
+      },
+      "tool": "metrics_query_range"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "invalid JSON from http://upstream/api/metrics/query_range: EOF while parsing an object at line 1 column 28"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/metrics/query_range",
+        "query": [
+          [
+            "q",
+            "{} | rate()"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "trace_id": "CvdlGRbNQ92ESOshHIAxnA=="
+      },
+      "tool": "trace"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "\"CvdlGRbNQ92ESOshHIAxnA==\" is not a trace ID: expected 1 to 32 hex digits, as `search` returns them"
+      }
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {
+        "trace_id": "../../api/echo"
+      },
+      "tool": "trace"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "\"../../api/echo\" is not a trace ID: expected 1 to 32 hex digits, as `search` returns them"
+      }
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {
+        "trace_id": ""
+      },
+      "tool": "trace"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "\"\" is not a trace ID: expected 1 to 32 hex digits, as `search` returns them"
+      }
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {
+        "tag": ".."
+      },
+      "tool": "search_tag_values"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "\"..\" is not a valid path segment: empty, `.` and `..` would address a different endpoint than the one this tool calls"
+      }
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {
+        "q": "{}",
+        "start": "1727230441000"
+      },
+      "tool": "search"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "`start` = 1727230441000 looks like milliseconds or nanoseconds; Tempo wants Unix seconds (e.g. 1727229541) or an RFC3339 timestamp"
+      }
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {
+        "end": "1727230441000000000",
+        "q": "{}"
+      },
+      "tool": "search"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "`end` = 1727230441000000000 looks like milliseconds or nanoseconds; Tempo wants Unix seconds (e.g. 1727229541) or an RFC3339 timestamp"
+      }
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {
+        "q": "{}",
+        "start": "yesterday"
+      },
+      "tool": "search"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "`start` = \"yesterday\" is neither Unix seconds (e.g. 1727229541) nor an RFC3339 timestamp (e.g. 2024-09-25T02:00:00Z)"
+      }
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {
+        "end": "2024-09-25T02:00:00Z",
+        "q": "{}",
+        "start": "2024-09-25T03:00:00Z"
+      },
+      "tool": "search"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "`start` (1727233200) is after `end` (1727229600): that window contains no traces"
+      }
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {
+        "scope": "everything"
+      },
+      "tool": "search_tags"
+    },
+    "response": {
+      "tool_error": "failed to deserialize parameters: unknown variant `everything`, expected one of `resource`, `span`, `intrinsic`, `event`, `link`, `instrumentation`"
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "status"
+    },
+    "response": {
+      "ok": {
+        "buildinfo": {
+          "ok": {
+            "branch": "HEAD",
+            "goVersion": "go1.24.2",
+            "revision": "a1f9b3c",
+            "version": "2.8.1"
+          }
+        },
+        "echo": "echo",
+        "ready": {
+          "ok": "ready"
+        }
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/echo",
+        "x-scope-orgid": "homelab"
+      },
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/ready",
+        "x-scope-orgid": "homelab"
+      },
+      {
+        "authorization": "Bearer otel-query-7f3a",
+        "method": "GET",
+        "path": "/api/status/buildinfo",
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  }
+]
