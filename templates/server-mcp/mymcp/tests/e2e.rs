@@ -10,6 +10,7 @@
 //! - an optional filter leaks as an empty param when omitted;
 //! - a dead host hangs or panics instead of failing the call, or poisons the
 //!   session;
+//! - a misspelt argument is dropped instead of refused;
 //! - any tool sends anything but GET; a foreign `Host` is served.
 //!
 //! Artifacts: the contract, the method surface, and each scenario's
@@ -71,6 +72,15 @@ async fn dns_rebinding_guard() {
     })
     .await
     .unwrap();
+}
+
+#[tokio::test]
+async fn unknown_arguments_are_refused() {
+    let mock = MockServer::start().await;
+    let (_server, client) = serve(&config(&mock.uri())).await.unwrap();
+
+    let refusals = e2e::unknown_arguments(&client, Some(&mock)).await.unwrap();
+    insta::assert_json_snapshot!("unknown_arguments", refusals);
 }
 
 /// TODO: the question an operator actually asks, answered across several

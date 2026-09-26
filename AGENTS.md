@@ -210,8 +210,12 @@ touching `[profile.*]` in the root `Cargo.toml`, the build-tuning env vars in
   `rmcp::ErrorData` (e.g. `ErrorData::internal_error(format!("{e:#}"), None)`)
   inside tool methods.
 - **Tool params:** a `#[derive(Debug, Deserialize, schemars::JsonSchema)]` struct
-  per tool, doc-commented (the docs become the tool's JSON schema), taken via
-  `Parameters<T>`.
+  per tool (and per prompt), doc-commented (the docs become the tool's JSON
+  schema), taken via `Parameters<T>`, and always `#[serde(deny_unknown_fields)]`
+  — a misspelt argument silently dropped makes the call answer a different
+  question. A tool with no arguments takes `_: Parameters<mcp_common::NoArguments>`
+  rather than nothing, for the same reason. `e2e::unknown_arguments` proves it
+  for every tool and prompt.
 - **Tests:** see [Testing](#testing). The only in-module tests left are
   env-parsing ones in `config.rs` and the SSE/healthcheck plumbing in
   `mcp-common`; env-reading config tests serialize on a `Mutex` and clear env
@@ -250,7 +254,8 @@ feature, dev-dependency only):
   The shared checks every REST server runs: `contract` (tools, prompts,
   resources, rendered prompts), `method_surface` (the HTTP methods each tool
   sends — the read-only rule, proven), `check_host_allow_list` (DNS
-  rebinding), `check_insecure_flag` (a self-signed TLS proxy, both ways), and
+  rebinding), `unknown_arguments` (every tool and prompt refuses a misspelt
+  argument before anything goes upstream), `check_insecure_flag` (a self-signed TLS proxy, both ways), and
   `check_doc_resource`. On top of those, at least one multi-tool `Scenario`
   that answers a real operator question, plus the failure shapes (upstream
   errors, garbage bodies, dead hosts, `..` in path arguments) with the session
