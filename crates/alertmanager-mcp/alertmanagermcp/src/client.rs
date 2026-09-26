@@ -10,12 +10,12 @@ use crate::config::Config;
 /// reverse proxy cannot flood the MCP transcript.
 const MAX_ERROR_BODY: usize = 512;
 
-/// Percent-encode a single URL path segment.
-///
-/// Interpolating a caller-supplied silence ID raw would let reserved characters
-/// change the URL's structure.
-pub(crate) fn seg(s: &str) -> impl std::fmt::Display + '_ {
-    percent_encoding::utf8_percent_encode(s, percent_encoding::NON_ALPHANUMERIC)
+/// Percent-encode one URL path segment, refusing values that would address a
+/// different endpoint (empty, `.`, `..`). See [`mcp_common::path_segment`] for
+/// the failure modes; this only maps the refusal to an MCP `invalid_params`
+/// error so the caller is told which argument was wrong.
+pub(crate) fn seg(s: &str) -> Result<String, rmcp::ErrorData> {
+    mcp_common::path_segment(s).map_err(|e| rmcp::ErrorData::invalid_params(e.to_string(), None))
 }
 
 /// Client for a single Alertmanager instance.
@@ -174,20 +174,4 @@ async fn ensure_success(resp: reqwest::Response, url: &str) -> Result<String> {
     }
 
     bail!("Alertmanager API {url} returned {status}: {shown}");
-}
-
-#[cfg(test)]
-mod tests {
-    use super::seg;
-
-    #[test]
-    fn seg_encodes_reserved_char() {
-        // A silence ID containing `/` must not split into extra path segments.
-        assert_eq!(seg("foo/bar").to_string(), "foo%2Fbar");
-    }
-
-    #[test]
-    fn seg_passes_alphanumeric_through() {
-        assert_eq!(seg("01HQ8Z").to_string(), "01HQ8Z");
-    }
 }

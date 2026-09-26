@@ -1,0 +1,518 @@
+---
+source: crates/prometheus-mcp/prommcp/tests/e2e.rs
+expression: s.transcript()
+---
+[
+  {
+    "call": {
+      "arguments": {},
+      "tool": "alerts"
+    },
+    "response": {
+      "ok": {
+        "alerts": [
+          {
+            "activeAt": "2024-09-25T03:12:44.117Z",
+            "annotations": {
+              "summary": "/tank on nas-01 fills within 24h"
+            },
+            "labels": {
+              "alertname": "DiskWillFillIn24h",
+              "instance": "nas-01:9100",
+              "mountpoint": "/tank",
+              "severity": "warning"
+            },
+            "state": "firing",
+            "value": "8.123e+04"
+          }
+        ]
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/alerts"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "rule_type": "alert"
+      },
+      "tool": "rules"
+    },
+    "response": {
+      "ok": {
+        "groups": [
+          {
+            "file": "/etc/prometheus/rules/node.yml",
+            "interval": 60,
+            "name": "node-disk",
+            "rules": [
+              {
+                "duration": 1800,
+                "health": "ok",
+                "labels": {
+                  "severity": "warning"
+                },
+                "name": "DiskWillFillIn24h",
+                "query": "predict_linear(node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay\"}[6h], 86400) < 0",
+                "state": "firing",
+                "type": "alerting"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/rules",
+        "query": [
+          [
+            "type",
+            "alert"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "query": "1 - node_filesystem_avail_bytes{mountpoint=~\"/tank|/\", fstype!=\"tmpfs\"} / node_filesystem_size_bytes"
+      },
+      "tool": "query"
+    },
+    "response": {
+      "ok": {
+        "result": [
+          {
+            "metric": {
+              "instance": "nas-01:9100",
+              "mountpoint": "/tank"
+            },
+            "value": [
+              1727250000.0,
+              "0.0412"
+            ]
+          }
+        ],
+        "resultType": "vector"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/query",
+        "query": [
+          [
+            "query",
+            "1 - node_filesystem_avail_bytes{mountpoint=~\"/tank|/\", fstype!=\"tmpfs\"} / node_filesystem_size_bytes"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "query": "1 - node_filesystem_avail_bytes{mountpoint=~\"/tank|/\", fstype!=\"tmpfs\"} / node_filesystem_size_bytes",
+        "time": "2024-09-25T07:40:00Z"
+      },
+      "tool": "query"
+    },
+    "response": {
+      "ok": {
+        "result": [
+          {
+            "metric": {
+              "instance": "nas-01:9100",
+              "mountpoint": "/tank"
+            },
+            "value": [
+              1727250000.0,
+              "0.0412"
+            ]
+          }
+        ],
+        "resultType": "vector"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/query",
+        "query": [
+          [
+            "query",
+            "1 - node_filesystem_avail_bytes{mountpoint=~\"/tank|/\", fstype!=\"tmpfs\"} / node_filesystem_size_bytes"
+          ],
+          [
+            "time",
+            "2024-09-25T07:40:00Z"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "end": "2024-09-25T07:40:00Z",
+        "query": "sum by (instance) (rate(1 - node_filesystem_avail_bytes{mountpoint=~\"/tank|/\", fstype!=\"tmpfs\"} / node_filesystem_size_bytes[5m]))",
+        "start": "2024-09-24T07:40:00Z",
+        "step": "15m"
+      },
+      "tool": "query_range"
+    },
+    "response": {
+      "ok": {
+        "result": [
+          {
+            "metric": {
+              "instance": "nas-01:9100"
+            },
+            "values": [
+              [
+                1727200000,
+                "0.061"
+              ],
+              [
+                1727225000,
+                "0.050"
+              ],
+              [
+                1727250000,
+                "0.041"
+              ]
+            ]
+          }
+        ],
+        "resultType": "matrix"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/query_range",
+        "query": [
+          [
+            "query",
+            "sum by (instance) (rate(1 - node_filesystem_avail_bytes{mountpoint=~\"/tank|/\", fstype!=\"tmpfs\"} / node_filesystem_size_bytes[5m]))"
+          ],
+          [
+            "start",
+            "2024-09-24T07:40:00Z"
+          ],
+          [
+            "end",
+            "2024-09-25T07:40:00Z"
+          ],
+          [
+            "step",
+            "15m"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "selectors": [
+          "node_filesystem_avail_bytes{instance=\"nas-01:9100\"}",
+          "node_filesystem_size_bytes"
+        ]
+      },
+      "tool": "series"
+    },
+    "response": {
+      "ok": [
+        {
+          "__name__": "node_filesystem_avail_bytes",
+          "fstype": "zfs",
+          "instance": "nas-01:9100",
+          "mountpoint": "/tank"
+        },
+        {
+          "__name__": "node_filesystem_size_bytes",
+          "fstype": "zfs",
+          "instance": "nas-01:9100",
+          "mountpoint": "/tank"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/series",
+        "query": [
+          [
+            "match[]",
+            "node_filesystem_avail_bytes{instance=\"nas-01:9100\"}"
+          ],
+          [
+            "match[]",
+            "node_filesystem_size_bytes"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "end": "1727250000",
+        "selectors": [
+          "up"
+        ],
+        "start": "1727222400"
+      },
+      "tool": "series"
+    },
+    "response": {
+      "ok": [
+        {
+          "__name__": "node_filesystem_avail_bytes",
+          "fstype": "zfs",
+          "instance": "nas-01:9100",
+          "mountpoint": "/tank"
+        },
+        {
+          "__name__": "node_filesystem_size_bytes",
+          "fstype": "zfs",
+          "instance": "nas-01:9100",
+          "mountpoint": "/tank"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/series",
+        "query": [
+          [
+            "match[]",
+            "up"
+          ],
+          [
+            "start",
+            "1727222400"
+          ],
+          [
+            "end",
+            "1727250000"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "labels"
+    },
+    "response": {
+      "ok": [
+        "__name__",
+        "fstype",
+        "instance",
+        "job",
+        "mountpoint"
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/labels"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "label": "__name__"
+      },
+      "tool": "label_values"
+    },
+    "response": {
+      "ok": [
+        "node_filesystem_avail_bytes",
+        "node_filesystem_size_bytes",
+        "up"
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/label/__name__/values"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "state": "active"
+      },
+      "tool": "targets"
+    },
+    "response": {
+      "ok": {
+        "activeTargets": [
+          {
+            "health": "down",
+            "labels": {
+              "instance": "nas-01:9100",
+              "job": "node"
+            },
+            "lastError": "Get \"http://nas-01:9100/metrics\": context deadline exceeded",
+            "lastScrape": "2024-09-25T07:40:02.5Z",
+            "lastScrapeDuration": 10.001,
+            "scrapeUrl": "http://nas-01:9100/metrics"
+          }
+        ],
+        "droppedTargets": []
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/targets",
+        "query": [
+          [
+            "state",
+            "active"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "targets"
+    },
+    "response": {
+      "ok": {
+        "activeTargets": [
+          {
+            "health": "down",
+            "labels": {
+              "instance": "nas-01:9100",
+              "job": "node"
+            },
+            "lastError": "Get \"http://nas-01:9100/metrics\": context deadline exceeded",
+            "lastScrape": "2024-09-25T07:40:02.5Z",
+            "lastScrapeDuration": 10.001,
+            "scrapeUrl": "http://nas-01:9100/metrics"
+          }
+        ],
+        "droppedTargets": []
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/targets"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "metric": "node_filesystem_avail_bytes"
+      },
+      "tool": "metadata"
+    },
+    "response": {
+      "ok": {
+        "node_filesystem_avail_bytes": [
+          {
+            "help": "Filesystem space available to non-root users in bytes.",
+            "type": "gauge",
+            "unit": ""
+          }
+        ]
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/metadata",
+        "query": [
+          [
+            "metric",
+            "node_filesystem_avail_bytes"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "tsdb_status"
+    },
+    "response": {
+      "ok": {
+        "headStats": {
+          "chunkCount": 402118,
+          "maxTime": 1727250000000,
+          "minTime": 1727222400000,
+          "numLabelPairs": 9921,
+          "numSeries": 184311
+        },
+        "seriesCountByMetricName": [
+          {
+            "name": "node_systemd_unit_state",
+            "value": 21480
+          }
+        ]
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/status/tsdb"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "build_info"
+    },
+    "response": {
+      "ok": {
+        "branch": "HEAD",
+        "buildDate": "20241201-10:02:11",
+        "goVersion": "go1.23.4",
+        "revision": "7c8ff2b",
+        "version": "3.1.0"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/status/buildinfo"
+      }
+    ]
+  }
+]

@@ -1,0 +1,320 @@
+---
+source: crates/pbs-mcp/pbsmcp/tests/e2e.rs
+expression: "e2e::contract(&client).await.unwrap()"
+---
+{
+  "initialize": {
+    "capabilities": {
+      "prompts": {},
+      "resources": {},
+      "tools": {}
+    },
+    "instructions": "Read-only access to a Proxmox Backup Server. Use these tools to inspect datastores, backup snapshots, and task history to check backup status.",
+    "protocolVersion": "2025-06-18",
+    "serverInfo": {
+      "name": "pbsmcp",
+      "version": "[version]"
+    }
+  },
+  "prompts": [
+    {
+      "arguments": [
+        {
+          "description": "Specific datastore to report on. Omit to check all configured datastores.",
+          "name": "datastore",
+          "required": false
+        }
+      ],
+      "description": "Assess backup health and datastore status: capacity, GC completion, and recent task failures.",
+      "name": "backup_health_report"
+    },
+    {
+      "arguments": [
+        {
+          "description": "Datastore to audit (required).",
+          "name": "datastore",
+          "required": true
+        },
+        {
+          "description": "Specific backup group to audit (e.g., `vm/100`). Omit to audit all groups in the datastore.",
+          "name": "group",
+          "required": false
+        }
+      ],
+      "description": "Audit backup coverage and snapshot retention in a datastore.",
+      "name": "snapshot_audit"
+    }
+  ],
+  "rendered_prompts": {
+    "backup_health_report/full": {
+      "messages": [
+        {
+          "content": {
+            "text": "Generate a backup health report for datastore `<datastore>`.\n\nWork in this order:\n1. Call `list_datastores` to confirm configured datastores. If a specific datastore was requested, verify it exists.\n2. For each datastore (or the one specified), call `datastore_status` to get capacity, used space, available space, and deduplication factor. Calculate and report headroom percentage.\n3. Call `gc_status` to check garbage collection jobs. For each job covering your datastore(s), note: is GC enabled, when did it last complete, and did it succeed? A datastore filling up when GC is not running or has stopped is a separate emergency from backup failure.\n4. Call `list_tasks` with `errors_only=true` and `limit=50` to find recent failed tasks (backup, verify, prune, sync). For any failures, call `task_status` and then `task_log` (use `tail=50` to get the last 50 lines of the log) to extract the actual error text.\n5. Synthesize the report: state per-datastore usage (used/total) and headroom; explicitly note any datastore where GC has not completed recently; list each failed task with its actual error text, not just a status code; and clearly separate 'backups are failing' from 'backups succeed but the store is filling up', as they need different fixes. Quote real error text from task logs rather than summarizing.\n",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "backup_health_report/minimal": {
+      "messages": [
+        {
+          "content": {
+            "text": "Generate a backup health report across all datastores.\n\nWork in this order:\n1. Call `list_datastores` to confirm configured datastores. If a specific datastore was requested, verify it exists.\n2. For each datastore (or the one specified), call `datastore_status` to get capacity, used space, available space, and deduplication factor. Calculate and report headroom percentage.\n3. Call `gc_status` to check garbage collection jobs. For each job covering your datastore(s), note: is GC enabled, when did it last complete, and did it succeed? A datastore filling up when GC is not running or has stopped is a separate emergency from backup failure.\n4. Call `list_tasks` with `errors_only=true` and `limit=50` to find recent failed tasks (backup, verify, prune, sync). For any failures, call `task_status` and then `task_log` (use `tail=50` to get the last 50 lines of the log) to extract the actual error text.\n5. Synthesize the report: state per-datastore usage (used/total) and headroom; explicitly note any datastore where GC has not completed recently; list each failed task with its actual error text, not just a status code; and clearly separate 'backups are failing' from 'backups succeed but the store is filling up', as they need different fixes. Quote real error text from task logs rather than summarizing.\n",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "snapshot_audit/full": {
+      "messages": [
+        {
+          "content": {
+            "text": "Audit snapshot retention for group `<group>` in datastore `<datastore>`.\n\nWork in this order:\n1. Call `list_groups` for the datastore to enumerate backup groups. If a specific group was requested, verify it is in the list.\n2. For each group (or the one specified), call `list_snapshots` to get its snapshots. Extract the backup timestamp from each snapshot and sort them chronologically.\n3. Analyze the timeline:\n- For each group, report the age of the most recent snapshot in human-readable form (e.g., 'last backup 3 days ago', 'last backup 6 hours ago').\n- Flag any group whose most recent snapshot is stale relative to the expected backup frequency (e.g., daily backups have not run for a week, or weekly backups are 3 weeks old).\n- Flag any group with suspiciously few snapshots relative to its peers (e.g., one group has 100+ snapshots but a similar-sized group has only 5), which may indicate retention pruning is too aggressive or a backup job stopped.\n- If a group appears in the list but has zero snapshots, flag it as an orphan.\n4. Report: the actual newest-snapshot age per group (not a vague 'looks fine'); groups whose backups are stale or whose retention looks wrong; and any orphaned groups. Quote snapshot timestamps from the API rather than approximating. State plainly when the snapshot count is too small to judge retention policy (e.g., a group with only one snapshot).\n",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "snapshot_audit/minimal": {
+      "messages": [
+        {
+          "content": {
+            "text": "Audit backup coverage and snapshot retention in datastore `<datastore>`.\n\nWork in this order:\n1. Call `list_groups` for the datastore to enumerate backup groups. If a specific group was requested, verify it is in the list.\n2. For each group (or the one specified), call `list_snapshots` to get its snapshots. Extract the backup timestamp from each snapshot and sort them chronologically.\n3. Analyze the timeline:\n- For each group, report the age of the most recent snapshot in human-readable form (e.g., 'last backup 3 days ago', 'last backup 6 hours ago').\n- Flag any group whose most recent snapshot is stale relative to the expected backup frequency (e.g., daily backups have not run for a week, or weekly backups are 3 weeks old).\n- Flag any group with suspiciously few snapshots relative to its peers (e.g., one group has 100+ snapshots but a similar-sized group has only 5), which may indicate retention pruning is too aggressive or a backup job stopped.\n- If a group appears in the list but has zero snapshots, flag it as an orphan.\n4. Report: the actual newest-snapshot age per group (not a vague 'looks fine'); groups whose backups are stale or whose retention looks wrong; and any orphaned groups. Quote snapshot timestamps from the API rather than approximating. State plainly when the snapshot count is too small to judge retention policy (e.g., a group with only one snapshot).\n",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    }
+  },
+  "resources": [
+    {
+      "description": "README for pbs-mcp: datastore inspection, backup health, task history, and PBS API caveats.",
+      "mimeType": "text/markdown",
+      "name": "PBS MCP operator guide",
+      "uri": "doc://pbsmcp/guide"
+    }
+  ],
+  "tools": [
+    {
+      "description": "Get a datastore's status: total/used/available bytes, deduplication factor, garbage-collection status, and estimated full date.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "store": {
+            "description": "Datastore name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store"
+        ],
+        "type": "object"
+      },
+      "name": "datastore_status"
+    },
+    {
+      "description": "List configured garbage-collection jobs and their last run status across datastores.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "gc_status"
+    },
+    {
+      "description": "List all configured datastores with comments.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_datastores"
+    },
+    {
+      "description": "List backup groups in a datastore, with last-backup time and backup counts.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "namespace": {
+            "default": null,
+            "description": "Namespace to list within (default: the root namespace).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "store": {
+            "description": "Datastore name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store"
+        ],
+        "type": "object"
+      },
+      "name": "list_groups"
+    },
+    {
+      "description": "List backup snapshots in a datastore, including backup time, size, owner, and verification state. Optionally filter by namespace, backup type, or backup ID.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "backup_id": {
+            "default": null,
+            "description": "Filter by backup ID (the group ID, e.g. a VMID or hostname).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "backup_type": {
+            "default": null,
+            "description": "Filter by backup type: \"vm\", \"ct\", or \"host\".",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "namespace": {
+            "default": null,
+            "description": "Namespace to list within (default: the root namespace).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "store": {
+            "description": "Datastore name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store"
+        ],
+        "type": "object"
+      },
+      "name": "list_snapshots"
+    },
+    {
+      "description": "List recent tasks (backups, verifies, prunes, syncs, GC) with their status. Optionally limit count, filter to errors only, running only, or since a given epoch.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "errors_only": {
+            "default": null,
+            "description": "Only return tasks that finished with an error.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "limit": {
+            "default": null,
+            "description": "Maximum number of tasks to return (default: 50).",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "running": {
+            "default": null,
+            "description": "Only return currently running tasks.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "since": {
+            "default": null,
+            "description": "Only return tasks started at or after this UNIX epoch (seconds).",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_tasks"
+    },
+    {
+      "description": "Get overall node status: CPU, memory, swap, root filesystem usage, and uptime.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "node_status"
+    },
+    {
+      "description": "Read the log output of a task by its UPID. Returns lines from the start of the log by default; use `start` and `limit` together to page through it, or set `tail` to fetch the last N lines (the right choice for long-running tasks, where the interesting output is at the end). The response includes the log's `total` line count so you can page.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "limit": {
+            "default": null,
+            "description": "Maximum number of log lines to return (default: 100).",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "start": {
+            "default": null,
+            "description": "Line offset to start at (PBS `start` parameter; `0` = the beginning).\nOmit to start at the beginning.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "tail": {
+            "default": null,
+            "description": "Return the LAST N lines instead of reading from the beginning; use this\nfor long-running tasks. Mutually exclusive with `start`.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "upid": {
+            "description": "Task UPID, as returned by `list_tasks`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "upid"
+        ],
+        "type": "object"
+      },
+      "name": "task_log"
+    },
+    {
+      "description": "Get the status of a single task by its UPID (running/stopped, exit status).",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "upid": {
+            "description": "Task UPID (unique process identifier), as returned by `list_tasks`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "upid"
+        ],
+        "type": "object"
+      },
+      "name": "task_status"
+    }
+  ]
+}

@@ -1,0 +1,246 @@
+---
+source: crates/prometheus-mcp/prommcp/tests/e2e.rs
+expression: s.transcript()
+---
+[
+  {
+    "call": {
+      "arguments": {
+        "query": "rate(up[5m]"
+      },
+      "tool": "query"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Prometheus API http://upstream/api/v1/query error: invalid parameter \"query\": 1:13: parse error: unclosed left parenthesis"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/query",
+        "query": [
+          [
+            "query",
+            "rate(up[5m]"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "labels"
+    },
+    "response": {
+      "ok": [
+        "job"
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/labels"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "query": "count({__name__=~\".+\"}) by (job)"
+      },
+      "tool": "query"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Prometheus API http://upstream/api/v1/query error: query processing would load too many samples into memory in query execution"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/query",
+        "query": [
+          [
+            "query",
+            "count({__name__=~\".+\"}) by (job)"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "labels"
+    },
+    "response": {
+      "ok": [
+        "job"
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/labels"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "query": "vector(1)"
+      },
+      "tool": "query"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Prometheus API http://upstream/api/v1/query error: query timed out in expression evaluation"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/query",
+        "query": [
+          [
+            "query",
+            "vector(1)"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "labels"
+    },
+    "response": {
+      "ok": [
+        "job"
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/labels"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "query": "up"
+      },
+      "tool": "query"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Prometheus API http://upstream/api/v1/query returned 503 Service Unavailable: Service Unavailable: TSDB still loading WAL"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/query",
+        "query": [
+          [
+            "query",
+            "up"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "labels"
+    },
+    "response": {
+      "ok": [
+        "job"
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/labels"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "query": "time()"
+      },
+      "tool": "query"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "invalid JSON from http://upstream/api/v1/query: EOF while parsing a string at line 1 column 45"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/query",
+        "query": [
+          [
+            "query",
+            "time()"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "labels"
+    },
+    "response": {
+      "ok": [
+        "job"
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer prom-reader-7f3a9c",
+        "method": "GET",
+        "path": "/api/v1/labels"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "label": ".."
+      },
+      "tool": "label_values"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "\"..\" is not a valid path segment: empty, `.` and `..` would address a different endpoint than the one this tool calls"
+      }
+    },
+    "upstream": []
+  }
+]

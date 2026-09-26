@@ -1,0 +1,184 @@
+---
+source: crates/postgres-mcp/pgmcp/tests/e2e.rs
+expression: "Value::Object(steps)"
+---
+{
+  "describe_table/missing": [],
+  "describe_table/public_default": [
+    {
+      "character_maximum_length": null,
+      "column_default": null,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "numeric_precision": 64,
+      "numeric_scale": 0,
+      "ordinal_position": 1
+    },
+    {
+      "character_maximum_length": null,
+      "column_default": null,
+      "column_name": "note",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "numeric_precision": null,
+      "numeric_scale": null,
+      "ordinal_position": 2
+    }
+  ],
+  "describe_table/repos": [
+    {
+      "character_maximum_length": null,
+      "column_default": null,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "numeric_precision": 64,
+      "numeric_scale": 0,
+      "ordinal_position": 1
+    },
+    {
+      "character_maximum_length": null,
+      "column_default": null,
+      "column_name": "owner_id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "numeric_precision": 64,
+      "numeric_scale": 0,
+      "ordinal_position": 2
+    },
+    {
+      "character_maximum_length": 100,
+      "column_default": null,
+      "column_name": "name",
+      "data_type": "character varying",
+      "is_nullable": "NO",
+      "numeric_precision": null,
+      "numeric_scale": null,
+      "ordinal_position": 3
+    },
+    {
+      "character_maximum_length": null,
+      "column_default": "0",
+      "column_name": "stars",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "numeric_precision": 32,
+      "numeric_scale": 0,
+      "ordinal_position": 4
+    },
+    {
+      "character_maximum_length": null,
+      "column_default": null,
+      "column_name": "size_mb",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "numeric_precision": 10,
+      "numeric_scale": 2,
+      "ordinal_position": 5
+    },
+    {
+      "character_maximum_length": null,
+      "column_default": "'{}'::text[]",
+      "column_name": "topics",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "numeric_precision": null,
+      "numeric_scale": null,
+      "ordinal_position": 6
+    },
+    {
+      "character_maximum_length": null,
+      "column_default": null,
+      "column_name": "settings",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "numeric_precision": null,
+      "numeric_scale": null,
+      "ordinal_position": 7
+    }
+  ],
+  "list_foreign_keys/issues": [
+    {
+      "column_name": "author_id",
+      "constraint_name": "issues_author_id_fkey",
+      "foreign_column_name": "id",
+      "foreign_table_name": "users",
+      "foreign_table_schema": "forge"
+    },
+    {
+      "column_name": "repo_id",
+      "constraint_name": "issues_repo_id_fkey",
+      "foreign_column_name": "id",
+      "foreign_table_name": "repos",
+      "foreign_table_schema": "forge"
+    }
+  ],
+  "list_indexes/issues": [
+    {
+      "indexdef": "CREATE INDEX issues_open_by_repo ON forge.issues USING btree (repo_id) WHERE (NOT closed)",
+      "indexname": "issues_open_by_repo"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX issues_pkey ON forge.issues USING btree (id)",
+      "indexname": "issues_pkey"
+    }
+  ],
+  "list_schemas": [
+    {
+      "schema_name": "forge"
+    },
+    {
+      "schema_name": "public"
+    }
+  ],
+  "list_tables/all": [
+    {
+      "table_name": "issues",
+      "table_schema": "forge",
+      "table_type": "BASE TABLE"
+    },
+    {
+      "table_name": "open_issues",
+      "table_schema": "forge",
+      "table_type": "VIEW"
+    },
+    {
+      "table_name": "repos",
+      "table_schema": "forge",
+      "table_type": "BASE TABLE"
+    },
+    {
+      "table_name": "users",
+      "table_schema": "forge",
+      "table_type": "BASE TABLE"
+    },
+    {
+      "table_name": "audit_log",
+      "table_schema": "public",
+      "table_type": "BASE TABLE"
+    }
+  ],
+  "list_tables/forge": [
+    {
+      "table_name": "issues",
+      "table_schema": "forge",
+      "table_type": "BASE TABLE"
+    },
+    {
+      "table_name": "open_issues",
+      "table_schema": "forge",
+      "table_type": "VIEW"
+    },
+    {
+      "table_name": "repos",
+      "table_schema": "forge",
+      "table_type": "BASE TABLE"
+    },
+    {
+      "table_name": "users",
+      "table_schema": "forge",
+      "table_type": "BASE TABLE"
+    }
+  ]
+}

@@ -1,0 +1,179 @@
+---
+source: crates/pbs-mcp/pbsmcp/tests/e2e.rs
+expression: s.transcript()
+---
+[
+  {
+    "call": {
+      "arguments": {
+        "namespace": "prod/web",
+        "store": "nas-01"
+      },
+      "tool": "list_groups"
+    },
+    "response": {
+      "ok": [
+        {
+          "backup-count": 14,
+          "backup-id": "101",
+          "backup-type": "vm",
+          "comment": "gitea",
+          "last-backup": 1727226035,
+          "owner": "root@pam"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/admin/datastore/nas-01/groups",
+        "query": [
+          [
+            "ns",
+            "prod/web"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "backup_id": "101",
+        "backup_type": "vm",
+        "namespace": "prod/web",
+        "store": "nas-01"
+      },
+      "tool": "list_snapshots"
+    },
+    "response": {
+      "ok": [
+        {
+          "backup-id": "101",
+          "backup-time": 1727226035,
+          "backup-type": "vm",
+          "files": [
+            {
+              "crypt-mode": "encrypt",
+              "filename": "drive-scsi0.img.fidx",
+              "size": 34359738368
+            }
+          ],
+          "owner": "root@pam",
+          "protected": false,
+          "size": 34359738368,
+          "verification": {
+            "state": "ok",
+            "upid": "UPID:pbs01:00002A00:00BC0000:00000000:66F2D000:verify:nas-01:root@pam:"
+          }
+        },
+        {
+          "backup-id": "101",
+          "backup-time": 1727139635,
+          "backup-type": "vm",
+          "owner": "root@pam",
+          "protected": true,
+          "size": 34359738368,
+          "verification": {
+            "state": "failed",
+            "upid": "UPID:pbs01:00002B00:00BD0000:00000000:66F1E000:verify:nas-01:root@pam:"
+          }
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/admin/datastore/nas-01/snapshots",
+        "query": [
+          [
+            "ns",
+            "prod/web"
+          ],
+          [
+            "backup-type",
+            "vm"
+          ],
+          [
+            "backup-id",
+            "101"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "store": "nas-01"
+      },
+      "tool": "list_snapshots"
+    },
+    "response": {
+      "ok": [
+        {
+          "backup-id": "101",
+          "backup-time": 1727226035,
+          "backup-type": "vm",
+          "files": [
+            {
+              "crypt-mode": "encrypt",
+              "filename": "drive-scsi0.img.fidx",
+              "size": 34359738368
+            }
+          ],
+          "owner": "root@pam",
+          "protected": false,
+          "size": 34359738368,
+          "verification": {
+            "state": "ok",
+            "upid": "UPID:pbs01:00002A00:00BC0000:00000000:66F2D000:verify:nas-01:root@pam:"
+          }
+        },
+        {
+          "backup-id": "101",
+          "backup-time": 1727139635,
+          "backup-type": "vm",
+          "owner": "root@pam",
+          "protected": true,
+          "size": 34359738368,
+          "verification": {
+            "state": "failed",
+            "upid": "UPID:pbs01:00002B00:00BD0000:00000000:66F1E000:verify:nas-01:root@pam:"
+          }
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/admin/datastore/nas-01/snapshots"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "list_tasks"
+    },
+    "response": {
+      "ok": []
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/nodes/localhost/tasks",
+        "query": [
+          [
+            "limit",
+            "50"
+          ]
+        ]
+      }
+    ]
+  }
+]

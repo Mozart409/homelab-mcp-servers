@@ -1,0 +1,66 @@
+---
+source: crates/pbs-mcp/pbsmcp/tests/e2e.rs
+expression: s.transcript()
+---
+[
+  {
+    "call": {
+      "arguments": {
+        "upid": ".."
+      },
+      "tool": "task_log"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "\"..\" is not a valid path segment: empty, `.` and `..` would address a different endpoint than the one this tool calls"
+      }
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {
+        "upid": "."
+      },
+      "tool": "task_status"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "\".\" is not a valid path segment: empty, `.` and `..` would address a different endpoint than the one this tool calls"
+      }
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {
+        "store": ""
+      },
+      "tool": "datastore_status"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "\"\" is not a valid path segment: empty, `.` and `..` would address a different endpoint than the one this tool calls"
+      }
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {
+        "store": ".."
+      },
+      "tool": "list_snapshots"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "\"..\" is not a valid path segment: empty, `.` and `..` would address a different endpoint than the one this tool calls"
+      }
+    },
+    "upstream": []
+  }
+]

@@ -1,0 +1,225 @@
+---
+source: crates/loki-mcp/lokimcp/tests/e2e.rs
+expression: s.transcript()
+---
+[
+  {
+    "call": {
+      "arguments": {
+        "query": "{service_name=\"gitea\"} |= "
+      },
+      "tool": "query_range"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Loki API http://upstream/loki/api/v1/query_range returned 400 Bad Request: parse error at line 1, col 26: syntax error: unexpected $end, expecting STRING"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/query_range",
+        "query": [
+          [
+            "query",
+            "{service_name=\"gitea\"} |= "
+          ],
+          [
+            "limit",
+            "100"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "labels"
+    },
+    "response": {
+      "ok": [
+        "job"
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/labels",
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "query": "{job=~\".+\"}"
+      },
+      "tool": "query_range"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Loki API http://upstream/loki/api/v1/query_range returned 400 Bad Request: the query time range exceeds the limit (query length: 2160h0m0s, limit: 721h0m0s)"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/query_range",
+        "query": [
+          [
+            "query",
+            "{job=~\".+\"}"
+          ],
+          [
+            "limit",
+            "100"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "labels"
+    },
+    "response": {
+      "ok": [
+        "job"
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/labels",
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "query": "{job=\"x\"}"
+      },
+      "tool": "query_range"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Loki API http://upstream/loki/api/v1/query_range error: context canceled"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/query_range",
+        "query": [
+          [
+            "query",
+            "{job=\"x\"}"
+          ],
+          [
+            "limit",
+            "100"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "labels"
+    },
+    "response": {
+      "ok": [
+        "job"
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/labels",
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "query": "{job=\"y\"}"
+      },
+      "tool": "query_range"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "invalid JSON from http://upstream/loki/api/v1/query_range: EOF while parsing a string at line 1 column 35"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/query_range",
+        "query": [
+          [
+            "query",
+            "{job=\"y\"}"
+          ],
+          [
+            "limit",
+            "100"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "labels"
+    },
+    "response": {
+      "ok": [
+        "job"
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/labels",
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "label": ".."
+      },
+      "tool": "label_values"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "\"..\" is not a valid path segment: empty, `.` and `..` would address a different endpoint than the one this tool calls"
+      }
+    },
+    "upstream": []
+  }
+]

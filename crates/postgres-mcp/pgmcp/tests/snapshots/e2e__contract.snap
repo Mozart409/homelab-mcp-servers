@@ -1,0 +1,233 @@
+---
+source: crates/postgres-mcp/pgmcp/tests/e2e.rs
+expression: "json!({\n    \"initialize\": client.initialize_result(), \"tools\":\n    client.list_tools().await.unwrap(), \"prompts\":\n    client.list_prompts().await.unwrap(), \"resources\":\n    client.list_resources().await.unwrap(), \"prompt/schema_overview\":\n    client.get_prompt(\"schema_overview\",\n    json!({ \"schema\": \"forge\" })).await.unwrap(), \"prompt/table_health\":\n    client.get_prompt(\"table_health\",\n    json!({ \"table\": \"issues\", \"schema\": \"forge\" })).await.unwrap(),\n})"
+---
+{
+  "initialize": {
+    "capabilities": {
+      "prompts": {},
+      "resources": {},
+      "tools": {}
+    },
+    "instructions": "Read-only access to a Postgres database. Use these tools to inspect schemas, tables, columns, indexes, and statistics, or to run ad-hoc read-only SELECT queries via `run_query`.",
+    "protocolVersion": "2025-06-18",
+    "serverInfo": {
+      "name": "pgmcp",
+      "version": "[version]"
+    }
+  },
+  "prompt/schema_overview": {
+    "messages": [
+      {
+        "content": {
+          "text": "Analyze the `forge` schema and help me understand its structure and data distribution.\n\nWork in this order:\n1. Start with `database_size` to understand the overall scale.\n2. Call `list_schemas` to see all available schemas (if not already scoped to one).\n3. Call `list_tables` to list the tables in the schema you specified \n4. Call `table_stats` to find the largest tables by disk size and by row count. These are rarely the same set — the difference tells a story.\n5. Call `describe_table` and `list_foreign_keys` on the top 3–4 tables that dominate by size or row count. Use foreign keys to infer real entity relationships rather than guessing from table names.\n6. Flag any tables that appear orphaned (no incoming or outgoing foreign keys) and any that look like append-only logs (monotonically increasing row counts, no deletes, minimal indexing).\n\n**Output requirements:**\n- Name the tables dominating by size and by row count (with row counts and sizes).\n- Describe the core entity relationships inferred from foreign keys. Do not rely on table names alone.\n- Explicitly flag tables that are orphaned or appear to be logs.\n- **If the schema is too large to summarise fully, say so and scope your analysis to the top tables by size instead of guessing.**",
+          "type": "text"
+        },
+        "role": "user"
+      }
+    ]
+  },
+  "prompt/table_health": {
+    "messages": [
+      {
+        "content": {
+          "text": "Audit the health of the `forge`.`issues` table. Focus on bloat, indexing, referential load, and data type correctness.\n\nWork in this order:\n1. Call `describe_table` to see column names, types, and nullability.\n2. Call `table_stats` for live/dead tuple counts and on-disk size. **A high dead-tuple ratio (dead_rows / estimated_rows) indicates bloat** — autovacuum settings are the fix, which must be applied by a human. This server cannot run `VACUUM` or `REINDEX`.\n3. Call `list_indexes` to see what indexes exist.\n4. Call `list_foreign_keys` to see the referential load: both foreign keys referencing this table and foreign keys pointing outward.\n5. Use `run_query` for targeted read-only counts if the catalog tools do not show what you need (e.g. NULL distributions, cardinality, duplicate checks). Stay within the row cap and statement timeout.\n\n**Identify and report:**\n- **Bloat:** Dead-tuple ratio and what fix to apply (autovacuum tuning, manual `VACUUM FULL`, `REINDEX` — humans must run these out-of-band).\n- **Index health:** Redundant indexes (one whose leading columns are a prefix of another's), missing indexes on foreign key columns (which slows referential checks and cascading deletes), and unused indexes.\n- **Referential integrity:** Foreign key columns lacking a supporting index.\n- **Data type issues:** Columns declared as TEXT or VARCHAR(large) when SMALLINT or UUID would fit; NUMERIC(huge_precision) for what could be DECIMAL(10,2); TIMESTAMP without timezone handling; large arrays when they could be a separate table.\n\n**Important:** Autovacuum settings, `VACUUM`, `REINDEX`, and schema changes are not available through this server. Flag what humans must fix; do not suggest this server run those commands.",
+          "type": "text"
+        },
+        "role": "user"
+      }
+    ]
+  },
+  "prompts": [
+    {
+      "arguments": [
+        {
+          "description": "Schema to analyze (default: all non-system schemas).",
+          "name": "schema",
+          "required": false
+        }
+      ],
+      "description": "Orient yourself in an unfamiliar database: scale, schemas, table distribution, and core entities.",
+      "name": "schema_overview"
+    },
+    {
+      "arguments": [
+        {
+          "description": "Schema the table lives in (default: `public`).",
+          "name": "schema",
+          "required": false
+        },
+        {
+          "description": "Schema-qualified table name, e.g. `public.users` or just `users` (defaults\nto `public`).",
+          "name": "table",
+          "required": true
+        }
+      ],
+      "description": "Audit a table's bloat, indexing, referential load, and data type usage.",
+      "name": "table_health"
+    }
+  ],
+  "resources": [
+    {
+      "description": "README for pgmcp: read-only guarantees, transaction limits, and schema introspection.",
+      "mimeType": "text/markdown",
+      "name": "PostgreSQL MCP operator guide",
+      "uri": "doc://pgmcp/guide"
+    }
+  ],
+  "tools": [
+    {
+      "description": "Current database name and total on-disk size (pretty and in bytes).",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "database_size"
+    },
+    {
+      "description": "Describe a table's columns: name, position, data type, nullability, default, and length/precision.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "schema": {
+            "default": null,
+            "description": "Schema the table lives in (default: `public`).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "table": {
+            "description": "Table name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table"
+        ],
+        "type": "object"
+      },
+      "name": "describe_table"
+    },
+    {
+      "description": "List a table's foreign keys: constraint name, local column, and the referenced table/column.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "schema": {
+            "default": null,
+            "description": "Schema the table lives in (default: `public`).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "table": {
+            "description": "Table name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table"
+        ],
+        "type": "object"
+      },
+      "name": "list_foreign_keys"
+    },
+    {
+      "description": "List indexes on a table, with their definitions.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "schema": {
+            "default": null,
+            "description": "Schema the table lives in (default: `public`).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "table": {
+            "description": "Table name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table"
+        ],
+        "type": "object"
+      },
+      "name": "list_indexes"
+    },
+    {
+      "description": "List user schemas (excludes system schemas like pg_catalog).",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_schemas"
+    },
+    {
+      "description": "List tables and views with their schema and type. Optionally restrict to a single schema.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "schema": {
+            "default": null,
+            "description": "Restrict to a single schema (default: all user schemas).",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_tables"
+    },
+    {
+      "description": "Run an arbitrary read-only SELECT and return the rows as JSON. The query executes in a READ ONLY transaction with a statement timeout; writes, DDL, and long-running queries are rejected. Results are capped at the configured row limit.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "limit": {
+            "default": null,
+            "description": "Maximum number of rows to return (default and hard cap: server's\n`PG_MAX_ROWS`).",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "sql": {
+            "description": "A single read-only `SELECT` statement. Writes and DDL are rejected at\nexecution time (the query runs in a `READ ONLY` transaction).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sql"
+        ],
+        "type": "object"
+      },
+      "name": "run_query"
+    },
+    {
+      "description": "Per-table statistics: estimated live/dead rows, scan counts, total on-disk size, and last (auto)vacuum/analyze times. Optionally restrict to a single schema.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "schema": {
+            "default": null,
+            "description": "Restrict to a single schema (default: all user schemas).",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "table_stats"
+    }
+  ]
+}

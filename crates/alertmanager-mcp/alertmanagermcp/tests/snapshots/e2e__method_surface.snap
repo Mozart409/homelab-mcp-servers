@@ -1,0 +1,52 @@
+---
+source: crates/alertmanager-mcp/alertmanagermcp/tests/e2e.rs
+expression: surfaces
+---
+{
+  "closed": {
+    "alert_groups": [
+      "GET"
+    ],
+    "get_silence": [
+      "GET"
+    ],
+    "list_alerts": [
+      "GET"
+    ],
+    "list_receivers": [
+      "GET"
+    ],
+    "list_silences": [
+      "GET"
+    ],
+    "status": [
+      "GET"
+    ]
+  },
+  "open": {
+    "alert_groups": [
+      "GET"
+    ],
+    "create_silence": [
+      "POST"
+    ],
+    "expire_silence": [
+      "DELETE"
+    ],
+    "get_silence": [
+      "GET"
+    ],
+    "list_alerts": [
+      "GET"
+    ],
+    "list_receivers": [
+      "GET"
+    ],
+    "list_silences": [
+      "GET"
+    ],
+    "status": [
+      "GET"
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+---
+source: crates/prometheus-mcp/prommcp/tests/e2e.rs
+expression: surface
+---
+{
+  "alerts": [
+    "GET"
+  ],
+  "build_info": [
+    "GET"
+  ],
+  "label_values": [
+    "GET"
+  ],
+  "labels": [
+    "GET"
+  ],
+  "metadata": [
+    "GET"
+  ],
+  "query": [
+    "GET"
+  ],
+  "query_range": [
+    "GET"
+  ],
+  "rules": [
+    "GET"
+  ],
+  "series": [
+    "GET"
+  ],
+  "targets": [
+    "GET"
+  ],
+  "tsdb_status": [
+    "GET"
+  ]
+}

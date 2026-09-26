@@ -17,21 +17,34 @@ pub use client::AlertmanagerClient;
 pub use config::Config;
 pub use server::AlertmanagerServer;
 
-use std::sync::Arc;
+use color_eyre::eyre::Result;
 
-use color_eyre::eyre::{Result, WrapErr};
-use mcp_common::health_router;
-use rmcp::transport::streamable_http_server::{
-    StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
-};
+/// Build the complete HTTP app for `config`: a [`AlertmanagerServer`] per MCP session at
+/// `/mcp`, plus the health routes.
+///
+/// This is what [`run`] serves, and what the end-to-end tests in `tests/` bind
+/// on an ephemeral port — so the tests exercise the production router,
+/// DNS-rebinding allow-list included, rather than a look-alike.
+///
+/// # Errors
+///
+/// Returns an error if the HTTP client cannot be built.
+pub fn router(config: &Config) -> Result<axum::Router> {
+    let client = AlertmanagerClient::new(config)?;
+    let allow_silence = config.allow_silence;
+    Ok(mcp_common::mcp_router(
+        move || Ok(AlertmanagerServer::new(client.clone(), allow_silence)),
+        config.allowed_hosts.clone(),
+    ))
+}
 
 /// Build an [`AlertmanagerServer`] from the environment and serve it over
 /// streamable HTTP (mounted at `/mcp`) until the process is stopped.
 ///
 /// # Errors
 ///
-/// Returns an error if configuration is missing/invalid, the HTTP client cannot
-/// be built, the bind address is unavailable, or the server fails while running.
+/// Returns an error if configuration is missing/invalid, the HTTP client cannot be built,
+/// the bind address is unavailable, or the server fails while running.
 pub async fn run() -> Result<()> {
     let config = Config::from_env()?;
     tracing::info!(
@@ -40,42 +53,11 @@ pub async fn run() -> Result<()> {
         "starting alertmanagermcp"
     );
     if config.allow_silence {
-        // Worth a line in the log on its own: this is the only state in which
-        // this server can change what the homelab notifies about.
         tracing::warn!(
             "ALERTMANAGER_ALLOW_SILENCE is set — create_silence and expire_silence are registered"
         );
     }
 
-    let client = AlertmanagerClient::new(&config)?;
-    let allow_silence = config.allow_silence;
-
-    let mut http_config = StreamableHttpServerConfig::default();
-    if let Some(hosts) = config.allowed_hosts.clone() {
-        http_config = http_config.with_allowed_hosts(hosts);
-    }
-
-    let service = StreamableHttpService::new(
-        move || Ok(AlertmanagerServer::new(client.clone(), allow_silence)),
-        Arc::new(LocalSessionManager::default()),
-        http_config,
-    );
-
-    let app = axum::Router::new()
-        .nest_service("/mcp", service)
-        .merge(health_router());
-
-    let listener = tokio::net::TcpListener::bind(&config.bind)
-        .await
-        .wrap_err_with(|| format!("failed to bind {}", config.bind))?;
-    tracing::info!(
-        bind = %config.bind,
-        "alertmanagermcp listening on http://{}/mcp",
-        config.bind
-    );
-
-    axum::serve(listener, app)
-        .await
-        .wrap_err("streamable-HTTP server error")?;
-    Ok(())
+    let app = router(&config)?;
+    mcp_common::serve(&config.bind, app, "alertmanagermcp").await
 }

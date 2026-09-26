@@ -1,0 +1,24 @@
+---
+source: crates/loki-mcp/lokimcp/tests/e2e.rs
+expression: surface
+---
+{
+  "index_stats": [
+    "GET"
+  ],
+  "label_values": [
+    "GET"
+  ],
+  "labels": [
+    "GET"
+  ],
+  "query": [
+    "GET"
+  ],
+  "query_range": [
+    "GET"
+  ],
+  "series": [
+    "GET"
+  ]
+}

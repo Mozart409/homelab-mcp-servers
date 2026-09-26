@@ -1,0 +1,165 @@
+---
+source: crates/pbs-mcp/pbsmcp/tests/e2e.rs
+expression: s.transcript()
+---
+[
+  {
+    "call": {
+      "arguments": {
+        "store": "locked"
+      },
+      "tool": "datastore_status"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "PBS API http://upstream/api2/json/admin/datastore/locked/status returned 401 Unauthorized: {\"data\":null,\"message\":\"authentication failure\\n\"}"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/admin/datastore/locked/status"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "gc_status"
+    },
+    "response": {
+      "ok": []
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/admin/gc"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "store": "broken"
+      },
+      "tool": "datastore_status"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "PBS API http://upstream/api2/json/admin/datastore/broken/status returned 500 Internal Server Error: <html><head><title>500 Internal Server Error</title></head><body>proxy error</body></html>"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/admin/datastore/broken/status"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "gc_status"
+    },
+    "response": {
+      "ok": []
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/admin/gc"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "store": "truncated"
+      },
+      "tool": "datastore_status"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "invalid JSON from http://upstream/api2/json/admin/datastore/truncated/status: EOF while parsing an object at line 1 column 22"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/admin/datastore/truncated/status"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "gc_status"
+    },
+    "response": {
+      "ok": []
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/admin/gc"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "tail": 5,
+        "upid": "UPID:pbs01:0000A1B2:0012F3C4:00000007:66F1A2B3:backup:nas-01\\x3avm-101:root@pam:"
+      },
+      "tool": "task_log"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "PBS task-log response envelope missing numeric `total` field"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/nodes/localhost/tasks/UPID%3Apbs01%3A0000A1B2%3A0012F3C4%3A00000007%3A66F1A2B3%3Abackup%3Anas-01%5Cx3avm-101%3Aroot%40pam%3A/log",
+        "query": [
+          [
+            "start",
+            "0"
+          ],
+          [
+            "limit",
+            "1"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "gc_status"
+    },
+    "response": {
+      "ok": []
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/admin/gc"
+      }
+    ]
+  }
+]

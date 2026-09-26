@@ -1,0 +1,29 @@
+---
+source: crates/pbs-mcp/pbsmcp-server/tests/binary.rs
+expression: s.transcript()
+---
+[
+  {
+    "call": {
+      "arguments": {},
+      "tool": "node_status"
+    },
+    "response": {
+      "ok": {
+        "cpu": 0.031,
+        "memory": {
+          "total": 16777216000,
+          "used": 5368709120
+        },
+        "uptime": 1209600
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/nodes/pbs-02/status"
+      }
+    ]
+  }
+]

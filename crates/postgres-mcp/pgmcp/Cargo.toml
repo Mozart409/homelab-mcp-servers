@@ -19,6 +19,8 @@ tracing.workspace = true
 
 [dev-dependencies]
 # keep-sorted start
+insta.workspace = true
+mcp-common = { path = "../../common/mcp-common", features = ["e2e"] }
 serde_json.workspace = true
 sqlx.workspace = true
 tokio.workspace = true

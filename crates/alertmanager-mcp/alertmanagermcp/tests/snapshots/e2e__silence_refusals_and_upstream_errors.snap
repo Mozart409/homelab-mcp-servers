@@ -1,0 +1,216 @@
+---
+source: crates/alertmanager-mcp/alertmanagermcp/tests/e2e.rs
+expression: s.transcript()
+---
+[
+  {
+    "call": {
+      "arguments": {
+        "comment": "test",
+        "created_by": "amadeus",
+        "ends_at": "2024-09-25T23:00:00Z",
+        "matchers": [],
+        "starts_at": "2024-09-25T22:00:00Z"
+      },
+      "tool": "create_silence"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "at least one matcher is required — a silence with no matchers would suppress every alert"
+      }
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "list_receivers"
+    },
+    "response": {
+      "ok": [
+        {
+          "name": "null"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "method": "GET",
+        "path": "/api/v2/receivers"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "comment": "test",
+        "created_by": "amadeus",
+        "ends_at": "2024-09-25T21:00:00Z",
+        "matchers": [
+          {
+            "name": "job",
+            "value": "pbs"
+          }
+        ],
+        "starts_at": "2024-09-25T22:00:00Z"
+      },
+      "tool": "create_silence"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Alertmanager API http://upstream/api/v2/silences returned 400 Bad Request: \"start time must be before end time\""
+      }
+    },
+    "upstream": [
+      {
+        "body": {
+          "comment": "test",
+          "createdBy": "amadeus",
+          "endsAt": "2024-09-25T21:00:00Z",
+          "matchers": [
+            {
+              "isEqual": true,
+              "isRegex": false,
+              "name": "job",
+              "value": "pbs"
+            }
+          ],
+          "startsAt": "2024-09-25T22:00:00Z"
+        },
+        "method": "POST",
+        "path": "/api/v2/silences"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "list_receivers"
+    },
+    "response": {
+      "ok": [
+        {
+          "name": "null"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "method": "GET",
+        "path": "/api/v2/receivers"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "id": "00000000-0000-0000-0000-000000000000"
+      },
+      "tool": "expire_silence"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Alertmanager API http://upstream/api/v2/silence/00000000-0000-0000-0000-000000000000 returned 404 Not Found: <empty body>"
+      }
+    },
+    "upstream": [
+      {
+        "method": "DELETE",
+        "path": "/api/v2/silence/00000000-0000-0000-0000-000000000000"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "list_receivers"
+    },
+    "response": {
+      "ok": [
+        {
+          "name": "null"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "method": "GET",
+        "path": "/api/v2/receivers"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "id": ".."
+      },
+      "tool": "expire_silence"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "\"..\" is not a valid path segment: empty, `.` and `..` would address a different endpoint than the one this tool calls"
+      }
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "list_receivers"
+    },
+    "response": {
+      "ok": [
+        {
+          "name": "null"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "method": "GET",
+        "path": "/api/v2/receivers"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "list_silences"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "invalid JSON from http://upstream/api/v2/silences: EOF while parsing a string at line 1 column 12"
+      }
+    },
+    "upstream": [
+      {
+        "method": "GET",
+        "path": "/api/v2/silences"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "list_receivers"
+    },
+    "response": {
+      "ok": [
+        {
+          "name": "null"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "method": "GET",
+        "path": "/api/v2/receivers"
+      }
+    ]
+  }
+]
