@@ -10,6 +10,7 @@ use serde::Deserialize;
 
 /// Input for the `get_entity` tool.
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct GetEntityInput {
     /// The entity ID (e.g., `light.living_room`).
     pub entity_id: String,
@@ -17,6 +18,7 @@ pub struct GetEntityInput {
 
 /// Input for the `call_service` tool.
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CallServiceInput {
     /// The service domain (e.g., `light`, `switch`, `climate`).
     pub domain: String,
@@ -32,6 +34,7 @@ pub struct CallServiceInput {
 
 /// Input for the `set_state` tool.
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct SetStateInput {
     /// The entity ID (e.g., `sensor.custom_sensor`).
     pub entity_id: String,
@@ -44,6 +47,7 @@ pub struct SetStateInput {
 
 /// Input for the `render_template` tool.
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RenderTemplateInput {
     /// The template string to render.
     ///
@@ -53,6 +57,7 @@ pub struct RenderTemplateInput {
 
 /// Input for the `get_calendar_events` tool.
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct GetCalendarEventsInput {
     /// The calendar entity ID (e.g., `calendar.personal`).
     pub entity_id: String,
@@ -64,6 +69,7 @@ pub struct GetCalendarEventsInput {
 
 /// Input for the `get_history` tool.
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct GetHistoryInput {
     /// Entity IDs to fetch history for (e.g., `["sensor.temperature"]`).
     pub entity_ids: Vec<String>,

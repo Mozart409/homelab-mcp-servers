@@ -1,5 +1,6 @@
 ---
 source: crates/pbs-mcp/pbsmcp/tests/e2e.rs
+assertion_line: 66
 expression: "e2e::contract(&client).await.unwrap()"
 ---
 {
@@ -104,6 +105,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Get a datastore's status: total/used/available bytes, deduplication factor, garbage-collection status, and estimated full date.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "store": {
             "description": "Datastore name.",
@@ -120,6 +122,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "List configured garbage-collection jobs and their last run status across datastores.",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -128,6 +132,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "List all configured datastores with comments.",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -137,6 +143,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List backup groups in a datastore, with last-backup time and backup counts.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "namespace": {
             "default": null,
@@ -162,6 +169,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List backup snapshots in a datastore, including backup time, size, owner, and verification state. Optionally filter by namespace, backup type, or backup ID.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "backup_id": {
             "default": null,
@@ -203,6 +211,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List recent tasks (backups, verifies, prunes, syncs, GC) with their status. Optionally limit count, filter to errors only, running only, or since a given epoch.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "errors_only": {
             "default": null,
@@ -247,6 +256,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "Get overall node status: CPU, memory, swap, root filesystem usage, and uptime.",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -256,6 +267,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Read the log output of a task by its UPID. Returns lines from the start of the log by default; use `start` and `limit` together to page through it, or set `tail` to fetch the last N lines (the right choice for long-running tasks, where the interesting output is at the end). The response includes the log's `total` line count so you can page.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "limit": {
             "default": null,
@@ -303,6 +315,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Get the status of a single task by its UPID (running/stopped, exit status).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "upid": {
             "description": "Task UPID (unique process identifier), as returned by `list_tasks`.",

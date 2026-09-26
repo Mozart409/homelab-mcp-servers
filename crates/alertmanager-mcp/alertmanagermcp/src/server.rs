@@ -3,6 +3,7 @@
 
 use std::fmt::Write;
 
+use mcp_common::NoArguments;
 use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
@@ -93,6 +94,7 @@ fn push_filters(
 // ---- Tool parameter types ---------------------------------------------------
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct ListAlertsParams {
     /// Include alerts that are currently firing (default `true` server-side).
     #[serde(default)]
@@ -115,6 +117,7 @@ struct ListAlertsParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct AlertGroupsParams {
     /// Include alerts that are currently firing (default `true` server-side).
     #[serde(default)]
@@ -134,6 +137,7 @@ struct AlertGroupsParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct ListSilencesParams {
     /// Label matchers to filter silences by, e.g. `["alertname=\"NodeDown\""]`.
     #[serde(default)]
@@ -141,6 +145,7 @@ struct ListSilencesParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct SilenceIdParams {
     /// The silence's ID, as returned by `list_silences` or `create_silence`.
     id: String,
@@ -148,6 +153,7 @@ struct SilenceIdParams {
 
 /// One label matcher in a silence definition.
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct SilenceMatcher {
     /// Label name to match, e.g. `alertname`.
     name: String,
@@ -162,6 +168,7 @@ struct SilenceMatcher {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct CreateSilenceParams {
     /// Matchers selecting which alerts to suppress. An empty list would silence
     /// every alert, so at least one is required.
@@ -181,6 +188,7 @@ struct CreateSilenceParams {
 // ---- Prompt arguments -------------------------------------------------------
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct NotificationAuditArgs {
     /// Restrict the audit to a single alert name, e.g. `NodeDown`. Omit to audit all.
     #[serde(default)]
@@ -191,6 +199,7 @@ struct NotificationAuditArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct SilenceReviewArgs {
     /// Label matcher narrowing which silences to review, e.g. `job="node"`.
     #[serde(default)]
@@ -271,14 +280,14 @@ impl AlertmanagerServer {
     #[tool(
         description = "List the configured receiver names. Use this to learn what notification destinations exist before tracing where an alert was routed."
     )]
-    async fn list_receivers(&self) -> Result<String, ErrorData> {
+    async fn list_receivers(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call("/api/v2/receivers", &[]).await
     }
 
     #[tool(
         description = "Get Alertmanager's status: version info, uptime, cluster peers and status, and the currently loaded configuration."
     )]
-    async fn status(&self) -> Result<String, ErrorData> {
+    async fn status(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call("/api/v2/status", &[]).await
     }
 }

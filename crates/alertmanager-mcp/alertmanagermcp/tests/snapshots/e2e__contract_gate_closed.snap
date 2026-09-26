@@ -1,5 +1,6 @@
 ---
 source: crates/alertmanager-mcp/alertmanagermcp/tests/e2e.rs
+assertion_line: 76
 expression: "e2e::contract(&client).await.unwrap()"
 ---
 {
@@ -104,6 +105,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List alerts grouped the way Alertmanager's routing tree groups them, with the receiver each group resolves to. Use this rather than list_alerts when the question is about routing or notification batching.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "active": {
             "default": null,
@@ -157,6 +159,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Get a single silence by its ID.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "id": {
             "description": "The silence's ID, as returned by `list_silences` or `create_silence`.",
@@ -174,6 +177,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List alerts currently known to Alertmanager, with their labels, annotations, receivers, and whether each is silenced or inhibited. Filter by state and by label matchers.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "active": {
             "default": null,
@@ -234,6 +238,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "List the configured receiver names. Use this to learn what notification destinations exist before tracing where an alert was routed.",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -243,6 +249,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List silences with their matchers, time window, creator, comment, and state (active, pending, or expired).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "filter": {
             "default": null,
@@ -263,6 +270,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "Get Alertmanager's status: version info, uptime, cluster peers and status, and the currently loaded configuration.",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },

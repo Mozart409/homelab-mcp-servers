@@ -2,6 +2,7 @@
 
 use std::fmt::Write;
 
+use mcp_common::NoArguments;
 use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
@@ -52,12 +53,14 @@ impl PbsServer {
 // ---- Tool parameter types ---------------------------------------------------
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct StoreParams {
     /// Datastore name.
     store: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct GroupsParams {
     /// Datastore name.
     store: String,
@@ -67,6 +70,7 @@ struct GroupsParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct SnapshotParams {
     /// Datastore name.
     store: String,
@@ -82,6 +86,7 @@ struct SnapshotParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct TasksParams {
     /// Maximum number of tasks to return (default: 50).
     #[serde(default)]
@@ -98,12 +103,14 @@ struct TasksParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct TaskParams {
     /// Task UPID (unique process identifier), as returned by `list_tasks`.
     upid: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct TaskLogParams {
     /// Task UPID, as returned by `list_tasks`.
     upid: String,
@@ -123,6 +130,7 @@ struct TaskLogParams {
 // ---- Prompt argument types --------------------------------------------------
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct BackupHealthReportArgs {
     /// Specific datastore to report on. Omit to check all configured datastores.
     #[serde(default)]
@@ -130,6 +138,7 @@ struct BackupHealthReportArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct SnapshotAuditArgs {
     /// Datastore to audit (required).
     datastore: String,
@@ -168,7 +177,7 @@ fn envelope_total(envelope: &serde_json::Value) -> Result<u64, ErrorData> {
 #[tool_router]
 impl PbsServer {
     #[tool(description = "List all configured datastores with comments.")]
-    async fn list_datastores(&self) -> Result<String, ErrorData> {
+    async fn list_datastores(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call("/admin/datastore", &[]).await
     }
 
@@ -327,14 +336,14 @@ impl PbsServer {
     #[tool(
         description = "List configured garbage-collection jobs and their last run status across datastores."
     )]
-    async fn gc_status(&self) -> Result<String, ErrorData> {
+    async fn gc_status(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call("/admin/gc", &[]).await
     }
 
     #[tool(
         description = "Get overall node status: CPU, memory, swap, root filesystem usage, and uptime."
     )]
-    async fn node_status(&self) -> Result<String, ErrorData> {
+    async fn node_status(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         let node = self.client.node.clone();
         self.call(&format!("/nodes/{}/status", seg(&node)?), &[])
             .await

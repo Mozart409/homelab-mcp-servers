@@ -51,6 +51,7 @@ impl LokiServer {
 // ---- Tool parameter types ---------------------------------------------------
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct InstantQueryParams {
     /// `LogQL` expression, e.g. `{job="varlogs"} |= "error"` or a metric query
     /// like `count_over_time({job="app"}[5m])`.
@@ -67,6 +68,7 @@ struct InstantQueryParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct RangeQueryParams {
     /// `LogQL` expression to evaluate over the range.
     query: String,
@@ -88,6 +90,7 @@ struct RangeQueryParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct LabelsParams {
     /// Optional start of the window to consider: RFC3339 or Unix ns. Defaults to 6h ago.
     #[serde(default)]
@@ -98,6 +101,7 @@ struct LabelsParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct LabelValuesParams {
     /// Label name to list values for, e.g. `job` or `app`.
     label: String,
@@ -110,6 +114,7 @@ struct LabelValuesParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct SeriesParams {
     /// One or more log stream selectors, e.g. `["{job=\"varlogs\"}"]`.
     selectors: Vec<String>,
@@ -122,6 +127,7 @@ struct SeriesParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct IndexStatsParams {
     /// Log stream selector to compute stats for, e.g. `{job="varlogs"}`.
     query: String,
@@ -272,6 +278,7 @@ impl LokiServer {
 // ---- Prompt arguments -------------------------------------------------------
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct ErrorScanArgs {
     /// Value of the stream label that selects the service, e.g. `varlogs` or
     /// `caddy`. Combined with `label` to form the stream selector.
@@ -285,6 +292,7 @@ struct ErrorScanArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct LabelExplorerArgs {
     /// Optional label to drill into. Omit to start from the full label list.
     #[serde(default)]

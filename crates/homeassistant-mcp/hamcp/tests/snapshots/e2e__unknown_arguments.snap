@@ -1,0 +1,31 @@
+---
+source: crates/homeassistant-mcp/hamcp/tests/e2e.rs
+assertion_line: 504
+expression: refusals
+---
+{
+  "prompts": {
+    "automation_audit": {
+      "code": -32602,
+      "message": "Failed to parse parameters: unknown field `limitt`, expected `domain`"
+    },
+    "entity_diagnostic": {
+      "code": -32602,
+      "message": "Failed to parse parameters: unknown field `limitt`, expected `entity_id` or `hours`"
+    }
+  },
+  "tools": {
+    "call_service": "failed to deserialize parameters: unknown field `limitt`, expected one of `domain`, `service`, `entity_id`, `service_data`",
+    "check_config": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "get_calendar_events": "failed to deserialize parameters: unknown field `limitt`, expected one of `entity_id`, `start`, `end`",
+    "get_calendars": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "get_config": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "get_entity": "failed to deserialize parameters: unknown field `limitt`, expected `entity_id`",
+    "get_history": "failed to deserialize parameters: unknown field `limitt`, expected one of `entity_ids`, `start_time`, `end_time`, `minimal_response`, `no_attributes`",
+    "get_services": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "get_states": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "health_check": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "render_template": "failed to deserialize parameters: unknown field `limitt`, expected `template`",
+    "set_state": "failed to deserialize parameters: unknown field `limitt`, expected one of `entity_id`, `state`, `attributes`"
+  }
+}

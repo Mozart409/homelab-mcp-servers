@@ -1,5 +1,6 @@
 ---
 source: crates/homeassistant-mcp/hamcp/tests/e2e.rs
+assertion_line: 87
 expression: "e2e::contract(&client).await.unwrap()"
 ---
 {
@@ -104,6 +105,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Call a Home Assistant service to control devices. Examples: domain='light', service='turn_on', entity_id='light.living_room'",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "domain": {
             "description": "The service domain (e.g., `light`, `switch`, `climate`).",
@@ -142,6 +144,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "Validate the Home Assistant configuration.yaml file",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -151,6 +155,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Get events from a specific calendar within a time range",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "end": {
             "description": "End time in ISO 8601 format (e.g., `2024-12-31T23:59:59`).",
@@ -177,6 +182,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "Get all available calendar entities",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -185,6 +192,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "Get Home Assistant configuration including location, unit system, and loaded components",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -194,6 +203,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Get the current state of a specific Home Assistant entity by ID",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "entity_id": {
             "description": "The entity ID (e.g., `light.living_room`).",
@@ -211,6 +221,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Get historical state data for one or more entities within a time range",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "end_time": {
             "default": null,
@@ -256,6 +267,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "Get all available Home Assistant services grouped by domain",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -264,6 +277,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "Get all Home Assistant entity states including lights, sensors, switches, etc.",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -272,6 +287,8 @@ expression: "e2e::contract(&client).await.unwrap()"
     {
       "description": "Check if the Home Assistant API is running and healthy",
       "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -281,6 +298,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Render a Home Assistant template string. Example: 'The temperature is {{ states(\"sensor.temperature\") }}C'",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "template": {
             "description": "The template string to render.\n\nExample: `\"The temperature is {{ states('sensor.temperature') }}C\"`",
@@ -298,6 +316,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Set or update a state for a Home Assistant entity. Creates the entity if it doesn't exist.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "attributes": {
             "additionalProperties": true,

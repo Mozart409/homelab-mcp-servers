@@ -1,5 +1,6 @@
 //! MCP server: exposes Home Assistant control and query tools.
 
+use mcp_common::NoArguments;
 use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
@@ -64,7 +65,7 @@ impl HaServer {
         name = "health_check",
         description = "Check if the Home Assistant API is running and healthy"
     )]
-    async fn health_check_tool(&self) -> Result<String, ErrorData> {
+    async fn health_check_tool(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         let result = self.client.check_health().await.map_err(client_error)?;
 
         if result.healthy {
@@ -81,7 +82,7 @@ impl HaServer {
         name = "get_config",
         description = "Get Home Assistant configuration including location, unit system, and loaded components"
     )]
-    async fn get_config_tool(&self) -> Result<String, ErrorData> {
+    async fn get_config_tool(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         let config = self.client.get_config().await.map_err(client_error)?;
         Self::to_json(&config)
     }
@@ -90,7 +91,7 @@ impl HaServer {
         name = "get_states",
         description = "Get all Home Assistant entity states including lights, sensors, switches, etc."
     )]
-    async fn get_states_tool(&self) -> Result<String, ErrorData> {
+    async fn get_states_tool(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         let states = self.client.get_states().await.map_err(client_error)?;
         Self::to_json(&states)
     }
@@ -168,7 +169,7 @@ impl HaServer {
         name = "get_services",
         description = "Get all available Home Assistant services grouped by domain"
     )]
-    async fn get_services_tool(&self) -> Result<String, ErrorData> {
+    async fn get_services_tool(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         let services = self.client.get_services().await.map_err(client_error)?;
         Self::to_json(&services)
     }
@@ -191,7 +192,7 @@ impl HaServer {
         name = "get_calendars",
         description = "Get all available calendar entities"
     )]
-    async fn get_calendars_tool(&self) -> Result<String, ErrorData> {
+    async fn get_calendars_tool(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         let calendars = self.client.get_calendars().await.map_err(client_error)?;
         Self::to_json(&calendars)
     }
@@ -216,7 +217,7 @@ impl HaServer {
         name = "check_config",
         description = "Validate the Home Assistant configuration.yaml file"
     )]
-    async fn check_config_tool(&self) -> Result<String, ErrorData> {
+    async fn check_config_tool(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         let result = self.client.check_config().await.map_err(client_error)?;
         Self::to_json(&result)
     }
@@ -247,6 +248,7 @@ impl HaServer {
 // ---- Prompt arguments -------------------------------------------------------
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct EntityDiagnosticArgs {
     /// Entity to diagnose, e.g. `sensor.living_room_temperature`.
     entity_id: String,
@@ -261,6 +263,7 @@ struct EntityDiagnosticArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct AutomationAuditArgs {
     /// Restrict the survey to one domain, e.g. `automation`, `light`, `sensor`.
     /// Omit to survey the whole installation.

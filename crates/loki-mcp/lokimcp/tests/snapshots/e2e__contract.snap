@@ -1,5 +1,6 @@
 ---
 source: crates/loki-mcp/lokimcp/tests/e2e.rs
+assertion_line: 66
 expression: "e2e::contract(&client).await.unwrap()"
 ---
 {
@@ -109,6 +110,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Get index statistics (stream, chunk, entry, and byte counts) for a selector — useful to gauge log volume before running a broad query.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "end": {
             "default": null,
@@ -142,6 +144,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List all values for a given label name (e.g. all `job` or `app` values) within the time window.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "end": {
             "default": null,
@@ -175,6 +178,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "List all label names present within the time window (default: last 6 hours).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "end": {
             "default": null,
@@ -201,6 +205,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Run an instant LogQL query at a single point in time. Use for metric queries; for browsing log lines over a window prefer query_range.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "direction": {
             "default": null,
@@ -244,6 +249,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Run a LogQL query over a time range — the main tool for searching logs (e.g. errors in a service over the last hour). Returns matching log streams or a metric matrix.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "direction": {
             "default": null,
@@ -303,6 +309,7 @@ expression: "e2e::contract(&client).await.unwrap()"
       "description": "Find log streams matching one or more selectors, returning their label sets (not the log lines).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "end": {
             "default": null,

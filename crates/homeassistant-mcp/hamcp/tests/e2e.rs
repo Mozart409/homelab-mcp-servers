@@ -492,3 +492,14 @@ async fn unreachable_home_assistant_is_a_prompt_tool_error() {
     );
     assert!(started.elapsed() < std::time::Duration::from_secs(12));
 }
+
+/// A misspelt argument is refused before anything is sent upstream, instead
+/// of being dropped so that the call quietly answers a different question.
+#[tokio::test]
+async fn unknown_arguments_are_refused() {
+    let mock = MockServer::start().await;
+    let (_server, client) = serve(&config(&mock.uri())).await.unwrap();
+
+    let refusals = e2e::unknown_arguments(&client, Some(&mock)).await.unwrap();
+    insta::assert_json_snapshot!("unknown_arguments", refusals);
+}

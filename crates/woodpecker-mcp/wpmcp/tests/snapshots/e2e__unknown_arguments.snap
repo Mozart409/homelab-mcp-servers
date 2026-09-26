@@ -1,0 +1,36 @@
+---
+source: crates/woodpecker-mcp/wpmcp/tests/e2e.rs
+assertion_line: 394
+expression: refusals
+---
+{
+  "prompts": {
+    "ci_health_triage": {
+      "code": -32602,
+      "message": "Failed to parse parameters: unknown field `limitt`, expected `repo`"
+    },
+    "pipeline_postmortem": {
+      "code": -32602,
+      "message": "Failed to parse parameters: unknown field `limitt`, expected `repo` or `pipeline`"
+    }
+  },
+  "tools": {
+    "get_pipeline": "failed to deserialize parameters: unknown field `limitt`, expected `repo_id` or `number`",
+    "get_repo": "failed to deserialize parameters: unknown field `limitt`, expected `repo_id`",
+    "healthz": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "list_agent_tasks": "failed to deserialize parameters: unknown field `limitt`, expected `agent_id`",
+    "list_agents": "failed to deserialize parameters: unknown field `limitt`, expected `page` or `per_page`",
+    "list_branches": "failed to deserialize parameters: unknown field `limitt`, expected one of `repo_id`, `page`, `per_page`",
+    "list_crons": "failed to deserialize parameters: unknown field `limitt`, expected one of `repo_id`, `page`, `per_page`",
+    "list_pipelines": "failed to deserialize parameters: unknown field `limitt`, expected one of `repo_id`, `page`, `per_page`, `branch`, `event`, `status`, `ref`, `before`, `after`",
+    "list_pull_requests": "failed to deserialize parameters: unknown field `limitt`, expected one of `repo_id`, `page`, `per_page`",
+    "list_repos": "failed to deserialize parameters: unknown field `limitt`, expected `all` or `name`",
+    "lookup_repo": "failed to deserialize parameters: unknown field `limitt`, expected `owner` or `name`",
+    "pipeline_config": "failed to deserialize parameters: unknown field `limitt`, expected `repo_id` or `number`",
+    "pipeline_feed": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "pipeline_metadata": "failed to deserialize parameters: unknown field `limitt`, expected `repo_id` or `number`",
+    "queue_info": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "step_logs": "failed to deserialize parameters: unknown field `limitt`, expected one of `repo_id`, `number`, `step_id`, `max_lines`",
+    "version": "failed to deserialize parameters: unknown field `limitt`, there are no fields"
+  }
+}
