@@ -16,11 +16,12 @@ use color_eyre::eyre::{Context, Result, bail};
 use rmcp::{
     ServerHandler,
     model::{ReadResourceResult, Resource, ResourceContents},
+    schemars,
     transport::streamable_http_server::{
         StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
     },
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 // ---- TLS --------------------------------------------------------------------
 
@@ -157,6 +158,25 @@ pub fn path_segment(s: &str) -> std::result::Result<String, InvalidPathSegment> 
     }
     Ok(percent_encoding::utf8_percent_encode(s, PATH_SEGMENT).to_string())
 }
+
+// ---- Tool arguments ---------------------------------------------------------
+
+/// The parameters of a tool that takes none: `Parameters<NoArguments>`.
+///
+/// Every argument struct in this workspace is `#[serde(deny_unknown_fields)]`,
+/// so a misspelt argument is refused instead of dropped. A tool method without
+/// a `Parameters` extractor never looks at `arguments` at all, which would
+/// make the argument-less tools the one place a stray argument still passes
+/// silently; taking this instead closes that. rmcp substitutes `{}` when a
+/// client omits `arguments`, so plain calls are unaffected.
+///
+/// The schema keeps an explicit empty `properties`, as the argument-less tools
+/// advertised before: some function-calling clients reject an object schema
+/// without one.
+#[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(extend("properties" = {}))]
+pub struct NoArguments {}
 
 // ---- Error rendering --------------------------------------------------------
 

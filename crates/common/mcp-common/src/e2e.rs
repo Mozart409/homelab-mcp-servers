@@ -1011,6 +1011,87 @@ pub async fn method_surface(
     Ok(Value::Object(surface))
 }
 
+/// The argument name [`unknown_arguments`] adds to every call. Close enough
+/// to a real one to be a plausible typo, far enough never to collide.
+pub const UNKNOWN_ARGUMENT: &str = "limitt";
+
+/// Call every tool with [`minimal_arguments`] plus [`UNKNOWN_ARGUMENT`], and
+/// render every prompt with its required arguments plus the same extra one.
+/// Returns `{"tools": {name: refusal}, "prompts": {name: refusal}}`, where each
+/// refusal is the JSON-RPC error (or tool error) the client received.
+///
+/// A misspelt argument that is silently dropped makes the call run with its
+/// defaults and answer a different question than the one asked, with nothing
+/// in the reply to say so. Every argument struct carries
+/// `#[serde(deny_unknown_fields)]`; this is the proof, driven from the lists so
+/// a new tool or prompt is covered the moment it is registered.
+///
+/// # Errors
+///
+/// Returns an error if a list fails, if any call **succeeds** with the extra
+/// argument, or if any call reached `mock` (when given) at all: a refusal must
+/// come before any request is sent.
+pub async fn unknown_arguments(
+    client: &McpClient,
+    mock: Option<&wiremock::MockServer>,
+) -> Result<Value> {
+    if let Some(mock) = mock {
+        mock.reset().await;
+    }
+    let mut tools = Map::new();
+    for tool in client.list_tools().await? {
+        let Some(name) = tool.get("name").and_then(Value::as_str) else {
+            continue;
+        };
+        let mut args = minimal_arguments(&tool);
+        if let Some(obj) = args.as_object_mut() {
+            obj.insert(UNKNOWN_ARGUMENT.to_string(), json!(1));
+        }
+        let res = client.call_tool(name, args).await?;
+        let refusal = res
+            .error_message()
+            .wrap_err_with(|| format!("{name} accepted an unknown argument"))?;
+        tools.insert(name.to_string(), json!(refusal));
+    }
+    let mut prompts = Map::new();
+    for prompt in client.list_prompts().await? {
+        let Some(name) = prompt.get("name").and_then(Value::as_str) else {
+            continue;
+        };
+        let mut args = Map::new();
+        for a in prompt
+            .get("arguments")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            if a.get("required").and_then(Value::as_bool).unwrap_or(false)
+                && let Some(n) = a.get("name").and_then(Value::as_str)
+            {
+                args.insert(n.to_string(), json!(format!("<{n}>")));
+            }
+        }
+        args.insert(UNKNOWN_ARGUMENT.to_string(), json!("1"));
+        let reply = client
+            .request(
+                "prompts/get",
+                json!({ "name": name, "arguments": Value::Object(args) }),
+            )
+            .await?;
+        let Some(err) = reply.get("error") else {
+            bail!("prompt {name} accepted an unknown argument: {reply}");
+        };
+        prompts.insert(name.to_string(), err.clone());
+    }
+    if let Some(mock) = mock {
+        let sent = upstream_requests(mock).await?;
+        if sent.as_array().is_some_and(|a| !a.is_empty()) {
+            bail!("calls with an unknown argument reached the upstream: {sent}");
+        }
+    }
+    Ok(json!({ "tools": tools, "prompts": prompts }))
+}
+
 /// Replace every occurrence of `needle` in every string (keys excluded) of
 /// `value` with `replacement`. For ephemeral addresses and other per-run noise.
 #[must_use]
