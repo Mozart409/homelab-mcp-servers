@@ -31,7 +31,7 @@ fine (e.g. when an MCP client injects the variables itself).
 | ------------------- | -------- | ----------------- | --------------------------------------------------------------------- |
 | `HA_HOST`           | yes      | —                 | `http://homeassistant.local:8123`, `homeassistant.local:8123`, or `homeassistant.local` |
 | `HA_TOKEN`          | yes      | —                 | Long-lived access token from the HA UI                               |
-| `HA_INSECURE`       | no       | `false`           | Set `1`/`true` to accept self-signed TLS certificates                |
+| `HA_INSECURE`       | no       | `false`           | Set `1`/`true`/`yes` to accept self-signed TLS certificates          |
 | `HA_BIND`           | no       | `127.0.0.1:8084`  | Address to bind the streamable-HTTP server (endpoint at `/mcp`)       |
 | `HA_ALLOWED_HOSTS`  | no       | loopback only     | Comma-separated allowed `Host` values; set when serving on a hostname |
 

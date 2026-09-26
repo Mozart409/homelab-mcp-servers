@@ -28,14 +28,18 @@ impl Config {
     /// - `HA_TOKEN` — long-lived access token
     ///
     /// Optional:
-    /// - `HA_INSECURE` — "true" to skip TLS verification (default: false)
+    /// - `HA_INSECURE` — `1`/`true`/`yes` to skip TLS verification (default: off)
     /// - `HA_BIND` — bind address (default: `127.0.0.1:8084`)
     /// - `HA_ALLOWED_HOSTS` — comma-separated allowed hosts
     pub fn from_env() -> Result<Self> {
         let host = env::var("HA_HOST").wrap_err("HA_HOST environment variable is required")?;
         let token = env::var("HA_TOKEN").wrap_err("HA_TOKEN environment variable is required")?;
 
-        let insecure = env::var("HA_INSECURE").is_ok_and(|v| v.eq_ignore_ascii_case("true"));
+        // `1`/`true`/`yes`, as the README documents and the other servers accept.
+        // (This used to honour only `true`, so the README's `HA_INSECURE=1` was
+        // silently ignored, on top of the flag never reaching the client.)
+        let insecure = env::var("HA_INSECURE")
+            .is_ok_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"));
 
         let bind = env::var("HA_BIND").unwrap_or_else(|_| "127.0.0.1:8084".to_string());
 

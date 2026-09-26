@@ -1,0 +1,450 @@
+---
+source: crates/homeassistant-mcp/hamcp/tests/e2e.rs
+expression: s.transcript()
+---
+[
+  {
+    "call": {
+      "arguments": {},
+      "tool": "health_check"
+    },
+    "response": {
+      "ok": "Home Assistant API is healthy: API running."
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "get_config"
+    },
+    "response": {
+      "ok": {
+        "components": [
+          "calendar",
+          "history",
+          "light"
+        ],
+        "config_dir": "/config",
+        "elevation": 34.0,
+        "latitude": 52.52,
+        "location_name": "Home",
+        "longitude": 13.405,
+        "time_zone": "Europe/Berlin",
+        "unit_system": {
+          "length": "km",
+          "mass": "g",
+          "temperature": "°C",
+          "volume": "L"
+        },
+        "version": "2024.9.3"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/config"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "get_states"
+    },
+    "response": {
+      "ok": [
+        {
+          "attributes": {
+            "brightness": 255,
+            "friendly_name": "Living Room",
+            "supported_color_modes": [
+              "brightness"
+            ]
+          },
+          "entity_id": "light.living_room",
+          "last_changed": "2024-09-25T18:02:11.482930+00:00",
+          "last_updated": "2024-09-25T18:02:11.482930+00:00",
+          "state": "on"
+        },
+        {
+          "attributes": {
+            "unit_of_measurement": "°C"
+          },
+          "entity_id": "sensor.living_room_temperature",
+          "last_changed": "2024-09-25T17:55:00+00:00",
+          "last_updated": "2024-09-25T17:55:00+00:00",
+          "state": "21.4"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/states"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "entity_id": "light.living_room"
+      },
+      "tool": "get_entity"
+    },
+    "response": {
+      "ok": {
+        "attributes": {
+          "brightness": 255,
+          "friendly_name": "Living Room",
+          "supported_color_modes": [
+            "brightness"
+          ]
+        },
+        "entity_id": "light.living_room",
+        "last_changed": "2024-09-25T18:02:11.482930+00:00",
+        "last_updated": "2024-09-25T18:02:11.482930+00:00",
+        "state": "on"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/states/light.living_room"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "get_services"
+    },
+    "response": {
+      "ok": [
+        {
+          "domain": "light",
+          "services": {
+            "turn_on": {
+              "fields": {
+                "brightness_pct": {
+                  "selector": {
+                    "number": {
+                      "max": 100,
+                      "min": 0
+                    }
+                  }
+                }
+              },
+              "name": "Turn on"
+            }
+          }
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/services"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "domain": "light",
+        "entity_id": "light.living_room",
+        "service": "turn_on",
+        "service_data": {
+          "brightness_pct": 30,
+          "entity_id": "light.kitchen",
+          "transition": 2
+        }
+      },
+      "tool": "call_service"
+    },
+    "response": {
+      "ok": {
+        "changed_states": [
+          {
+            "attributes": {
+              "brightness": 77,
+              "friendly_name": "Living Room",
+              "supported_color_modes": [
+                "brightness"
+              ]
+            },
+            "entity_id": "light.living_room",
+            "last_changed": "2024-09-25T18:02:11.482930+00:00",
+            "last_updated": "2024-09-25T18:02:11.482930+00:00",
+            "state": "on"
+          }
+        ],
+        "service_response": null
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "body": {
+          "brightness_pct": 30,
+          "entity_id": "light.living_room",
+          "transition": 2
+        },
+        "method": "POST",
+        "path": "/api/services/light/turn_on"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "attributes": {
+          "source": "hamcp"
+        },
+        "entity_id": "input_boolean.movie_mode",
+        "state": "on"
+      },
+      "tool": "set_state"
+    },
+    "response": {
+      "ok": {
+        "attributes": {
+          "source": "hamcp"
+        },
+        "entity_id": "input_boolean.movie_mode",
+        "last_changed": "2024-09-25T20:00:00+00:00",
+        "last_updated": "2024-09-25T20:00:00+00:00",
+        "state": "on"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "body": {
+          "attributes": {
+            "source": "hamcp"
+          },
+          "state": "on"
+        },
+        "method": "POST",
+        "path": "/api/states/input_boolean.movie_mode"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "template": "{{ state_attr('light.living_room', 'friendly_name') }} is {{ states('light.living_room') }} at 30%"
+      },
+      "tool": "render_template"
+    },
+    "response": {
+      "ok": "Living Room is on at 30%"
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "body": {
+          "template": "{{ state_attr('light.living_room', 'friendly_name') }} is {{ states('light.living_room') }} at 30%"
+        },
+        "method": "POST",
+        "path": "/api/template"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "get_calendars"
+    },
+    "response": {
+      "ok": [
+        {
+          "entity_id": "calendar.family",
+          "name": "Family"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/calendars"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "end": "2024-09-27T00:00:00+02:00",
+        "entity_id": "calendar.family",
+        "start": "2024-09-25T00:00:00+02:00"
+      },
+      "tool": "get_calendar_events"
+    },
+    "response": {
+      "ok": [
+        {
+          "description": null,
+          "end": {
+            "date": null,
+            "dateTime": "2024-09-25T23:00:00+02:00"
+          },
+          "location": "Living room",
+          "start": {
+            "date": null,
+            "dateTime": "2024-09-25T20:00:00+02:00"
+          },
+          "summary": "Movie night"
+        },
+        {
+          "description": null,
+          "end": {
+            "date": "2024-09-27",
+            "dateTime": null
+          },
+          "location": null,
+          "start": {
+            "date": "2024-09-26",
+            "dateTime": null
+          },
+          "summary": "Recycling"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/calendars/calendar.family",
+        "query": [
+          [
+            "start",
+            "2024-09-25T00:00:00+02:00"
+          ],
+          [
+            "end",
+            "2024-09-27T00:00:00+02:00"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "end_time": "2024-09-25T23:59:59+00:00",
+        "entity_ids": [
+          "light.living_room",
+          "sensor.living_room_temperature"
+        ],
+        "minimal_response": true,
+        "no_attributes": true,
+        "start_time": "2024-09-25T00:00:00+00:00"
+      },
+      "tool": "get_history"
+    },
+    "response": {
+      "ok": [
+        [
+          {
+            "attributes": null,
+            "entity_id": "light.living_room",
+            "last_changed": "2024-09-25T06:00:00+00:00",
+            "last_updated": null,
+            "state": "off"
+          },
+          {
+            "attributes": null,
+            "entity_id": null,
+            "last_changed": "2024-09-25T18:02:11+00:00",
+            "last_updated": null,
+            "state": "on"
+          }
+        ]
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/history/period/2024-09-25T00%3A00%3A00%2B00%3A00",
+        "query": [
+          [
+            "filter_entity_id",
+            "light.living_room,sensor.living_room_temperature"
+          ],
+          [
+            "end_time",
+            "2024-09-25T23:59:59+00:00"
+          ],
+          [
+            "minimal_response",
+            ""
+          ],
+          [
+            "no_attributes",
+            ""
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "entity_ids": [
+          "light.living_room"
+        ]
+      },
+      "tool": "get_history"
+    },
+    "response": {
+      "ok": [
+        []
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/history/period",
+        "query": [
+          [
+            "filter_entity_id",
+            "light.living_room"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "check_config"
+    },
+    "response": {
+      "ok": {
+        "errors": null,
+        "result": "valid"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "POST",
+        "path": "/api/config/core/check_config"
+      }
+    ]
+  }
+]

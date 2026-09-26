@@ -1,0 +1,42 @@
+---
+source: crates/homeassistant-mcp/hamcp/tests/e2e.rs
+expression: surface
+---
+{
+  "call_service": [
+    "POST"
+  ],
+  "check_config": [
+    "POST"
+  ],
+  "get_calendar_events": [
+    "GET"
+  ],
+  "get_calendars": [
+    "GET"
+  ],
+  "get_config": [
+    "GET"
+  ],
+  "get_entity": [
+    "GET"
+  ],
+  "get_history": [
+    "GET"
+  ],
+  "get_services": [
+    "GET"
+  ],
+  "get_states": [
+    "GET"
+  ],
+  "health_check": [
+    "GET"
+  ],
+  "render_template": [
+    "POST"
+  ],
+  "set_state": [
+    "POST"
+  ]
+}
