@@ -2,6 +2,39 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.12.0 - 2026-09-26
+#### Features
+- (**deps**) upgrade rmcp 3.4 and utoipa 6, adopt ServerConfig - (3871a67) - Amadeus Mader
+- (**deps**) upgrade flake.lock - (970ce48) - Amadeus Mader
+- (**mcp-common**) add NoArguments and an unknown_arguments e2e check - (4a286bd) - Amadeus Mader
+- (**mcp-common**) add e2e harness, mcp_router and path_segment - (57d9a7f) - Amadeus Mader
+- (**servers**) refuse unknown tool and prompt arguments - (084a7d3) - Amadeus Mader
+- (**tempomcp**) add Tempo MCP server for TraceQL search and trace lookup - (c6ccc0a) - Amadeus Mader
+#### Bug Fixes
+- (**deps**) upgrade rustls - (1f41a1b) - Amadeus Mader
+- (**flake**) use modern syntax - (4d2afde) - Amadeus Mader
+- (**hamcp**) apply HA_INSECURE, keep error causes, truncate on char boundary - (23729f6) - Amadeus Mader
+- (**wpmcp**) treat max_lines 0 as unset and take prompt args as strings - (83ceda5) - Amadeus Mader
+#### Documentation
+- (**agents**) require deny_unknown_fields on tool arguments - (18158e5) - Amadeus Mader
+- (**agents**) document the e2e harness and testing workflow - (de13033) - Amadeus Mader
+- (**testing**) add testing philosophy - (0e77e6f) - Amadeus Mader
+- (**todos**) file the flaky hamcp set_state percent-encoding test - (de8060e) - developmentbot
+#### Tests
+- (**nix**) run every test against a throwaway postgres cluster - (873f104) - Amadeus Mader
+- (**servers**) replace unit tests with e2e and binary suites - (133a664) - Amadeus Mader
+#### Continuous Integration
+- (**lefthook**) lint and test the whole workspace on pre-push - (7fd0040) - Amadeus Mader
+- (**nix**) check containerfile toolchain pin and drop woodpecker leftovers - (4f30910) - Amadeus Mader
+- (**woodpecker**) decommission woodpecker pipelines - (beb3fc1) - Amadeus Mader
+#### Refactoring
+- (**mcp-common**) lift normalize_base_url and parse_allowed_hosts - (befc58a) - developmentbot
+- (**servers**) share parse_allowed_hosts in pbs, pg and wp too - (7cf4a63) - developmentbot
+- (**sops**) route all env consumers through sops - (fb1a812) - Amadeus Mader
+- (**sops**) use sops for env vars - (afb92db) - Amadeus Mader
+
+- - -
+
 ## 0.11.0 - 2026-09-08
 #### Features
 - (**alertmanagermcp**) add an alertmanager mcp server with gated silences - (b55ae64) - developmentbot
