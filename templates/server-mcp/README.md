@@ -27,7 +27,16 @@ Then:
 2. Add the deps your server needs (`sqlx`, `reqwest`, `axum`, …) by inheriting
    from the workspace: `<dep>.workspace = true`. If the crate isn't in the root
    `[workspace.dependencies]` yet, add it there first.
-3. `cargo check -p "$NAME-server"` to confirm it builds.
+3. Expose `pub fn router(config: &Config) -> Result<axum::Router>` from the
+   library (build the client, hand the server factory to
+   `mcp_common::mcp_router`) and make `run()` just `Config::from_env` →
+   `router` → `mcp_common::serve`. The tests drive that exact router.
+4. Fill in `mymcp/tests/e2e.rs` and `mymcp-server/tests/binary.rs` — failure
+   modes in the module doc first, then the tests. Rename `MY_HOST`/`MY_BIND` to
+   your env vars. Accept the first snapshots with `cargo insta review`, and read
+   them: they are the artifact the suite exists to produce.
+5. `cargo check -p "$NAME-server"` to confirm it builds, then `just test-pkg
+   "$NAME"`.
 
 Versions/edition are inherited from `[workspace.package]`, so the copied crates
 build as soon as they land under `crates/`.
