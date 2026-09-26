@@ -7,13 +7,16 @@ pre-commit:
       run: actionlint {staged_files}
     - name: cargo-deny
       run: cargo deny check
+    # Same unit shape as `just check`/`just clippy` (--all-targets
+    # --all-features), so it fixes test code and feature-gated code too and
+    # reuses their type-check instead of paying for a second one.
     - name: cargo-fix
       glob: "*.rs"
-      run: cargo fix --allow-dirty --allow-staged
+      run: cargo fix --workspace --all-targets --all-features --allow-dirty --allow-staged
       stage_fixed: true
     - name: clippy
       glob: "*.rs"
-      run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::pedantic
+      run: just clippy
     - name: format
       glob: "*.rs"
       run: cargo fmt
@@ -21,17 +24,23 @@ pre-commit:
     - name: keep-sorted
       run: keep-sorted {staged_files}
       stage_fixed: true
-      # keep-sorted end 
+      # keep-sorted end
+# The last gate before code leaves the machine, so it runs exactly what CI
+# runs, through the same `just` recipes (one definition of "green"):
+#   - lint: fmt-check, clippy on every crate and target, cargo-deny, and the
+#     Containerfile toolchain pin. No `glob`: a push that only touches
+#     Cargo.toml/Cargo.lock can break every crate and must still be linted.
+#   - test: every server's suite, the E2E tests, and the real-Postgres tests
+#     (`just test` brings up the throwaway cluster).
+# Sequential, not parallel: both drive cargo on the same target dir, so running
+# them together only adds lock contention.
 pre-push:
-  parallel: true
+  parallel: false
   jobs:
-    # keep-sorted start
-    - name: clippy-pedantic
-      glob: "*.rs"
-      run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::pedantic
+    - name: lint
+      run: just lint-ci
     - name: test
-      run: cargo test
-      # keep-sorted end 
+      run: just test
 commit-msg:
   jobs:
     - name: cog verify
