@@ -2,11 +2,12 @@
 
 use std::fmt::Write;
 
+use mcp_common::NoArguments;
 use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    Implementation, ListResourcesResult, PromptMessage, Role, ServerCapabilities, ServerInfo,
+    Implementation, ListResourcesResult, PromptMessage, Role, ServerCapabilities, ServerConfig,
 };
 use rmcp::{
     ErrorData, ServerHandler, prompt, prompt_handler, prompt_router, schemars, tool, tool_handler,
@@ -52,6 +53,7 @@ impl PromServer {
 // ---- Tool parameter types ---------------------------------------------------
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct InstantQueryParams {
     /// `PromQL` expression to evaluate, e.g. `up` or `rate(http_requests_total[5m])`.
     query: String,
@@ -62,6 +64,7 @@ struct InstantQueryParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct RangeQueryParams {
     /// `PromQL` expression to evaluate over the range.
     query: String,
@@ -74,6 +77,7 @@ struct RangeQueryParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct SeriesParams {
     /// One or more series selectors, e.g. `["up", "process_cpu_seconds_total{job=\"node\"}"]`.
     selectors: Vec<String>,
@@ -86,12 +90,14 @@ struct SeriesParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct LabelValuesParams {
     /// Label name to list values for, e.g. `job` or `instance`.
     label: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct TargetsParams {
     /// Filter by target state: `active`, `dropped`, or `any` (default `any`).
     #[serde(default)]
@@ -99,6 +105,7 @@ struct TargetsParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct RulesParams {
     /// Filter by rule type: `alert` or `record` (default: both).
     #[serde(default)]
@@ -106,6 +113,7 @@ struct RulesParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct MetadataParams {
     /// Restrict metadata to a single metric name (default: all metrics).
     #[serde(default)]
@@ -115,6 +123,7 @@ struct MetadataParams {
 // ---- Prompt arguments -------------------------------------------------------
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct AlertTriageArgs {
     /// Alert severity to filter on, e.g. `critical` or `warning`. Omit to show all severities.
     #[serde(default)]
@@ -125,6 +134,7 @@ struct AlertTriageArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct TargetHealthArgs {
     /// Restrict to a single scrape job. Omit to check all jobs.
     #[serde(default)]
@@ -192,7 +202,7 @@ impl PromServer {
     }
 
     #[tool(description = "List all label names present in the Prometheus database.")]
-    async fn labels(&self) -> Result<String, ErrorData> {
+    async fn labels(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call("/api/v1/labels", &[]).await
     }
 
@@ -203,7 +213,7 @@ impl PromServer {
         &self,
         Parameters(LabelValuesParams { label }): Parameters<LabelValuesParams>,
     ) -> Result<String, ErrorData> {
-        self.call(&format!("/api/v1/label/{}/values", seg(&label)), &[])
+        self.call(&format!("/api/v1/label/{}/values", seg(&label)?), &[])
             .await
     }
 
@@ -224,7 +234,7 @@ impl PromServer {
     #[tool(
         description = "List currently active alerts with their state (pending/firing), labels, and annotations."
     )]
-    async fn alerts(&self) -> Result<String, ErrorData> {
+    async fn alerts(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call("/api/v1/alerts", &[]).await
     }
 
@@ -259,14 +269,14 @@ impl PromServer {
     #[tool(
         description = "Get TSDB stats: head series/chunks, label cardinality, and per-metric series counts."
     )]
-    async fn tsdb_status(&self) -> Result<String, ErrorData> {
+    async fn tsdb_status(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call("/api/v1/status/tsdb", &[]).await
     }
 
     #[tool(
         description = "Get Prometheus build information: version, revision, branch, build date, and Go version."
     )]
-    async fn build_info(&self) -> Result<String, ErrorData> {
+    async fn build_info(&self, _: Parameters<NoArguments>) -> Result<String, ErrorData> {
         self.call("/api/v1/status/buildinfo", &[]).await
     }
 }
@@ -383,9 +393,9 @@ impl PromServer {
 #[tool_handler(router = self.tool_router)]
 #[prompt_handler(router = self.prompt_router)]
 impl ServerHandler for PromServer {
-    fn get_info(&self) -> ServerInfo {
-        // `ServerInfo` is `#[non_exhaustive]`, so build from default and assign.
-        let mut info = ServerInfo::default();
+    fn get_info(&self) -> ServerConfig {
+        // `ServerConfig` is `#[non_exhaustive]`, so build from default and assign.
+        let mut info = ServerConfig::default();
         info.instructions = Some(
             "Read-only access to a Prometheus instance. Use these tools to run PromQL \
              queries (instant and range), inspect series/labels, and check target health, \
@@ -441,355 +451,5 @@ impl ServerHandler for PromServer {
                 None,
             ))
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::client::PromClient;
-    use crate::config::Config;
-    use color_eyre::eyre::{Result, eyre};
-    use wiremock::matchers::any;
-    use wiremock::{Mock, MockServer, Request, ResponseTemplate};
-
-    /// Start a mock Prometheus that answers *every* request — any method, any
-    /// path — with `template`, and point a [`PromServer`] at it.
-    ///
-    /// Matching on `any()` rather than on a method/path is deliberate: a request
-    /// the code got wrong still gets served, so the assertions below can report
-    /// what was actually sent instead of failing with an opaque 404.
-    async fn mock_prom(template: ResponseTemplate) -> Result<(MockServer, PromServer)> {
-        let mock = MockServer::start().await;
-        Mock::given(any()).respond_with(template).mount(&mock).await;
-
-        let config = Config {
-            base_url: mock.uri(),
-            token: None,
-            insecure: false,
-            bind: "127.0.0.1:0".to_string(),
-            allowed_hosts: None,
-        };
-        let server = PromServer::new(PromClient::new(&config)?);
-        Ok((mock, server))
-    }
-
-    /// A minimal well-formed Prometheus success envelope.
-    fn ok_body() -> ResponseTemplate {
-        ResponseTemplate::new(200).set_body_string(r#"{"status":"success","data":{}}"#)
-    }
-
-    /// The one request the mock recorded, or an error describing what it saw.
-    async fn only_request(mock: &MockServer) -> Result<Request> {
-        let mut requests = mock
-            .received_requests()
-            .await
-            .ok_or_else(|| eyre!("mock server is not recording requests"))?;
-        if requests.len() != 1 {
-            return Err(eyre!("expected exactly 1 request, got {}", requests.len()));
-        }
-        requests.pop().ok_or_else(|| eyre!("no request recorded"))
-    }
-
-    /// Flatten a tool's `ErrorData` into `eyre` so tests can use `?`.
-    fn ok(result: Result<String, ErrorData>) -> Result<String> {
-        result.map_err(|e| eyre!("tool returned an error: {e:?}"))
-    }
-
-    #[tokio::test]
-    async fn query_omits_time_when_unset() -> Result<()> {
-        let (mock, server) = mock_prom(ok_body()).await?;
-        ok(server
-            .query(Parameters(InstantQueryParams {
-                query: "up".to_string(),
-                time: None,
-            }))
-            .await)?;
-
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.path(), "/api/v1/query");
-        assert_eq!(req.url.query(), Some("query=up"));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn query_sends_time_when_set() -> Result<()> {
-        let (mock, server) = mock_prom(ok_body()).await?;
-        ok(server
-            .query(Parameters(InstantQueryParams {
-                query: "up".to_string(),
-                time: Some("42".to_string()),
-            }))
-            .await)?;
-
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.path(), "/api/v1/query");
-        assert_eq!(req.url.query(), Some("query=up&time=42"));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn query_range_sends_all_four_required_params() -> Result<()> {
-        let (mock, server) = mock_prom(ok_body()).await?;
-        ok(server
-            .query_range(Parameters(RangeQueryParams {
-                query: "up".to_string(),
-                start: "1".to_string(),
-                end: "2".to_string(),
-                step: "30s".to_string(),
-            }))
-            .await)?;
-
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.path(), "/api/v1/query_range");
-        // Unlike Loki's, this tool takes no `limit` and no optionals at all.
-        assert_eq!(req.url.query(), Some("query=up&start=1&end=2&step=30s"));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn series_repeats_the_match_param_and_omits_unset_window() -> Result<()> {
-        let (mock, server) = mock_prom(ok_body()).await?;
-        ok(server
-            .series(Parameters(SeriesParams {
-                selectors: vec!["up".to_string(), "down".to_string()],
-                start: None,
-                end: None,
-            }))
-            .await)?;
-
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.path(), "/api/v1/series");
-        assert_eq!(req.url.query(), Some("match%5B%5D=up&match%5B%5D=down"));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn series_sends_the_window_when_set() -> Result<()> {
-        let (mock, server) = mock_prom(ok_body()).await?;
-        ok(server
-            .series(Parameters(SeriesParams {
-                selectors: vec!["up".to_string()],
-                start: Some("1".to_string()),
-                end: Some("2".to_string()),
-            }))
-            .await)?;
-
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.query(), Some("match%5B%5D=up&start=1&end=2"));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn labels_sends_no_query() -> Result<()> {
-        let (mock, server) = mock_prom(ok_body()).await?;
-        ok(server.labels().await)?;
-
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.path(), "/api/v1/labels");
-        assert_eq!(req.url.query(), None);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn label_values_percent_encodes_the_label() -> Result<()> {
-        let (mock, server) = mock_prom(ok_body()).await?;
-        ok(server
-            .label_values(Parameters(LabelValuesParams {
-                label: "foo/bar".to_string(),
-            }))
-            .await)?;
-
-        let req = only_request(&mock).await?;
-        // The `/` must survive as `%2F` rather than adding a path segment.
-        assert_eq!(req.url.path(), "/api/v1/label/foo%2Fbar/values");
-        assert_eq!(req.url.query(), None);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn targets_sends_state_only_when_set() -> Result<()> {
-        let (mock, server) = mock_prom(ok_body()).await?;
-        ok(server
-            .targets(Parameters(TargetsParams { state: None }))
-            .await)?;
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.path(), "/api/v1/targets");
-        assert_eq!(req.url.query(), None);
-
-        let (mock, server) = mock_prom(ok_body()).await?;
-        ok(server
-            .targets(Parameters(TargetsParams {
-                state: Some("active".to_string()),
-            }))
-            .await)?;
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.query(), Some("state=active"));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn rules_maps_rule_type_onto_the_type_param() -> Result<()> {
-        let (mock, server) = mock_prom(ok_body()).await?;
-        ok(server
-            .rules(Parameters(RulesParams { rule_type: None }))
-            .await)?;
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.path(), "/api/v1/rules");
-        assert_eq!(req.url.query(), None);
-
-        let (mock, server) = mock_prom(ok_body()).await?;
-        ok(server
-            .rules(Parameters(RulesParams {
-                rule_type: Some("alert".to_string()),
-            }))
-            .await)?;
-        let req = only_request(&mock).await?;
-        // The MCP-facing name is `rule_type`; Prometheus wants `type`.
-        assert_eq!(req.url.query(), Some("type=alert"));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn metadata_sends_metric_only_when_set() -> Result<()> {
-        let (mock, server) = mock_prom(ok_body()).await?;
-        ok(server
-            .metadata(Parameters(MetadataParams { metric: None }))
-            .await)?;
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.path(), "/api/v1/metadata");
-        assert_eq!(req.url.query(), None);
-
-        let (mock, server) = mock_prom(ok_body()).await?;
-        ok(server
-            .metadata(Parameters(MetadataParams {
-                metric: Some("up".to_string()),
-            }))
-            .await)?;
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.query(), Some("metric=up"));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn parameterless_tools_hit_their_fixed_paths() -> Result<()> {
-        let (mock, server) = mock_prom(ok_body()).await?;
-        ok(server.alerts().await)?;
-        assert_eq!(only_request(&mock).await?.url.path(), "/api/v1/alerts");
-
-        let (mock, server) = mock_prom(ok_body()).await?;
-        ok(server.tsdb_status().await)?;
-        assert_eq!(only_request(&mock).await?.url.path(), "/api/v1/status/tsdb");
-
-        let (mock, server) = mock_prom(ok_body()).await?;
-        ok(server.build_info().await)?;
-        assert_eq!(
-            only_request(&mock).await?.url.path(),
-            "/api/v1/status/buildinfo"
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn upstream_500_maps_to_an_error() -> Result<()> {
-        let (_mock, server) = mock_prom(
-            ResponseTemplate::new(500).set_body_string(r#"{"status":"error","error":"boom"}"#),
-        )
-        .await?;
-
-        assert!(
-            server.labels().await.is_err(),
-            "a 500 must surface as ErrorData, not a panic"
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn malformed_json_maps_to_an_error() -> Result<()> {
-        let (_mock, server) =
-            mock_prom(ResponseTemplate::new(200).set_body_string("not json at all")).await?;
-
-        assert!(
-            server.labels().await.is_err(),
-            "a malformed body must surface as ErrorData, not a panic"
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn malformed_json_on_a_500_maps_to_an_error() -> Result<()> {
-        // The client parses the body before checking the status, so this path
-        // must still fail rather than reporting success.
-        let (_mock, server) =
-            mock_prom(ResponseTemplate::new(500).set_body_string("<html>oops</html>")).await?;
-
-        assert!(server.labels().await.is_err());
-        Ok(())
-    }
-
-    /// Executable form of AGENTS.md hard rule §1: this server is read-only, so
-    /// every tool must reach Prometheus with a `GET` and nothing else.
-    #[tokio::test]
-    async fn every_tool_issues_only_get_requests() -> Result<()> {
-        let (mock, server) = mock_prom(ok_body()).await?;
-
-        ok(server
-            .query(Parameters(InstantQueryParams {
-                query: "up".to_string(),
-                time: None,
-            }))
-            .await)?;
-        ok(server
-            .query_range(Parameters(RangeQueryParams {
-                query: "up".to_string(),
-                start: "1".to_string(),
-                end: "2".to_string(),
-                step: "30s".to_string(),
-            }))
-            .await)?;
-        ok(server
-            .series(Parameters(SeriesParams {
-                selectors: vec!["up".to_string()],
-                start: None,
-                end: None,
-            }))
-            .await)?;
-        ok(server.labels().await)?;
-        ok(server
-            .label_values(Parameters(LabelValuesParams {
-                label: "job".to_string(),
-            }))
-            .await)?;
-        ok(server
-            .targets(Parameters(TargetsParams { state: None }))
-            .await)?;
-        ok(server.alerts().await)?;
-        ok(server
-            .rules(Parameters(RulesParams { rule_type: None }))
-            .await)?;
-        ok(server
-            .metadata(Parameters(MetadataParams { metric: None }))
-            .await)?;
-        ok(server.tsdb_status().await)?;
-        ok(server.build_info().await)?;
-
-        let requests = mock
-            .received_requests()
-            .await
-            .ok_or_else(|| eyre!("mock server is not recording requests"))?;
-        assert_eq!(
-            requests.len(),
-            11,
-            "every tool should have issued a request"
-        );
-        for req in &requests {
-            assert_eq!(
-                req.method.as_str(),
-                "GET",
-                "{} used a non-GET method",
-                req.url
-            );
-        }
-        Ok(())
     }
 }

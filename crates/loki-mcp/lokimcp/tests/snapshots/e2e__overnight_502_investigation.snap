@@ -1,0 +1,404 @@
+---
+source: crates/loki-mcp/lokimcp/tests/e2e.rs
+expression: s.transcript()
+---
+[
+  {
+    "call": {
+      "arguments": {},
+      "tool": "labels"
+    },
+    "response": {
+      "ok": [
+        "container",
+        "host",
+        "job",
+        "level",
+        "service_name"
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/labels",
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "end": "2024-09-25T08:00:00Z",
+        "start": "2024-09-25T00:00:00Z"
+      },
+      "tool": "labels"
+    },
+    "response": {
+      "ok": [
+        "container",
+        "host",
+        "job",
+        "level",
+        "service_name"
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/labels",
+        "query": [
+          [
+            "start",
+            "2024-09-25T00:00:00Z"
+          ],
+          [
+            "end",
+            "2024-09-25T08:00:00Z"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "label": "service_name"
+      },
+      "tool": "label_values"
+    },
+    "response": {
+      "ok": [
+        "caddy",
+        "gitea",
+        "postgres"
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/label/service_name/values",
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "selectors": [
+          "{service_name=\"gitea\"}",
+          "{job=~\"caddy|traefik\"}"
+        ],
+        "start": "2024-09-25T00:00:00Z"
+      },
+      "tool": "series"
+    },
+    "response": {
+      "ok": [
+        {
+          "host": "forge-01",
+          "level": "error",
+          "service_name": "gitea"
+        },
+        {
+          "host": "edge-01",
+          "level": "info",
+          "service_name": "caddy"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/series",
+        "query": [
+          [
+            "match[]",
+            "{service_name=\"gitea\"}"
+          ],
+          [
+            "match[]",
+            "{job=~\"caddy|traefik\"}"
+          ],
+          [
+            "start",
+            "2024-09-25T00:00:00Z"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "direction": "backward",
+        "end": "2024-09-25T08:00:00Z",
+        "query": "{service_name=\"gitea\", host=~\"forge-.*\"} |= \"502\" != \"healthcheck\" |~ `(?i)conn(ection)? refused|starting up` | json | line_format \"{{.msg}}\"",
+        "start": "2024-09-25T00:00:00Z"
+      },
+      "tool": "query_range"
+    },
+    "response": {
+      "ok": {
+        "result": [
+          {
+            "stream": {
+              "host": "forge-01",
+              "level": "error",
+              "service_name": "gitea"
+            },
+            "values": [
+              [
+                "1727229541000000000",
+                "{\"level\":\"error\",\"msg\":\"dial tcp 10.0.20.5:5432: connect: connection refused\",\"status\":502}"
+              ],
+              [
+                "1727229602000000000",
+                "{\"level\":\"error\",\"msg\":\"pq: the database system is starting up\",\"status\":502}"
+              ]
+            ]
+          }
+        ],
+        "resultType": "streams",
+        "stats": {
+          "summary": {
+            "bytesProcessedPerSecond": 812392,
+            "totalEntriesReturned": 2
+          }
+        }
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/query_range",
+        "query": [
+          [
+            "query",
+            "{service_name=\"gitea\", host=~\"forge-.*\"} |= \"502\" != \"healthcheck\" |~ `(?i)conn(ection)? refused|starting up` | json | line_format \"{{.msg}}\""
+          ],
+          [
+            "limit",
+            "100"
+          ],
+          [
+            "start",
+            "2024-09-25T00:00:00Z"
+          ],
+          [
+            "end",
+            "2024-09-25T08:00:00Z"
+          ],
+          [
+            "direction",
+            "backward"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "limit": 5000,
+        "query": "{service_name=\"gitea\", host=~\"forge-.*\"} |= \"502\" != \"healthcheck\" |~ `(?i)conn(ection)? refused|starting up` | json | line_format \"{{.msg}}\"",
+        "step": "5m"
+      },
+      "tool": "query_range"
+    },
+    "response": {
+      "ok": {
+        "result": [
+          {
+            "stream": {
+              "host": "forge-01",
+              "level": "error",
+              "service_name": "gitea"
+            },
+            "values": [
+              [
+                "1727229541000000000",
+                "{\"level\":\"error\",\"msg\":\"dial tcp 10.0.20.5:5432: connect: connection refused\",\"status\":502}"
+              ],
+              [
+                "1727229602000000000",
+                "{\"level\":\"error\",\"msg\":\"pq: the database system is starting up\",\"status\":502}"
+              ]
+            ]
+          }
+        ],
+        "resultType": "streams",
+        "stats": {
+          "summary": {
+            "bytesProcessedPerSecond": 812392,
+            "totalEntriesReturned": 2
+          }
+        }
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/query_range",
+        "query": [
+          [
+            "query",
+            "{service_name=\"gitea\", host=~\"forge-.*\"} |= \"502\" != \"healthcheck\" |~ `(?i)conn(ection)? refused|starting up` | json | line_format \"{{.msg}}\""
+          ],
+          [
+            "limit",
+            "5000"
+          ],
+          [
+            "step",
+            "5m"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "query": "sum by (host) (count_over_time({service_name=\"gitea\"} |= \"502\" [8h]))",
+        "time": "2024-09-25T08:00:00Z"
+      },
+      "tool": "query"
+    },
+    "response": {
+      "ok": {
+        "result": [
+          {
+            "metric": {
+              "host": "forge-01"
+            },
+            "value": [
+              1727250000,
+              "37"
+            ]
+          }
+        ],
+        "resultType": "vector"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/query",
+        "query": [
+          [
+            "query",
+            "sum by (host) (count_over_time({service_name=\"gitea\"} |= \"502\" [8h]))"
+          ],
+          [
+            "limit",
+            "100"
+          ],
+          [
+            "time",
+            "2024-09-25T08:00:00Z"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "direction": "forward",
+        "limit": 3,
+        "query": "{service_name=\"gitea\"}"
+      },
+      "tool": "query"
+    },
+    "response": {
+      "ok": {
+        "result": [
+          {
+            "metric": {
+              "host": "forge-01"
+            },
+            "value": [
+              1727250000,
+              "37"
+            ]
+          }
+        ],
+        "resultType": "vector"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/query",
+        "query": [
+          [
+            "query",
+            "{service_name=\"gitea\"}"
+          ],
+          [
+            "limit",
+            "3"
+          ],
+          [
+            "direction",
+            "forward"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "end": "2024-09-25T08:00:00Z",
+        "query": "{service_name=\"gitea\"}",
+        "start": "2024-09-25T00:00:00Z"
+      },
+      "tool": "index_stats"
+    },
+    "response": {
+      "ok": {
+        "bytes": 18874368,
+        "chunks": 212,
+        "entries": 91422,
+        "streams": 4
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer loki-reader-51c0",
+        "method": "GET",
+        "path": "/loki/api/v1/index/stats",
+        "query": [
+          [
+            "query",
+            "{service_name=\"gitea\"}"
+          ],
+          [
+            "start",
+            "2024-09-25T00:00:00Z"
+          ],
+          [
+            "end",
+            "2024-09-25T08:00:00Z"
+          ]
+        ],
+        "x-scope-orgid": "homelab"
+      }
+    ]
+  }
+]

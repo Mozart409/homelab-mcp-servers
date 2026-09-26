@@ -1,0 +1,364 @@
+---
+source: crates/homeassistant-mcp/hamcp/tests/e2e.rs
+expression: s.transcript()
+---
+[
+  {
+    "call": {
+      "arguments": {
+        "domain": "light",
+        "entity_id": "light.living_room",
+        "service": "turn_on"
+      },
+      "tool": "call_service"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Failed to call light.turn_on: Home Assistant returned 500 Internal Server Error: 500 Internal Server Error\n\nServer got itself in trouble"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "body": {
+          "entity_id": "light.living_room"
+        },
+        "method": "POST",
+        "path": "/api/services/light/turn_on"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "health_check"
+    },
+    "response": {
+      "ok": "Home Assistant API is healthy: API running."
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "domain": "light",
+        "service": "flash"
+      },
+      "tool": "call_service"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Failed to call light.flash: Service call failed: Bad request for light.flash - service may not support response data or invalid parameters"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "body": {},
+        "method": "POST",
+        "path": "/api/services/light/flash"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "health_check"
+    },
+    "response": {
+      "ok": "Home Assistant API is healthy: API running."
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "entity_id": "light.ghost"
+      },
+      "tool": "get_entity"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Entity not found: light.ghost"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/states/light.ghost"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "health_check"
+    },
+    "response": {
+      "ok": "Home Assistant API is healthy: API running."
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "get_config"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Home Assistant returned 401 Unauthorized: 401: Unauthorized"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/config"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "health_check"
+    },
+    "response": {
+      "ok": "Home Assistant API is healthy: API running."
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "get_states"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Home Assistant returned 502 Bad Gateway: <html><body><h1>502 Bad Gateway</h1></body></html>"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/states"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "health_check"
+    },
+    "response": {
+      "ok": "Home Assistant API is healthy: API running."
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "get_services"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "HTTP request failed: error decoding response body for url (http://upstream/api/services): EOF while parsing a string at line 1 column 25"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/services"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "health_check"
+    },
+    "response": {
+      "ok": "Home Assistant API is healthy: API running."
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "template": "{{ foo.bar }}"
+      },
+      "tool": "render_template"
+    },
+    "response": {
+      "error": {
+        "code": -32603,
+        "message": "Template rendering failed: Home Assistant returned 400 Bad Request: {\"message\":\"Error rendering template: UndefinedError: 'foo' is undefined\"}"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "body": {
+          "template": "{{ foo.bar }}"
+        },
+        "method": "POST",
+        "path": "/api/template"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "health_check"
+    },
+    "response": {
+      "ok": "Home Assistant API is healthy: API running."
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "entity_id": "..",
+        "state": "on"
+      },
+      "tool": "set_state"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "\"..\" is not a valid path segment: empty, `.` and `..` would address a different endpoint than the one this tool calls"
+      }
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "health_check"
+    },
+    "response": {
+      "ok": "Home Assistant API is healthy: API running."
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "domain": "..",
+        "service": "states"
+      },
+      "tool": "call_service"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "\"..\" is not a valid path segment: empty, `.` and `..` would address a different endpoint than the one this tool calls"
+      }
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "health_check"
+    },
+    "response": {
+      "ok": "Home Assistant API is healthy: API running."
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "entity_id": "."
+      },
+      "tool": "get_entity"
+    },
+    "response": {
+      "error": {
+        "code": -32602,
+        "message": "\".\" is not a valid path segment: empty, `.` and `..` would address a different endpoint than the one this tool calls"
+      }
+    },
+    "upstream": []
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "health_check"
+    },
+    "response": {
+      "ok": "Home Assistant API is healthy: API running."
+    },
+    "upstream": [
+      {
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.hamcp-e2e.c2lnbmF0dXJl",
+        "method": "GET",
+        "path": "/api/"
+      }
+    ]
+  }
+]

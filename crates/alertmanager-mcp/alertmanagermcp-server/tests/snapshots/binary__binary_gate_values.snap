@@ -1,0 +1,23 @@
+---
+source: crates/alertmanager-mcp/alertmanagermcp-server/tests/binary.rs
+expression: observed
+---
+{
+  "\"\"": [],
+  "\"0\"": [],
+  "\"1\"": [
+    "create_silence",
+    "expire_silence"
+  ],
+  "\"false\"": [],
+  "\"true\"": [
+    "create_silence",
+    "expire_silence"
+  ],
+  "\"ture\"": [],
+  "\"yes\"": [
+    "create_silence",
+    "expire_silence"
+  ],
+  "<unset>": []
+}

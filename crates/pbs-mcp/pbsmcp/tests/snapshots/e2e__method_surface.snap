@@ -1,0 +1,33 @@
+---
+source: crates/pbs-mcp/pbsmcp/tests/e2e.rs
+expression: surface
+---
+{
+  "datastore_status": [
+    "GET"
+  ],
+  "gc_status": [
+    "GET"
+  ],
+  "list_datastores": [
+    "GET"
+  ],
+  "list_groups": [
+    "GET"
+  ],
+  "list_snapshots": [
+    "GET"
+  ],
+  "list_tasks": [
+    "GET"
+  ],
+  "node_status": [
+    "GET"
+  ],
+  "task_log": [
+    "GET"
+  ],
+  "task_status": [
+    "GET"
+  ]
+}

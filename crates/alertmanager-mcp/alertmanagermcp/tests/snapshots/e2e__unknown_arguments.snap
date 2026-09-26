@@ -1,0 +1,27 @@
+---
+source: crates/alertmanager-mcp/alertmanagermcp/tests/e2e.rs
+assertion_line: 384
+expression: refusals
+---
+{
+  "prompts": {
+    "notification_audit": {
+      "code": -32602,
+      "message": "Failed to parse parameters: unknown field `limitt`, expected `alertname` or `receiver`"
+    },
+    "silence_review": {
+      "code": -32602,
+      "message": "Failed to parse parameters: unknown field `limitt`, expected `filter`"
+    }
+  },
+  "tools": {
+    "alert_groups": "failed to deserialize parameters: unknown field `limitt`, expected one of `active`, `silenced`, `inhibited`, `filter`, `receiver`",
+    "create_silence": "failed to deserialize parameters: unknown field `limitt`, expected one of `matchers`, `ends_at`, `starts_at`, `created_by`, `comment`",
+    "expire_silence": "failed to deserialize parameters: unknown field `limitt`, expected `id`",
+    "get_silence": "failed to deserialize parameters: unknown field `limitt`, expected `id`",
+    "list_alerts": "failed to deserialize parameters: unknown field `limitt`, expected one of `active`, `silenced`, `inhibited`, `unprocessed`, `filter`, `receiver`",
+    "list_receivers": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "list_silences": "failed to deserialize parameters: unknown field `limitt`, expected `filter`",
+    "status": "failed to deserialize parameters: unknown field `limitt`, there are no fields"
+  }
+}

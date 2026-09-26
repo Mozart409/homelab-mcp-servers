@@ -1,0 +1,335 @@
+---
+source: crates/alertmanager-mcp/alertmanagermcp/tests/e2e.rs
+expression: s.transcript()
+---
+[
+  {
+    "call": {
+      "arguments": {},
+      "tool": "status"
+    },
+    "response": {
+      "ok": {
+        "cluster": {
+          "peers": [],
+          "status": "disabled"
+        },
+        "config": {
+          "original": "route:\n  receiver: ntfy-critical\n"
+        },
+        "uptime": "2024-09-20T10:00:00.000Z",
+        "versionInfo": {
+          "goVersion": "go1.23.4",
+          "revision": "b2099ea",
+          "version": "0.28.1"
+        }
+      }
+    },
+    "upstream": [
+      {
+        "method": "GET",
+        "path": "/api/v2/status"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "list_receivers"
+    },
+    "response": {
+      "ok": [
+        {
+          "name": "ntfy-critical"
+        },
+        {
+          "name": "null"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "method": "GET",
+        "path": "/api/v2/receivers"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "active": true,
+        "filter": [
+          "alertname=\"BackupJobFailed\"",
+          "severity=~\"critical|warning\""
+        ],
+        "inhibited": false,
+        "receiver": "ntfy-.*",
+        "silenced": false
+      },
+      "tool": "list_alerts"
+    },
+    "response": {
+      "ok": [
+        {
+          "annotations": {
+            "summary": "Nightly backup of vm/101 failed"
+          },
+          "endsAt": "2024-09-25T09:15:00.000Z",
+          "fingerprint": "5e7d4c1b2a3f6e8d",
+          "labels": {
+            "alertname": "BackupJobFailed",
+            "instance": "pbs01:8007",
+            "job": "pbs",
+            "severity": "critical"
+          },
+          "receivers": [
+            {
+              "name": "ntfy-critical"
+            }
+          ],
+          "startsAt": "2024-09-25T01:15:00.000Z",
+          "status": {
+            "inhibitedBy": [],
+            "silencedBy": [],
+            "state": "active"
+          }
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "method": "GET",
+        "path": "/api/v2/alerts",
+        "query": [
+          [
+            "active",
+            "true"
+          ],
+          [
+            "silenced",
+            "false"
+          ],
+          [
+            "inhibited",
+            "false"
+          ],
+          [
+            "filter",
+            "alertname=\"BackupJobFailed\""
+          ],
+          [
+            "filter",
+            "severity=~\"critical|warning\""
+          ],
+          [
+            "receiver",
+            "ntfy-.*"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "filter": [
+          "job=\"pbs\""
+        ]
+      },
+      "tool": "alert_groups"
+    },
+    "response": {
+      "ok": [
+        {
+          "alerts": [
+            {
+              "annotations": {
+                "summary": "Nightly backup of vm/101 failed"
+              },
+              "endsAt": "2024-09-25T09:15:00.000Z",
+              "fingerprint": "5e7d4c1b2a3f6e8d",
+              "labels": {
+                "alertname": "BackupJobFailed",
+                "instance": "pbs01:8007",
+                "job": "pbs",
+                "severity": "critical"
+              },
+              "receivers": [
+                {
+                  "name": "ntfy-critical"
+                }
+              ],
+              "startsAt": "2024-09-25T01:15:00.000Z",
+              "status": {
+                "inhibitedBy": [],
+                "silencedBy": [],
+                "state": "active"
+              }
+            }
+          ],
+          "labels": {
+            "alertname": "BackupJobFailed"
+          },
+          "receiver": {
+            "name": "ntfy-critical"
+          }
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "method": "GET",
+        "path": "/api/v2/alerts/groups",
+        "query": [
+          [
+            "filter",
+            "job=\"pbs\""
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "comment": "manual re-run of vm/101 backup",
+        "created_by": "amadeus",
+        "ends_at": "2024-09-25T22:00:00Z",
+        "matchers": [
+          {
+            "name": "alertname",
+            "value": "BackupJobFailed"
+          },
+          {
+            "is_regex": true,
+            "name": "instance",
+            "value": "pbs0[12]:.*"
+          }
+        ],
+        "starts_at": "2024-09-25T20:00:00Z"
+      },
+      "tool": "create_silence"
+    },
+    "response": {
+      "ok": {
+        "silenceID": "8b1d64b3-5f2a-4c7e-9d0b-2e6f1a3c4d5e"
+      }
+    },
+    "upstream": [
+      {
+        "body": {
+          "comment": "manual re-run of vm/101 backup",
+          "createdBy": "amadeus",
+          "endsAt": "2024-09-25T22:00:00Z",
+          "matchers": [
+            {
+              "isEqual": true,
+              "isRegex": false,
+              "name": "alertname",
+              "value": "BackupJobFailed"
+            },
+            {
+              "isEqual": true,
+              "isRegex": true,
+              "name": "instance",
+              "value": "pbs0[12]:.*"
+            }
+          ],
+          "startsAt": "2024-09-25T20:00:00Z"
+        },
+        "method": "POST",
+        "path": "/api/v2/silences"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "filter": [
+          "alertname=\"BackupJobFailed\""
+        ]
+      },
+      "tool": "list_silences"
+    },
+    "response": {
+      "ok": [
+        {
+          "comment": "manual re-run of vm/101 backup",
+          "createdBy": "amadeus",
+          "endsAt": "2024-09-25T22:00:00.000Z",
+          "id": "8b1d64b3-5f2a-4c7e-9d0b-2e6f1a3c4d5e",
+          "matchers": [
+            {
+              "isEqual": true,
+              "isRegex": false,
+              "name": "alertname",
+              "value": "BackupJobFailed"
+            },
+            {
+              "isEqual": true,
+              "isRegex": true,
+              "name": "instance",
+              "value": "pbs0[12]:.*"
+            }
+          ],
+          "startsAt": "2024-09-25T20:00:00.000Z",
+          "status": {
+            "state": "active"
+          },
+          "updatedAt": "2024-09-25T20:00:00.000Z"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "method": "GET",
+        "path": "/api/v2/silences",
+        "query": [
+          [
+            "filter",
+            "alertname=\"BackupJobFailed\""
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "id": "8b1d64b3-5f2a-4c7e-9d0b-2e6f1a3c4d5e"
+      },
+      "tool": "get_silence"
+    },
+    "response": {
+      "ok": {
+        "id": "8b1d64b3-5f2a-4c7e-9d0b-2e6f1a3c4d5e",
+        "status": {
+          "state": "active"
+        }
+      }
+    },
+    "upstream": [
+      {
+        "method": "GET",
+        "path": "/api/v2/silence/8b1d64b3-5f2a-4c7e-9d0b-2e6f1a3c4d5e"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "id": "8b1d64b3-5f2a-4c7e-9d0b-2e6f1a3c4d5e"
+      },
+      "tool": "expire_silence"
+    },
+    "response": {
+      "ok": "silence 8b1d64b3-5f2a-4c7e-9d0b-2e6f1a3c4d5e expired"
+    },
+    "upstream": [
+      {
+        "method": "DELETE",
+        "path": "/api/v2/silence/8b1d64b3-5f2a-4c7e-9d0b-2e6f1a3c4d5e"
+      }
+    ]
+  }
+]

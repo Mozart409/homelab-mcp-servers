@@ -1,0 +1,28 @@
+---
+source: crates/pbs-mcp/pbsmcp/tests/e2e.rs
+assertion_line: 525
+expression: refusals
+---
+{
+  "prompts": {
+    "backup_health_report": {
+      "code": -32602,
+      "message": "Failed to parse parameters: unknown field `limitt`, expected `datastore`"
+    },
+    "snapshot_audit": {
+      "code": -32602,
+      "message": "Failed to parse parameters: unknown field `limitt`, expected `datastore` or `group`"
+    }
+  },
+  "tools": {
+    "datastore_status": "failed to deserialize parameters: unknown field `limitt`, expected `store`",
+    "gc_status": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "list_datastores": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "list_groups": "failed to deserialize parameters: unknown field `limitt`, expected `store` or `namespace`",
+    "list_snapshots": "failed to deserialize parameters: unknown field `limitt`, expected one of `store`, `namespace`, `backup_type`, `backup_id`",
+    "list_tasks": "failed to deserialize parameters: unknown field `limitt`, expected one of `limit`, `errors_only`, `running`, `since`",
+    "node_status": "failed to deserialize parameters: unknown field `limitt`, there are no fields",
+    "task_log": "failed to deserialize parameters: unknown field `limitt`, expected one of `upid`, `start`, `limit`, `tail`",
+    "task_status": "failed to deserialize parameters: unknown field `limitt`, expected `upid`"
+  }
+}

@@ -1,0 +1,15 @@
+---
+source: crates/prometheus-mcp/prommcp-server/tests/binary.rs
+expression: seen
+---
+[
+  {
+    "authorization": "Bearer prom-reader-7f3a9c",
+    "method": "GET",
+    "path": "/api/v1/status/buildinfo"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/status/buildinfo"
+  }
+]

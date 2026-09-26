@@ -14,55 +14,38 @@ pub use client::WpClient;
 pub use config::Config;
 pub use server::WpServer;
 
-use std::sync::Arc;
+use color_eyre::eyre::Result;
 
-use color_eyre::eyre::{Result, WrapErr};
-use mcp_common::health_router;
-use rmcp::transport::streamable_http_server::{
-    StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
-};
-
-/// Build a [`WpServer`] from the environment and serve it over streamable HTTP
-/// (mounted at `/mcp`) until the process is stopped.
+/// Build the complete HTTP app for `config`: a [`WpServer`] per MCP session at
+/// `/mcp`, plus the health routes.
 ///
-/// Reads `WP_*` env vars via [`Config::from_env()`], logs startup info, builds
-/// the HTTP client to Woodpecker, and serves tools over streamable HTTP. A successful
-/// call means the server is listening and ready to accept MCP requests.
+/// This is what [`run`] serves, and what the end-to-end tests in `tests/` bind
+/// on an ephemeral port — so the tests exercise the production router,
+/// DNS-rebinding allow-list included, rather than a look-alike.
 ///
 /// # Errors
 ///
-/// Returns an error if configuration is missing/invalid (e.g. `WP_HOST` or
-/// `WP_TOKEN` unset), the HTTP client cannot be built, the bind address is
-/// unavailable, or the server fails while running.
+/// Returns an error if the HTTP client cannot be built.
+pub fn router(config: &Config) -> Result<axum::Router> {
+    let client = WpClient::new(config)?;
+    let max_log_lines = config.max_log_lines;
+    Ok(mcp_common::mcp_router(
+        move || Ok(WpServer::new(client.clone(), max_log_lines)),
+        config.allowed_hosts.clone(),
+    ))
+}
+
+/// Build a [`WpServer`] from the environment and serve it over
+/// streamable HTTP (mounted at `/mcp`) until the process is stopped.
+///
+/// # Errors
+///
+/// Returns an error if configuration is missing/invalid, the HTTP client cannot be built,
+/// the bind address is unavailable, or the server fails while running.
 pub async fn run() -> Result<()> {
     let config = Config::from_env()?;
     tracing::info!(base_url = %config.base_url, "starting wpmcp");
 
-    let client = WpClient::new(&config)?;
-    let max_log_lines = config.max_log_lines;
-
-    let mut http_config = StreamableHttpServerConfig::default();
-    if let Some(hosts) = config.allowed_hosts.clone() {
-        http_config = http_config.with_allowed_hosts(hosts);
-    }
-
-    let service = StreamableHttpService::new(
-        move || Ok(WpServer::new(client.clone(), max_log_lines)),
-        Arc::new(LocalSessionManager::default()),
-        http_config,
-    );
-
-    let app = axum::Router::new()
-        .nest_service("/mcp", service)
-        .merge(health_router());
-
-    let listener = tokio::net::TcpListener::bind(&config.bind)
-        .await
-        .wrap_err_with(|| format!("failed to bind {}", config.bind))?;
-    tracing::info!(bind = %config.bind, "wpmcp listening on http://{}/mcp", config.bind);
-
-    axum::serve(listener, app)
-        .await
-        .wrap_err("streamable-HTTP server error")?;
-    Ok(())
+    let app = router(&config)?;
+    mcp_common::serve(&config.bind, app, "wpmcp").await
 }

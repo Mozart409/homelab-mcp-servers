@@ -51,9 +51,17 @@ build-release:
 # artifacts. `--all-targets` is deliberately absent: it would silently drop
 # doctests from the run.
 #
+# The cargo invocation is wrapped, not changed: scripts/test-pg.sh brings up a
+# throwaway, durability-off Postgres on tmpfs (~1s), hands pgmcp's tests its
+# URL, and tears it down afterwards. Nothing is skipped or `#[ignore]`d — the
+# read-only guarantee is verified against a real server on every run.
+#
+# Snapshot tests (insta) write `*.snap.new` on a mismatch and fail; review with
+# `cargo insta review`, or accept everything with `INSTA_UPDATE=always just test`.
+#
 # Test everything
 test:
-    cargo test --workspace --all-features
+    scripts/test-pg.sh run -- cargo test --workspace --all-features
 
 # Narrowing to one package re-resolves features over just that package, so the
 # first run after a `just test` rebuilds a slice of the dependency tree (~16s
@@ -62,11 +70,7 @@ test:
 #
 # Test a specific package (e.g. `just test-pkg pgmcp`)
 test-pkg pkg:
-    cargo test -p {{ pkg }}
-
-# Run the pgmcp DB integration tests (needs PGMCP_TEST_DATABASE_URL, from .sops.env or the shell; `just test` marks them ignored)
-test-db:
-    {{ secrets }} 'cargo test -p pgmcp --test integration -- --ignored'
+    scripts/test-pg.sh run -- cargo test -p {{ pkg }}
 
 # Watch a specific package and re-run its binary (e.g. `just watch-pkg pbsmcp-server`)
 watch-pkg pkg:
@@ -129,7 +133,11 @@ lint: fmt clippy deny
 
 # Same checks as `lint`, but read-only — this is the variant CI must use, since
 # `fmt` rewrites files and would let unformatted code pass a pipeline silently.
-lint-ci: fmt-check clippy deny
+lint-ci: fmt-check clippy deny toolchain-pin
+
+# Fail if the Containerfile's RUST_TOOLCHAIN drifted from the flake's rustc
+toolchain-pin:
+    scripts/check-toolchain-pin.sh
 
 # Run keep-sorted on staged files or all tracked files
 sort:
@@ -149,10 +157,10 @@ sort:
 # Run fmt-check, clippy, cargo-deny, and the test suite (fast local path)
 ci: lint-ci test
 
-# Runs fmt, clippy, and the test suite through crane, exactly as
-# .woodpecker/test.yaml does. Slower on a cold Nix store than `just ci`, because
+# Runs fmt, clippy, the test suite, and the toolchain-pin check through crane,
+# exactly as the GitHub `nix checks` workflow does. Slower on a cold Nix store than `just ci`, because
 # it compiles dependencies into the Nix store rather than reusing `target/` —
-# but that is precisely what makes the result cacheable in Attic, and it is the
+# but that is precisely what makes the result cacheable, and it is the
 # way to reproduce a CI result locally without pushing.
 #
 # cargo-deny is absent for the same reason it is absent in CI: it needs network
@@ -164,7 +172,8 @@ ci-nix:
         .#checks.x86_64-linux.fmt \
         .#checks.x86_64-linux.clippy \
         .#checks.x86_64-linux.test \
-        .#checks.x86_64-linux.actionlint
+        .#checks.x86_64-linux.actionlint \
+        .#checks.x86_64-linux.toolchain-pin
 
 # Run pre-commit hooks manually
 pre-commit:

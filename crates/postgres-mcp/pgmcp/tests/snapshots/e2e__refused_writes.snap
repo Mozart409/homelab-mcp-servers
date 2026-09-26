@@ -1,0 +1,82 @@
+---
+source: crates/postgres-mcp/pgmcp/tests/e2e.rs
+expression: "Value::Object(refused)"
+---
+{
+  "commit_escape": {
+    "error": "query execution failed: error returned from database: syntax error at or near \";\": syntax error at or near \";\"",
+    "sql": "COMMIT; DELETE FROM forge.issues"
+  },
+  "create_table": {
+    "error": "query execution failed: error returned from database: syntax error at or near \"CREATE\": syntax error at or near \"CREATE\"",
+    "sql": "CREATE TABLE forge.pwned (id int)"
+  },
+  "create_temp": {
+    "error": "query execution failed: error returned from database: syntax error at or near \"CREATE\": syntax error at or near \"CREATE\"",
+    "sql": "CREATE TEMP TABLE t AS SELECT 1"
+  },
+  "data_modifying_cte": {
+    "error": "query execution failed: error returned from database: WITH clause containing a data-modifying statement must be at the top level: WITH clause containing a data-modifying statement must be at the top level",
+    "sql": "WITH d AS (DELETE FROM forge.issues RETURNING *) SELECT count(*) FROM d"
+  },
+  "delete": {
+    "error": "query execution failed: error returned from database: syntax error at or near \"FROM\": syntax error at or near \"FROM\"",
+    "sql": "DELETE FROM forge.issues"
+  },
+  "drop_table": {
+    "error": "query execution failed: error returned from database: syntax error at or near \"TABLE\": syntax error at or near \"TABLE\"",
+    "sql": "DROP TABLE forge.issues CASCADE"
+  },
+  "flip_read_only": {
+    "error": "query execution failed: error returned from database: transaction read-write mode must be set before any query: transaction read-write mode must be set before any query",
+    "sql": "SELECT set_config('transaction_read_only', 'off', false)"
+  },
+  "function_dynamic_ddl": {
+    "error": "query execution failed: error returned from database: cannot execute DROP TABLE in a read-only transaction: cannot execute DROP TABLE in a read-only transaction",
+    "sql": "SELECT forge.nuke()"
+  },
+  "function_insert": {
+    "error": "query execution failed: error returned from database: cannot execute INSERT in a read-only transaction: cannot execute INSERT in a read-only transaction",
+    "sql": "SELECT forge.log_note('pwned')"
+  },
+  "function_update": {
+    "error": "query execution failed: error returned from database: cannot execute UPDATE in a read-only transaction: cannot execute UPDATE in a read-only transaction",
+    "sql": "SELECT forge.star(10) FROM forge.repos"
+  },
+  "insert": {
+    "error": "query execution failed: error returned from database: syntax error at or near \"INTO\": syntax error at or near \"INTO\"",
+    "sql": "INSERT INTO forge.users VALUES (99, 'mallory', NULL, now())"
+  },
+  "large_object_create": {
+    "error": "query execution failed: error returned from database: cannot execute lo_create() in a read-only transaction: cannot execute lo_create() in a read-only transaction",
+    "sql": "SELECT lo_create(0)"
+  },
+  "nextval": {
+    "error": "query execution failed: error returned from database: cannot execute nextval() in a read-only transaction: cannot execute nextval() in a read-only transaction",
+    "sql": "SELECT nextval('forge.issues_id_seq')"
+  },
+  "paren_escape": {
+    "error": "query execution failed: error returned from database: syntax error at or near \";\": syntax error at or near \";\"",
+    "sql": "SELECT 1) AS _q; DELETE FROM forge.issues; SELECT * FROM (SELECT 1"
+  },
+  "select_for_update": {
+    "error": "query execution failed: error returned from database: cannot execute SELECT FOR UPDATE in a read-only transaction: cannot execute SELECT FOR UPDATE in a read-only transaction",
+    "sql": "SELECT * FROM forge.users FOR UPDATE"
+  },
+  "setval": {
+    "error": "query execution failed: error returned from database: cannot execute setval() in a read-only transaction: cannot execute setval() in a read-only transaction",
+    "sql": "SELECT setval('forge.issues_id_seq', 1)"
+  },
+  "stacked_statement": {
+    "error": "query execution failed: error returned from database: syntax error at or near \";\": syntax error at or near \";\"",
+    "sql": "SELECT 1; DELETE FROM forge.issues"
+  },
+  "truncate": {
+    "error": "query execution failed: error returned from database: syntax error at or near \".\": syntax error at or near \".\"",
+    "sql": "TRUNCATE forge.issues CASCADE"
+  },
+  "update": {
+    "error": "query execution failed: error returned from database: syntax error at or near \".\": syntax error at or near \".\"",
+    "sql": "UPDATE forge.repos SET stars = 0"
+  }
+}

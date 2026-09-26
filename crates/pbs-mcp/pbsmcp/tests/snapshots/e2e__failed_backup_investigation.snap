@@ -1,0 +1,238 @@
+---
+source: crates/pbs-mcp/pbsmcp/tests/e2e.rs
+expression: s.transcript()
+---
+[
+  {
+    "call": {
+      "arguments": {},
+      "tool": "list_datastores"
+    },
+    "response": {
+      "ok": [
+        {
+          "comment": "primary, ZFS mirror",
+          "store": "nas-01"
+        },
+        {
+          "comment": "synced to B2 nightly",
+          "maintenance": "read-only",
+          "store": "offsite"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/admin/datastore"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "store": "nas-01"
+      },
+      "tool": "datastore_status"
+    },
+    "response": {
+      "ok": {
+        "avail": 197608194048,
+        "counts": {
+          "ct": {
+            "groups": 7,
+            "snapshots": 198
+          },
+          "vm": {
+            "groups": 12,
+            "snapshots": 341
+          }
+        },
+        "estimated-full-date": 1727654400,
+        "gc-status": {
+          "disk-chunks": 1204551,
+          "index-file-count": 1843,
+          "pending-bytes": 412316860416,
+          "removed-bytes": 0,
+          "upid": "UPID:pbs01:00001F00:00AB0000:00000000:66F0C000:garbage_collection:nas-01:root@pam:"
+        },
+        "total": 3985729650688,
+        "used": 3788121456640
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/admin/datastore/nas-01/status"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {},
+      "tool": "gc_status"
+    },
+    "response": {
+      "ok": [
+        {
+          "last-run-endtime": 1727222400,
+          "last-run-state": "error: unable to acquire lock",
+          "next-run": 1727308800,
+          "schedule": "daily",
+          "store": "nas-01"
+        },
+        {
+          "last-run-endtime": 1726963200,
+          "last-run-state": "ok",
+          "next-run": 1727568000,
+          "schedule": "sat 02:00",
+          "store": "offsite"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/admin/gc"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "errors_only": true,
+        "limit": 20,
+        "since": 1727222400
+      },
+      "tool": "list_tasks"
+    },
+    "response": {
+      "ok": [
+        {
+          "endtime": 1727226977,
+          "node": "pbs01",
+          "pid": 41394,
+          "starttime": 1727226035,
+          "status": "backup failed: connection error: timed out",
+          "upid": "UPID:pbs01:0000A1B2:0012F3C4:00000007:66F1A2B3:backup:nas-01\\x3avm-101:root@pam:",
+          "user": "root@pam",
+          "worker_id": "nas-01:vm/101",
+          "worker_type": "backup"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/nodes/localhost/tasks",
+        "query": [
+          [
+            "limit",
+            "20"
+          ],
+          [
+            "errors",
+            "1"
+          ],
+          [
+            "since",
+            "1727222400"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "upid": "UPID:pbs01:0000A1B2:0012F3C4:00000007:66F1A2B3:backup:nas-01\\x3avm-101:root@pam:"
+      },
+      "tool": "task_status"
+    },
+    "response": {
+      "ok": {
+        "exitstatus": "backup failed: connection error: timed out",
+        "id": "nas-01:vm/101",
+        "node": "pbs01",
+        "pid": 41394,
+        "starttime": 1727226035,
+        "status": "stopped",
+        "type": "backup",
+        "upid": "UPID:pbs01:0000A1B2:0012F3C4:00000007:66F1A2B3:backup:nas-01\\x3avm-101:root@pam:",
+        "user": "root@pam"
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/nodes/localhost/tasks/UPID%3Apbs01%3A0000A1B2%3A0012F3C4%3A00000007%3A66F1A2B3%3Abackup%3Anas-01%5Cx3avm-101%3Aroot%40pam%3A/status"
+      }
+    ]
+  },
+  {
+    "call": {
+      "arguments": {
+        "tail": 3,
+        "upid": "UPID:pbs01:0000A1B2:0012F3C4:00000007:66F1A2B3:backup:nas-01\\x3avm-101:root@pam:"
+      },
+      "tool": "task_log"
+    },
+    "response": {
+      "ok": {
+        "lines": [
+          {
+            "n": 1198,
+            "t": "upload_chunk: 4.00 MiB in 30.01s (0.13 MiB/s)"
+          },
+          {
+            "n": 1199,
+            "t": "backup ended: connection error: timed out"
+          },
+          {
+            "n": 1200,
+            "t": "TASK ERROR: backup failed: connection error: timed out"
+          }
+        ],
+        "start": 1197,
+        "total": 1200
+      }
+    },
+    "upstream": [
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/nodes/localhost/tasks/UPID%3Apbs01%3A0000A1B2%3A0012F3C4%3A00000007%3A66F1A2B3%3Abackup%3Anas-01%5Cx3avm-101%3Aroot%40pam%3A/log",
+        "query": [
+          [
+            "start",
+            "0"
+          ],
+          [
+            "limit",
+            "1"
+          ]
+        ]
+      },
+      {
+        "authorization": "PBSAPIToken=mcp@pbs!homelab:2f9c1d7e-5b8a-4c3f-9e21-7a6b5c4d3e2f",
+        "method": "GET",
+        "path": "/api2/json/nodes/localhost/tasks/UPID%3Apbs01%3A0000A1B2%3A0012F3C4%3A00000007%3A66F1A2B3%3Abackup%3Anas-01%5Cx3avm-101%3Aroot%40pam%3A/log",
+        "query": [
+          [
+            "start",
+            "1197"
+          ],
+          [
+            "limit",
+            "3"
+          ]
+        ]
+      }
+    ]
+  }
+]

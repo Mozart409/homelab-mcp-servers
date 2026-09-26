@@ -1,0 +1,316 @@
+---
+source: crates/prometheus-mcp/prommcp/tests/e2e.rs
+assertion_line: 66
+expression: "e2e::contract(&client).await.unwrap()"
+---
+{
+  "initialize": {
+    "capabilities": {
+      "prompts": {},
+      "resources": {},
+      "tools": {}
+    },
+    "instructions": "Read-only access to a Prometheus instance. Use these tools to run PromQL queries (instant and range), inspect series/labels, and check target health, alerts, and rules.",
+    "protocolVersion": "2025-06-18",
+    "serverInfo": {
+      "name": "prommcp",
+      "version": "[version]"
+    }
+  },
+  "prompts": [
+    {
+      "arguments": [
+        {
+          "description": "Optional `PromQL` label matcher to narrow scope, e.g. `job=\"api\"` to filter by job.",
+          "name": "matcher",
+          "required": false
+        },
+        {
+          "description": "Alert severity to filter on, e.g. `critical` or `warning`. Omit to show all severities.",
+          "name": "severity",
+          "required": false
+        }
+      ],
+      "description": "Investigate active alerts: identify their root causes, compare rule definitions against live data, and rank by severity and trend.",
+      "name": "alert_triage"
+    },
+    {
+      "arguments": [
+        {
+          "description": "Restrict to a single scrape job. Omit to check all jobs.",
+          "name": "job",
+          "required": false
+        }
+      ],
+      "description": "Diagnose scrape health: find which targets are down, struggling, or misconfigured.",
+      "name": "target_health"
+    }
+  ],
+  "rendered_prompts": {
+    "alert_triage/full": {
+      "messages": [
+        {
+          "content": {
+            "text": "Triage the active alerts in this Prometheus instance and tell me what is failing.\n\nWork in this order:\n1. Call `alerts` to get what is currently firing. Filter for severity `<severity>` in alerts matching `<matcher>`. Note the label sets of each distinct alert.\n2. For each distinct alert, call `rules` to recover the alert rule's expression and `for` duration — do not guess from the alert name; anchor reasoning in the rule definition.\n3. Run `query` or `query_range` on the rule's own expression to see how far over threshold it is and whether the metric is trending toward or away from resolution. Use `query_range` with a 10-15 minute window to detect trend.\n4. Call `targets` to check whether the alert is caused by a scrape failure rather than a genuine application breach — a down target (`up{instance=\"...\"}=0`) produces alerts that look like application failures but are infrastructure issues, not data issues.\n\nReport: - Group alerts by likely common cause rather than listing them flat.\n- Distinguish a real breach from a scrape/staleness artifact.\n- State for each whether it is worsening, steady, or recovering based on the range query rather than the instantaneous value.\n- Quote the rule definition and the most recent metric value.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "alert_triage/minimal": {
+      "messages": [
+        {
+          "content": {
+            "text": "Triage the active alerts in this Prometheus instance and tell me what is failing.\n\nWork in this order:\n1. Call `alerts` to get what is currently firing. Scan all severities. Note the label sets of each distinct alert.\n2. For each distinct alert, call `rules` to recover the alert rule's expression and `for` duration — do not guess from the alert name; anchor reasoning in the rule definition.\n3. Run `query` or `query_range` on the rule's own expression to see how far over threshold it is and whether the metric is trending toward or away from resolution. Use `query_range` with a 10-15 minute window to detect trend.\n4. Call `targets` to check whether the alert is caused by a scrape failure rather than a genuine application breach — a down target (`up{instance=\"...\"}=0`) produces alerts that look like application failures but are infrastructure issues, not data issues.\n\nReport: - Group alerts by likely common cause rather than listing them flat.\n- Distinguish a real breach from a scrape/staleness artifact.\n- State for each whether it is worsening, steady, or recovering based on the range query rather than the instantaneous value.\n- Quote the rule definition and the most recent metric value.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "target_health/full": {
+      "messages": [
+        {
+          "content": {
+            "text": "Diagnose the scrape health of this Prometheus instance.\n\nWork in this order:\n1. Call `targets` to list up/down state and `lastError`/`lastScrape` metadata per target. Restrict to the `<job>` scrape job. Note which targets are down (`state=dropped` or `up=0`) and their error signatures.\n2. For each target that is down or scraping slowly (large `lastScrape` interval), query `up{instance=\"...\"}` with `query_range` over the last 30 minutes to confirm whether the target is perpetually down or intermittently failing.\n3. Call `tsdb_status` to check Prometheus's own health: series/chunk cardinality, head-block series count, and which metrics dominate. Use `metadata` to name the high-cardinality metrics and gauge whether dropping them would help.\n4. Call `build_info` to confirm the Prometheus version (some versions have known scrape bugs).\n\nReport: - A verdict distinguishing (a) targets genuinely down with their last error, (b) targets up but scraping slowly or erroring intermittently, and (c) a Prometheus instance under cardinality pressure that is degrading scrapes on its own.\n- Flag high-cardinality metrics from `tsdb_status` when they are the actual problem, not target health.\n- For each down target, quote the rule or config that should be collecting from it.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "target_health/minimal": {
+      "messages": [
+        {
+          "content": {
+            "text": "Diagnose the scrape health of this Prometheus instance.\n\nWork in this order:\n1. Call `targets` to list up/down state and `lastError`/`lastScrape` metadata per target. Note which targets are down (`state=dropped` or `up=0`) and their error signatures.\n2. For each target that is down or scraping slowly (large `lastScrape` interval), query `up{instance=\"...\"}` with `query_range` over the last 30 minutes to confirm whether the target is perpetually down or intermittently failing.\n3. Call `tsdb_status` to check Prometheus's own health: series/chunk cardinality, head-block series count, and which metrics dominate. Use `metadata` to name the high-cardinality metrics and gauge whether dropping them would help.\n4. Call `build_info` to confirm the Prometheus version (some versions have known scrape bugs).\n\nReport: - A verdict distinguishing (a) targets genuinely down with their last error, (b) targets up but scraping slowly or erroring intermittently, and (c) a Prometheus instance under cardinality pressure that is degrading scrapes on its own.\n- Flag high-cardinality metrics from `tsdb_status` when they are the actual problem, not target health.\n- For each down target, quote the rule or config that should be collecting from it.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    }
+  },
+  "resources": [
+    {
+      "description": "README for prometheus-mcp: PromQL usage, scrape config, and API caveats.",
+      "mimeType": "text/markdown",
+      "name": "Prometheus MCP operator guide",
+      "uri": "doc://prommcp/guide"
+    }
+  ],
+  "tools": [
+    {
+      "description": "List currently active alerts with their state (pending/firing), labels, and annotations.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "alerts"
+    },
+    {
+      "description": "Get Prometheus build information: version, revision, branch, build date, and Go version.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "build_info"
+    },
+    {
+      "description": "List all values for a given label name (e.g. all `job` or `instance` values).",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "description": "Label name to list values for, e.g. `job` or `instance`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "type": "object"
+      },
+      "name": "label_values"
+    },
+    {
+      "description": "List all label names present in the Prometheus database.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "labels"
+    },
+    {
+      "description": "Get metric metadata (type, help text, unit). Optionally restrict to a single metric name.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "metric": {
+            "default": null,
+            "description": "Restrict metadata to a single metric name (default: all metrics).",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "metadata"
+    },
+    {
+      "description": "Evaluate a PromQL expression at a single instant. Returns the current value(s) of the query (a vector or scalar).",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "description": "`PromQL` expression to evaluate, e.g. `up` or `rate(http_requests_total[5m])`.",
+            "type": "string"
+          },
+          "time": {
+            "default": null,
+            "description": "Evaluation timestamp: RFC3339 (`2026-06-30T12:00:00Z`) or a Unix\ntimestamp in seconds. Defaults to the server's current time.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "name": "query"
+    },
+    {
+      "description": "Evaluate a PromQL expression over a time range, returning a time series matrix. Provide start, end, and step.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "description": "Range end: RFC3339 or Unix timestamp (seconds).",
+            "type": "string"
+          },
+          "query": {
+            "description": "`PromQL` expression to evaluate over the range.",
+            "type": "string"
+          },
+          "start": {
+            "description": "Range start: RFC3339 or Unix timestamp (seconds).",
+            "type": "string"
+          },
+          "step": {
+            "description": "Resolution step, as a duration (`30s`, `5m`, `1h`) or seconds.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "start",
+          "end",
+          "step"
+        ],
+        "type": "object"
+      },
+      "name": "query_range"
+    },
+    {
+      "description": "List configured alerting and recording rules with their state and health. Filter by type: alert or record.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "rule_type": {
+            "default": null,
+            "description": "Filter by rule type: `alert` or `record` (default: both).",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "rules"
+    },
+    {
+      "description": "Find series matching one or more selectors, returning the label sets of matching series (not their values).",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "default": null,
+            "description": "Optional end: RFC3339 or Unix timestamp (seconds).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "selectors": {
+            "description": "One or more series selectors, e.g. `[\"up\", \"process_cpu_seconds_total{job=\\\"node\\\"}\"]`.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "start": {
+            "default": null,
+            "description": "Optional start: RFC3339 or Unix timestamp (seconds).",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "selectors"
+        ],
+        "type": "object"
+      },
+      "name": "series"
+    },
+    {
+      "description": "List scrape targets and their health (up/down), last scrape time, and labels. Filter by state: active, dropped, or any.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "default": null,
+            "description": "Filter by target state: `active`, `dropped`, or `any` (default `any`).",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "targets"
+    },
+    {
+      "description": "Get TSDB stats: head series/chunks, label cardinality, and per-metric series counts.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "tsdb_status"
+    }
+  ]
+}

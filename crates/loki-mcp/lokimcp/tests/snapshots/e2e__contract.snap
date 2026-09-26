@@ -1,0 +1,346 @@
+---
+source: crates/loki-mcp/lokimcp/tests/e2e.rs
+assertion_line: 66
+expression: "e2e::contract(&client).await.unwrap()"
+---
+{
+  "initialize": {
+    "capabilities": {
+      "prompts": {},
+      "resources": {},
+      "tools": {}
+    },
+    "instructions": "Read-only access to a Grafana Loki instance. Use these tools to search logs with LogQL (query_range is the workhorse), inspect available labels/values, and gauge log volume via index stats.",
+    "protocolVersion": "2025-06-18",
+    "serverInfo": {
+      "name": "lokimcp",
+      "version": "[version]"
+    }
+  },
+  "prompts": [
+    {
+      "arguments": [
+        {
+          "description": "Stream label to match `service` against (default: `job`).",
+          "name": "label",
+          "required": false
+        },
+        {
+          "description": "Value of the stream label that selects the service, e.g. `varlogs` or\n`caddy`. Combined with `label` to form the stream selector.",
+          "name": "service",
+          "required": true
+        },
+        {
+          "description": "`LogQL` duration for how far back to look, e.g. `1h`, `30m` (default: `1h`).",
+          "name": "window",
+          "required": false
+        }
+      ],
+      "description": "Scan one service's logs for errors over a bounded time window, then summarise what is failing.",
+      "name": "error_scan"
+    },
+    {
+      "arguments": [
+        {
+          "description": "Optional label to drill into. Omit to start from the full label list.",
+          "name": "label",
+          "required": false
+        }
+      ],
+      "description": "Explore the label namespace to construct a valid LogQL stream selector before querying.",
+      "name": "label_explorer"
+    }
+  ],
+  "rendered_prompts": {
+    "error_scan/full": {
+      "messages": [
+        {
+          "content": {
+            "text": "Scan the last <window> of logs for the service `<service>` and tell me what is going wrong.\n\nWork in this order:\n1. Call `label_values` for `<label>` and confirm `<service>` is actually a live stream value. If it is not, stop and say so rather than querying a selector that cannot match — an empty Loki result is indistinguishable from a healthy service.\n2. Call `query_range` with `{<label>=\"<service>\"} |~ \"(?i)error|fatal|panic|exception\"` over the last <window>. `query_range` is the workhorse here; the instant `query` tool answers a different question.\n3. If that returns nothing, widen once — drop the line filter and re-run to confirm the stream is producing logs at all. Distinguish 'no errors' from 'no logs'.\n4. Call `index_stats` for the same selector and window to gauge volume, so you can say whether the sample you looked at is representative or truncated.\n\nReport: the distinct error signatures you found, roughly how often each occurs, the earliest and latest occurrence in the window, and whether the result was capped by the query limit. Quote real log lines. Do not speculate about causes that the logs do not support.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "error_scan/minimal": {
+      "messages": [
+        {
+          "content": {
+            "text": "Scan the last 1h of logs for the service `<service>` and tell me what is going wrong.\n\nWork in this order:\n1. Call `label_values` for `job` and confirm `<service>` is actually a live stream value. If it is not, stop and say so rather than querying a selector that cannot match — an empty Loki result is indistinguishable from a healthy service.\n2. Call `query_range` with `{job=\"<service>\"} |~ \"(?i)error|fatal|panic|exception\"` over the last 1h. `query_range` is the workhorse here; the instant `query` tool answers a different question.\n3. If that returns nothing, widen once — drop the line filter and re-run to confirm the stream is producing logs at all. Distinguish 'no errors' from 'no logs'.\n4. Call `index_stats` for the same selector and window to gauge volume, so you can say whether the sample you looked at is representative or truncated.\n\nReport: the distinct error signatures you found, roughly how often each occurs, the earliest and latest occurrence in the window, and whether the result was capped by the query limit. Quote real log lines. Do not speculate about causes that the logs do not support.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "label_explorer/full": {
+      "messages": [
+        {
+          "content": {
+            "text": "Drill into the Loki label `<label>` and help me build a stream selector from it.\n\nStart by calling `label_values` for `<label>`.\n\nThen:\n- Pick the labels that actually partition the data (`job`, `app`, `namespace`, `container` are typical) and call `label_values` on each. Ignore high-cardinality labels like `pod` or `instance` for selector-building — they fragment streams without helping you find anything.\n- Call `series` with a candidate selector to confirm it matches real streams before anyone spends a `query_range` on it.\n- Use `index_stats` on the candidate to show how much volume it covers.\n\nFinish by giving me two or three concrete, copy-pasteable `LogQL` selectors with a one-line note on what each one covers.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "label_explorer/minimal": {
+      "messages": [
+        {
+          "content": {
+            "text": "Map out this Loki instance's label namespace so I can build a stream selector.\n\nStart by calling `labels` to list every label name.\n\nThen:\n- Pick the labels that actually partition the data (`job`, `app`, `namespace`, `container` are typical) and call `label_values` on each. Ignore high-cardinality labels like `pod` or `instance` for selector-building — they fragment streams without helping you find anything.\n- Call `series` with a candidate selector to confirm it matches real streams before anyone spends a `query_range` on it.\n- Use `index_stats` on the candidate to show how much volume it covers.\n\nFinish by giving me two or three concrete, copy-pasteable `LogQL` selectors with a one-line note on what each one covers.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    }
+  },
+  "resources": [
+    {
+      "description": "README for loki-mcp: LogQL usage, label conventions, and API caveats.",
+      "mimeType": "text/markdown",
+      "name": "Loki MCP operator guide",
+      "uri": "doc://lokimcp/guide"
+    }
+  ],
+  "tools": [
+    {
+      "description": "Get index statistics (stream, chunk, entry, and byte counts) for a selector — useful to gauge log volume before running a broad query.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "default": null,
+            "description": "Optional end: RFC3339 or Unix ns.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "query": {
+            "description": "Log stream selector to compute stats for, e.g. `{job=\"varlogs\"}`.",
+            "type": "string"
+          },
+          "start": {
+            "default": null,
+            "description": "Optional start: RFC3339 or Unix ns.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "name": "index_stats"
+    },
+    {
+      "description": "List all values for a given label name (e.g. all `job` or `app` values) within the time window.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "default": null,
+            "description": "Optional end of the window to consider: RFC3339 or Unix ns.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "label": {
+            "description": "Label name to list values for, e.g. `job` or `app`.",
+            "type": "string"
+          },
+          "start": {
+            "default": null,
+            "description": "Optional start of the window to consider: RFC3339 or Unix ns.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "type": "object"
+      },
+      "name": "label_values"
+    },
+    {
+      "description": "List all label names present within the time window (default: last 6 hours).",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "default": null,
+            "description": "Optional end of the window to consider: RFC3339 or Unix ns. Defaults to now.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start": {
+            "default": null,
+            "description": "Optional start of the window to consider: RFC3339 or Unix ns. Defaults to 6h ago.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "labels"
+    },
+    {
+      "description": "Run an instant LogQL query at a single point in time. Use for metric queries; for browsing log lines over a window prefer query_range.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "direction": {
+            "default": null,
+            "description": "Sort direction: `forward` or `backward` (default: `backward`, newest first).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "default": null,
+            "description": "Max number of entries to return (default: 100).",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "query": {
+            "description": "`LogQL` expression, e.g. `{job=\"varlogs\"} |= \"error\"` or a metric query\nlike `count_over_time({job=\"app\"}[5m])`.",
+            "type": "string"
+          },
+          "time": {
+            "default": null,
+            "description": "Evaluation time: RFC3339 or a Unix timestamp in nanoseconds. Defaults to now.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "name": "query"
+    },
+    {
+      "description": "Run a LogQL query over a time range — the main tool for searching logs (e.g. errors in a service over the last hour). Returns matching log streams or a metric matrix.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "direction": {
+            "default": null,
+            "description": "Sort direction: `forward` or `backward` (default: `backward`, newest first).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "end": {
+            "default": null,
+            "description": "Range end: RFC3339 or Unix timestamp (nanoseconds). Defaults to now.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "default": null,
+            "description": "Max number of entries to return (default: 100).",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "query": {
+            "description": "`LogQL` expression to evaluate over the range.",
+            "type": "string"
+          },
+          "start": {
+            "default": null,
+            "description": "Range start: RFC3339 or Unix timestamp (nanoseconds). Defaults to one hour ago.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "step": {
+            "default": null,
+            "description": "Step for metric queries, as a duration (`30s`, `5m`) or seconds.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "name": "query_range"
+    },
+    {
+      "description": "Find log streams matching one or more selectors, returning their label sets (not the log lines).",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "default": null,
+            "description": "Optional end: RFC3339 or Unix ns.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "selectors": {
+            "description": "One or more log stream selectors, e.g. `[\"{job=\\\"varlogs\\\"}\"]`.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "start": {
+            "default": null,
+            "description": "Optional start: RFC3339 or Unix ns.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "selectors"
+        ],
+        "type": "object"
+      },
+      "name": "series"
+    }
+  ]
+}

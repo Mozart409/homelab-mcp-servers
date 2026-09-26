@@ -18,5 +18,14 @@ tracing-subscriber.workspace = true
 tracing.workspace = true
 # keep-sorted end
 
+[dev-dependencies]
+# keep-sorted start
+insta.workspace = true
+mcp-common = { path = "../../common/mcp-common", features = ["e2e"] }
+serde_json.workspace = true
+tokio.workspace = true
+wiremock.workspace = true
+# keep-sorted end
+
 [lints]
 workspace = true

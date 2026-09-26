@@ -46,16 +46,21 @@ the cross-server plumbing that would otherwise be copy-pasted into every crate:
 and `run_healthcheck(bind)`, the client-side probe behind every binary's
 `--healthcheck` flag. The distroless images have no shell and no `curl`, so the
 container healthcheck is the binary probing itself; that is why the probe must
-work without config or dotenv. A new server merges `health_router()` into its
-own router in `run()` and wires the `--healthcheck` flag in `main` — don't
-reimplement either.
+work without config or dotenv. It also has `mcp_router()` (the `/mcp`
+service plus `health_router()`, with the loopback host allow-list applied),
+`serve()`, `path_segment()` and `error_chain()`. A new server builds its router
+with `mcp_router()` and wires the `--healthcheck` flag in `main` — don't
+reimplement any of these.
 
 Within a library crate the module split is consistent:
 - `config.rs` — `Config` struct + `Config::from_env()`, all settings from env vars.
 - `client.rs` — the REST/DB client wrapper.
 - `server.rs` — the `*Server` struct, tool parameter types, and `#[tool]` methods.
-- `lib.rs` — re-exports + the `run()` function that builds config/client/service
-  and serves over streamable HTTP.
+- `lib.rs` — re-exports, `router(&Config)` (builds the client and hands the
+  server factory to `mcp_common::mcp_router`, which mounts `/mcp` with the
+  host allow-list plus the health routes), and `run()`: `Config::from_env` →
+  `router` → `mcp_common::serve`. The tests drive that same `router`, so keep
+  everything that shapes production behaviour inside it.
 
 ## Hard rules
 
@@ -147,8 +152,8 @@ Use the [`justfile`](justfile) (`just --list`):
 
 ```sh
 just check              # cargo check --workspace --all-targets --all-features
-just test               # cargo test --workspace --all-features
-just test-pkg pgmcp     # one package
+just test               # cargo test --workspace --all-features, inside a throwaway PostgreSQL
+just test-pkg pgmcp     # one package, same throwaway PostgreSQL
 just watch-pkg pgmcp-server
 just fmt                # cargo fmt
 just clippy             # clippy -D warnings -D clippy::pedantic  (must pass clean)
@@ -205,13 +210,73 @@ touching `[profile.*]` in the root `Cargo.toml`, the build-tuning env vars in
   `rmcp::ErrorData` (e.g. `ErrorData::internal_error(format!("{e:#}"), None)`)
   inside tool methods.
 - **Tool params:** a `#[derive(Debug, Deserialize, schemars::JsonSchema)]` struct
-  per tool, doc-commented (the docs become the tool's JSON schema), taken via
-  `Parameters<T>`.
-- **Tests:** env-reading config tests serialize on a `Mutex` and clear env keys
-  before/after (see `config.rs`); follow that pattern. Integration tests live in
-  the lib crate's `tests/`.
+  per tool (and per prompt), doc-commented (the docs become the tool's JSON
+  schema), taken via `Parameters<T>`, and always `#[serde(deny_unknown_fields)]`
+  — a misspelt argument silently dropped makes the call answer a different
+  question. A tool with no arguments takes `_: Parameters<mcp_common::NoArguments>`
+  rather than nothing, for the same reason. `e2e::unknown_arguments` proves it
+  for every tool and prompt.
+- **Tests:** see [Testing](#testing). The only in-module tests left are
+  env-parsing ones in `config.rs` and the SSE/healthcheck plumbing in
+  `mcp-common`; env-reading config tests serialize on a `Mutex` and clear env
+  keys before/after — follow that pattern if you add one.
 - **Tone of docs:** module/`run()`/config doc comments are thorough and explain
   *why* (see `config.rs`, `lib.rs`). Match that density.
+
+
+## Testing Philosophy
+
+- **NEVER write unit tests after you write code.** Unit tests written after the
+  fact tend to just re-describe the implementation rather than verify
+  behavior.
+- **Highly prefer E2E tests as the sole testing mechanism.** Use them to
+  verify complex features work end-to-end. At the end of an E2E test, produce
+  a verifiable and repeatable artifact (e.g. a downloaded/verified file, a
+  persisted DB row, an API response fixture) rather than just asserting a
+  process exited cleanly.
+- **If you must test a system in isolation**, first write down all the ways
+  it could fail, *then* write the code to guard against those failure modes.
+  Do not write the code first and backfill unit tests against it.
+- **When writing an E2E test, don't pick the simplest possible scenario to
+  prove the happy path works.** Pick a medium-to-hard scenario when verifying
+  the work.
+
+
+## Testing
+
+Every server has two suites, both driven by `mcp_common::e2e` (the `e2e`
+feature, dev-dependency only):
+
+- **`<svc>mcp/tests/e2e.rs`** — the production `router()` on a real loopback
+  socket, spoken to over MCP by a raw JSON-RPC client, with wiremock standing in
+  for the upstream API (postgres-mcp uses a real database instead). Each suite
+  opens with the failure modes it guards against, written before the tests.
+  The shared checks every REST server runs: `contract` (tools, prompts,
+  resources, rendered prompts), `method_surface` (the HTTP methods each tool
+  sends — the read-only rule, proven), `check_host_allow_list` (DNS
+  rebinding), `unknown_arguments` (every tool and prompt refuses a misspelt
+  argument before anything goes upstream), `check_insecure_flag` (a self-signed TLS proxy, both ways), and
+  `check_doc_resource`. On top of those, at least one multi-tool `Scenario`
+  that answers a real operator question, plus the failure shapes (upstream
+  errors, garbage bodies, dead hosts, `..` in path arguments) with the session
+  surviving each one.
+- **`<svc>mcp-server/tests/binary.rs`** — the built executable, spawned with a
+  cleared environment (`check_binary_contract`, `ServerProcess`). Anything read
+  from an env var is proven here, not by constructing `Config` in a test.
+
+The artifacts are [insta](https://insta.rs) JSON snapshots under each crate's
+`tests/snapshots/`: contracts, method surfaces and call → upstream → response
+transcripts, with the mock's address scrubbed. A snapshot diff *is* a behaviour
+change — read it before accepting (`cargo insta review`, or
+`INSTA_UPDATE=always` then `git diff`). The Nix check runs with
+`INSTA_UPDATE=no`, so an unreviewed snapshot fails CI.
+
+No `#[ignore]`, no skipping when a service is missing. `just test` and
+`just test-pkg` wrap cargo in [`scripts/test-pg.sh`](scripts/test-pg.sh), which
+starts a throwaway PostgreSQL on tmpfs (Unix socket only, fsync off,
+`max_connections=300`) and exports `PGMCP_TEST_DATABASE_URL`; the flake's
+`checks.test` does the same inside the sandbox. pgmcp tests each get their own
+database, so they run in parallel.
 
 ## Adding a new server
 
@@ -220,7 +285,10 @@ touching `[profile.*]` in the root `Cargo.toml`, the build-tuning env vars in
 2. Implement `config.rs` (env vars prefixed `<SVC>_`, pick the next free default
    port — pbs `8080`, postgres `8081`, prometheus `8082`, loki `8083`, ha `8084`,
    wp `8085`, alertmanager `8086`),
-   `client.rs`, `server.rs` (read-only tools), and `run()` in `lib.rs`.
+   `client.rs`, `server.rs` (read-only tools), and `router()` + `run()` in
+   `lib.rs`. Every path segment taken from a tool argument goes through
+   `mcp_common::path_segment` (it refuses `.`/`..`, which URL normalization
+   would otherwise resolve into a different endpoint).
 3. Register the crate (workspace `members` is `crates/*/*`, so it's automatic),
    add deps to `[workspace.dependencies]` if new. Add the binary to `serverPkgs`
    and `knownServers` in [`flake.nix`](flake.nix) — `serverPkgs` is what the
@@ -232,9 +300,11 @@ touching `[profile.*]` in the root `Cargo.toml`, the build-tuning env vars in
    [`scripts/smoke.sh`](scripts/smoke.sh) (env prefix + port), and, if it should
    run in the local stack, to [`compose.yaml`](compose.yaml). Then
    `just smoke <bin>` to check the image actually serves.
-5. Add a crate `README.md`, a row in the root README's Servers table, and an
+5. Fill in the template's `tests/e2e.rs` and `tests/binary.rs` (see
+   [Testing](#testing)) and review the first snapshots.
+6. Add a crate `README.md`, a row in the root README's Servers table, and an
    entry in `.env.example`.
-6. `just ci`.
+7. `just ci`.
 
 ## Containers
 

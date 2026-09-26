@@ -1,0 +1,281 @@
+---
+source: crates/alertmanager-mcp/alertmanagermcp/tests/e2e.rs
+assertion_line: 76
+expression: "e2e::contract(&client).await.unwrap()"
+---
+{
+  "initialize": {
+    "capabilities": {
+      "prompts": {},
+      "resources": {},
+      "tools": {}
+    },
+    "instructions": "Access to an Alertmanager instance: inspect alerts as Alertmanager sees them (including why they are suppressed), the routing groups and receivers they resolve to, and the silences in effect. Prometheus can tell you an alert is firing; use these tools for what happened to the notification afterwards. This server is read-only. Silence creation and expiry are gated off (ALERTMANAGER_ALLOW_SILENCE is unset), so `create_silence` and `expire_silence` are not registered — report silences as something the operator must change by hand.",
+    "protocolVersion": "2025-06-18",
+    "serverInfo": {
+      "name": "alertmanagermcp",
+      "version": "[version]"
+    }
+  },
+  "prompts": [
+    {
+      "arguments": [
+        {
+          "description": "Restrict the audit to a single alert name, e.g. `NodeDown`. Omit to audit all.",
+          "name": "alertname",
+          "required": false
+        },
+        {
+          "description": "Restrict the audit to alerts routed to a given receiver, e.g. `webhook`.",
+          "name": "receiver",
+          "required": false
+        }
+      ],
+      "description": "Determine why an alert did or did not notify: trace it through grouping and routing to a receiver, and distinguish silenced from inhibited from delivered.",
+      "name": "notification_audit"
+    },
+    {
+      "arguments": [
+        {
+          "description": "Label matcher narrowing which silences to review, e.g. `job=\"node\"`.",
+          "name": "filter",
+          "required": false
+        }
+      ],
+      "description": "Review active and pending silences: flag over-broad matchers, stale silences, and ones about to expire on alerts that are still firing.",
+      "name": "silence_review"
+    }
+  ],
+  "rendered_prompts": {
+    "notification_audit/full": {
+      "messages": [
+        {
+          "content": {
+            "text": "Audit what Alertmanager did with the current alerts, and tell me which ones actually reached a human.\n\nWork in this order:\n1. Call `list_alerts` with no state filters so suppressed alerts are included. Restrict to alerts named `<alertname>`. Restrict to alerts routed to receiver `<receiver>`. For each alert note its `status.state` and, critically, its `status.silencedBy`, `status.inhibitedBy`, and `status.mutedBy` arrays — those are what separate a suppressed alert from a delivered one. All three suppress, but have different causes and different fixes: a silence is deliberate and has an owner, an inhibition is a rule saying some other alert supersedes this one, and a mute is a time interval (out-of-hours, maintenance window) configured in the routing tree.\n2. Call `alert_groups` for the same filters. This is the only view that shows the routing tree's grouping and the receiver each group resolved to; `list_alerts` alone cannot tell you where a notification was sent.\n3. For every non-empty `silencedBy`, call `get_silence` on that ID to recover who created it, why, and when it expires. A silence nobody remembers creating is the most common cause of an alert that 'should have paged'.\n4. Call `list_receivers` and `status` to confirm the receiver actually exists in the loaded config and that Alertmanager is not in a degraded cluster state.\n\nReport:\n- Split the alerts into four groups: delivered, suppressed by silence, suppressed by inhibition, muted by a time interval. Never merge them — they have different fixes, and a muted alert in particular looks like nothing is wrong at all.\n- For each suppressed alert, name the silence, inhibition rule, or time interval responsible, and quote the silence's comment and expiry where there is one.\n- Flag any alert whose group resolved to a receiver that does not appear in `list_receivers` — that is a routing misconfiguration, not a suppression.\n- Do not infer routing from alert labels; read it from `alert_groups`.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "notification_audit/minimal": {
+      "messages": [
+        {
+          "content": {
+            "text": "Audit what Alertmanager did with the current alerts, and tell me which ones actually reached a human.\n\nWork in this order:\n1. Call `list_alerts` with no state filters so suppressed alerts are included. For each alert note its `status.state` and, critically, its `status.silencedBy`, `status.inhibitedBy`, and `status.mutedBy` arrays — those are what separate a suppressed alert from a delivered one. All three suppress, but have different causes and different fixes: a silence is deliberate and has an owner, an inhibition is a rule saying some other alert supersedes this one, and a mute is a time interval (out-of-hours, maintenance window) configured in the routing tree.\n2. Call `alert_groups` for the same filters. This is the only view that shows the routing tree's grouping and the receiver each group resolved to; `list_alerts` alone cannot tell you where a notification was sent.\n3. For every non-empty `silencedBy`, call `get_silence` on that ID to recover who created it, why, and when it expires. A silence nobody remembers creating is the most common cause of an alert that 'should have paged'.\n4. Call `list_receivers` and `status` to confirm the receiver actually exists in the loaded config and that Alertmanager is not in a degraded cluster state.\n\nReport:\n- Split the alerts into four groups: delivered, suppressed by silence, suppressed by inhibition, muted by a time interval. Never merge them — they have different fixes, and a muted alert in particular looks like nothing is wrong at all.\n- For each suppressed alert, name the silence, inhibition rule, or time interval responsible, and quote the silence's comment and expiry where there is one.\n- Flag any alert whose group resolved to a receiver that does not appear in `list_receivers` — that is a routing misconfiguration, not a suppression.\n- Do not infer routing from alert labels; read it from `alert_groups`.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "silence_review/full": {
+      "messages": [
+        {
+          "content": {
+            "text": "Review the silences configured in this Alertmanager and tell me which ones are hiding problems.\n\nWork in this order:\n1. Call `list_silences` to get every silence with its matchers, window, creator, and comment. Restrict to silences matching `<filter>`. Separate them by state: active, pending, expired. Silence IDs are UUIDs; pass one to `get_silence` verbatim.\n2. Call `list_alerts` with `silenced=true` to see which alerts each active silence is actually suppressing right now. A silence suppressing nothing is either stale or mistargeted; a silence suppressing far more than its comment implies is over-broad.\n3. For each active silence, judge the matchers. A regex matcher on `alertname`, or a silence with a single matcher on a broad label like `job` or `instance`, suppresses far more than it usually intends. Quote the matcher when you flag it.\n4. Cross-reference expiry times against what is still firing: a silence about to expire on an alert that is still active means a notification is about to arrive, possibly at an inconvenient hour.\n\nReport:\n- Silences that are suppressing nothing (candidates for removal).\n- Silences whose matchers are broader than their stated comment justifies, with the count of alerts each is actually hiding.\n- Silences expiring soon whose alerts are still firing, so the operator can decide to extend or to fix the underlying issue first.\n- Anything silenced without a comment or with a placeholder comment — that is an audit trail failure regardless of whether the silence is correct.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    },
+    "silence_review/minimal": {
+      "messages": [
+        {
+          "content": {
+            "text": "Review the silences configured in this Alertmanager and tell me which ones are hiding problems.\n\nWork in this order:\n1. Call `list_silences` to get every silence with its matchers, window, creator, and comment. Separate them by state: active, pending, expired. Silence IDs are UUIDs; pass one to `get_silence` verbatim.\n2. Call `list_alerts` with `silenced=true` to see which alerts each active silence is actually suppressing right now. A silence suppressing nothing is either stale or mistargeted; a silence suppressing far more than its comment implies is over-broad.\n3. For each active silence, judge the matchers. A regex matcher on `alertname`, or a silence with a single matcher on a broad label like `job` or `instance`, suppresses far more than it usually intends. Quote the matcher when you flag it.\n4. Cross-reference expiry times against what is still firing: a silence about to expire on an alert that is still active means a notification is about to arrive, possibly at an inconvenient hour.\n\nReport:\n- Silences that are suppressing nothing (candidates for removal).\n- Silences whose matchers are broader than their stated comment justifies, with the count of alerts each is actually hiding.\n- Silences expiring soon whose alerts are still firing, so the operator can decide to extend or to fix the underlying issue first.\n- Anything silenced without a comment or with a placeholder comment — that is an audit trail failure regardless of whether the silence is correct.",
+            "type": "text"
+          },
+          "role": "user"
+        }
+      ]
+    }
+  },
+  "resources": [
+    {
+      "description": "README for alertmanager-mcp: matcher syntax, silence lifecycle, and API caveats.",
+      "mimeType": "text/markdown",
+      "name": "Alertmanager MCP operator guide",
+      "uri": "doc://alertmanagermcp/guide"
+    }
+  ],
+  "tools": [
+    {
+      "description": "List alerts grouped the way Alertmanager's routing tree groups them, with the receiver each group resolves to. Use this rather than list_alerts when the question is about routing or notification batching.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "default": null,
+            "description": "Include alerts that are currently firing (default `true` server-side).",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "filter": {
+            "default": null,
+            "description": "Label matchers to filter by, e.g. `[\"severity=\\\"critical\\\"\"]`.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "inhibited": {
+            "default": null,
+            "description": "Include alerts suppressed by an inhibition rule (default `true` server-side).",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "receiver": {
+            "default": null,
+            "description": "Regex matched against the receiver name.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "silenced": {
+            "default": null,
+            "description": "Include alerts suppressed by a silence (default `true` server-side).",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "alert_groups"
+    },
+    {
+      "description": "Get a single silence by its ID.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "The silence's ID, as returned by `list_silences` or `create_silence`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "name": "get_silence"
+    },
+    {
+      "description": "List alerts currently known to Alertmanager, with their labels, annotations, receivers, and whether each is silenced or inhibited. Filter by state and by label matchers.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "default": null,
+            "description": "Include alerts that are currently firing (default `true` server-side).",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "filter": {
+            "default": null,
+            "description": "Label matchers to filter by, e.g. `[\"severity=\\\"critical\\\"\", \"job=~\\\"node.*\\\"\"]`.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "inhibited": {
+            "default": null,
+            "description": "Include alerts suppressed by an inhibition rule (default `true` server-side).",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "receiver": {
+            "default": null,
+            "description": "Regex matched against the receiver name, e.g. `webhook`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "silenced": {
+            "default": null,
+            "description": "Include alerts suppressed by a silence (default `true` server-side).",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "unprocessed": {
+            "default": null,
+            "description": "Include alerts received but not yet processed into a group.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_alerts"
+    },
+    {
+      "description": "List the configured receiver names. Use this to learn what notification destinations exist before tracing where an alert was routed.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_receivers"
+    },
+    {
+      "description": "List silences with their matchers, time window, creator, comment, and state (active, pending, or expired).",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "filter": {
+            "default": null,
+            "description": "Label matchers to filter silences by, e.g. `[\"alertname=\\\"NodeDown\\\"\"]`.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_silences"
+    },
+    {
+      "description": "Get Alertmanager's status: version info, uptime, cluster peers and status, and the currently loaded configuration.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "status"
+    }
+  ]
+}

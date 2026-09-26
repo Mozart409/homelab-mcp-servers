@@ -1,0 +1,16 @@
+---
+source: crates/loki-mcp/lokimcp-server/tests/binary.rs
+expression: upstream_requests(&mock).await.unwrap()
+---
+[
+  {
+    "authorization": "Bearer loki-reader-51c0",
+    "method": "GET",
+    "path": "/loki/api/v1/labels",
+    "x-scope-orgid": "homelab"
+  },
+  {
+    "method": "GET",
+    "path": "/loki/api/v1/labels"
+  }
+]

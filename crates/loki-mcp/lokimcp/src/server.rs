@@ -5,7 +5,7 @@ use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    Implementation, ListResourcesResult, PromptMessage, Role, ServerCapabilities, ServerInfo,
+    Implementation, ListResourcesResult, PromptMessage, Role, ServerCapabilities, ServerConfig,
 };
 use rmcp::{
     ErrorData, ServerHandler, prompt, prompt_handler, prompt_router, schemars, tool, tool_handler,
@@ -51,6 +51,7 @@ impl LokiServer {
 // ---- Tool parameter types ---------------------------------------------------
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct InstantQueryParams {
     /// `LogQL` expression, e.g. `{job="varlogs"} |= "error"` or a metric query
     /// like `count_over_time({job="app"}[5m])`.
@@ -67,6 +68,7 @@ struct InstantQueryParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct RangeQueryParams {
     /// `LogQL` expression to evaluate over the range.
     query: String,
@@ -88,6 +90,7 @@ struct RangeQueryParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct LabelsParams {
     /// Optional start of the window to consider: RFC3339 or Unix ns. Defaults to 6h ago.
     #[serde(default)]
@@ -98,6 +101,7 @@ struct LabelsParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct LabelValuesParams {
     /// Label name to list values for, e.g. `job` or `app`.
     label: String,
@@ -110,6 +114,7 @@ struct LabelValuesParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct SeriesParams {
     /// One or more log stream selectors, e.g. `["{job=\"varlogs\"}"]`.
     selectors: Vec<String>,
@@ -122,6 +127,7 @@ struct SeriesParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct IndexStatsParams {
     /// Log stream selector to compute stats for, e.g. `{job="varlogs"}`.
     query: String,
@@ -226,7 +232,7 @@ impl LokiServer {
         if let Some(e) = end {
             q.push(("end", e));
         }
-        self.call(&format!("/loki/api/v1/label/{}/values", seg(&label)), &q)
+        self.call(&format!("/loki/api/v1/label/{}/values", seg(&label)?), &q)
             .await
     }
 
@@ -272,6 +278,7 @@ impl LokiServer {
 // ---- Prompt arguments -------------------------------------------------------
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct ErrorScanArgs {
     /// Value of the stream label that selects the service, e.g. `varlogs` or
     /// `caddy`. Combined with `label` to form the stream selector.
@@ -285,6 +292,7 @@ struct ErrorScanArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct LabelExplorerArgs {
     /// Optional label to drill into. Omit to start from the full label list.
     #[serde(default)]
@@ -390,9 +398,9 @@ impl LokiServer {
 #[tool_handler(router = self.tool_router)]
 #[prompt_handler(router = self.prompt_router)]
 impl ServerHandler for LokiServer {
-    fn get_info(&self) -> ServerInfo {
-        // `ServerInfo` is `#[non_exhaustive]`, so build from default and assign.
-        let mut info = ServerInfo::default();
+    fn get_info(&self) -> ServerConfig {
+        // `ServerConfig` is `#[non_exhaustive]`, so build from default and assign.
+        let mut info = ServerConfig::default();
         info.instructions = Some(
             "Read-only access to a Grafana Loki instance. Use these tools to search logs \
              with LogQL (query_range is the workhorse), inspect available labels/values, \
@@ -448,348 +456,5 @@ impl ServerHandler for LokiServer {
                 None,
             ))
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::client::LokiClient;
-    use crate::config::Config;
-    use color_eyre::eyre::{Result, eyre};
-    use wiremock::matchers::any;
-    use wiremock::{Mock, MockServer, Request, ResponseTemplate};
-
-    /// Start a mock Loki that answers *every* request — any method, any path —
-    /// with `template`, and point a [`LokiServer`] at it.
-    ///
-    /// Matching on `any()` rather than on a method/path is deliberate: a request
-    /// the code got wrong still gets served, so the assertions below can report
-    /// what was actually sent instead of failing with an opaque 404.
-    async fn mock_loki(template: ResponseTemplate) -> Result<(MockServer, LokiServer)> {
-        let mock = MockServer::start().await;
-        Mock::given(any()).respond_with(template).mount(&mock).await;
-
-        let config = Config {
-            base_url: mock.uri(),
-            token: None,
-            org_id: None,
-            insecure: false,
-            bind: "127.0.0.1:0".to_string(),
-            allowed_hosts: None,
-        };
-        let server = LokiServer::new(LokiClient::new(&config)?);
-        Ok((mock, server))
-    }
-
-    /// A minimal well-formed Loki success envelope.
-    fn ok_body() -> ResponseTemplate {
-        ResponseTemplate::new(200).set_body_string(r#"{"status":"success","data":{}}"#)
-    }
-
-    /// The one request the mock recorded, or an error describing what it saw.
-    async fn only_request(mock: &MockServer) -> Result<Request> {
-        let mut requests = mock
-            .received_requests()
-            .await
-            .ok_or_else(|| eyre!("mock server is not recording requests"))?;
-        if requests.len() != 1 {
-            return Err(eyre!("expected exactly 1 request, got {}", requests.len()));
-        }
-        requests.pop().ok_or_else(|| eyre!("no request recorded"))
-    }
-
-    /// Flatten a tool's `ErrorData` into `eyre` so tests can use `?`.
-    fn ok(result: Result<String, ErrorData>) -> Result<String> {
-        result.map_err(|e| eyre!("tool returned an error: {e:?}"))
-    }
-
-    #[tokio::test]
-    async fn query_defaults_limit_and_omits_unset_params() -> Result<()> {
-        let (mock, server) = mock_loki(ok_body()).await?;
-        ok(server
-            .query(Parameters(InstantQueryParams {
-                query: "up".to_string(),
-                time: None,
-                limit: None,
-                direction: None,
-            }))
-            .await)?;
-
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.path(), "/loki/api/v1/query");
-        // `limit` is always sent, defaulting to 100; `time`/`direction` are absent.
-        assert_eq!(req.url.query(), Some("query=up&limit=100"));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn query_sends_time_and_direction_when_set() -> Result<()> {
-        let (mock, server) = mock_loki(ok_body()).await?;
-        ok(server
-            .query(Parameters(InstantQueryParams {
-                query: "up".to_string(),
-                time: Some("42".to_string()),
-                limit: Some(5),
-                direction: Some("forward".to_string()),
-            }))
-            .await)?;
-
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.path(), "/loki/api/v1/query");
-        assert_eq!(
-            req.url.query(),
-            Some("query=up&limit=5&time=42&direction=forward")
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn query_range_defaults_limit_and_omits_unset_params() -> Result<()> {
-        let (mock, server) = mock_loki(ok_body()).await?;
-        ok(server
-            .query_range(Parameters(RangeQueryParams {
-                query: "up".to_string(),
-                start: None,
-                end: None,
-                limit: None,
-                step: None,
-                direction: None,
-            }))
-            .await)?;
-
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.path(), "/loki/api/v1/query_range");
-        assert_eq!(req.url.query(), Some("query=up&limit=100"));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn query_range_sends_every_optional_param_when_set() -> Result<()> {
-        let (mock, server) = mock_loki(ok_body()).await?;
-        ok(server
-            .query_range(Parameters(RangeQueryParams {
-                query: "up".to_string(),
-                start: Some("1".to_string()),
-                end: Some("2".to_string()),
-                limit: Some(7),
-                step: Some("30s".to_string()),
-                direction: Some("forward".to_string()),
-            }))
-            .await)?;
-
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.path(), "/loki/api/v1/query_range");
-        assert_eq!(
-            req.url.query(),
-            Some("query=up&limit=7&start=1&end=2&step=30s&direction=forward")
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn labels_sends_no_query_when_window_is_unset() -> Result<()> {
-        let (mock, server) = mock_loki(ok_body()).await?;
-        ok(server
-            .labels(Parameters(LabelsParams {
-                start: None,
-                end: None,
-            }))
-            .await)?;
-
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.path(), "/loki/api/v1/labels");
-        assert_eq!(req.url.query(), None);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn labels_sends_the_window_when_set() -> Result<()> {
-        let (mock, server) = mock_loki(ok_body()).await?;
-        ok(server
-            .labels(Parameters(LabelsParams {
-                start: Some("1".to_string()),
-                end: Some("2".to_string()),
-            }))
-            .await)?;
-
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.path(), "/loki/api/v1/labels");
-        assert_eq!(req.url.query(), Some("start=1&end=2"));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn label_values_percent_encodes_the_label_and_sends_the_window() -> Result<()> {
-        let (mock, server) = mock_loki(ok_body()).await?;
-        ok(server
-            .label_values(Parameters(LabelValuesParams {
-                label: "foo:bar".to_string(),
-                start: Some("1".to_string()),
-                end: None,
-            }))
-            .await)?;
-
-        let req = only_request(&mock).await?;
-        // The `:` must survive as `%3A` rather than restructuring the path.
-        assert_eq!(req.url.path(), "/loki/api/v1/label/foo%3Abar/values");
-        assert_eq!(req.url.query(), Some("start=1"));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn series_repeats_the_match_param_once_per_selector() -> Result<()> {
-        let (mock, server) = mock_loki(ok_body()).await?;
-        ok(server
-            .series(Parameters(SeriesParams {
-                selectors: vec!["up".to_string(), "down".to_string()],
-                start: Some("1".to_string()),
-                end: Some("2".to_string()),
-            }))
-            .await)?;
-
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.path(), "/loki/api/v1/series");
-        assert_eq!(
-            req.url.query(),
-            Some("match%5B%5D=up&match%5B%5D=down&start=1&end=2")
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn index_stats_omits_unset_window() -> Result<()> {
-        let (mock, server) = mock_loki(ok_body()).await?;
-        ok(server
-            .index_stats(Parameters(IndexStatsParams {
-                query: "up".to_string(),
-                start: None,
-                end: None,
-            }))
-            .await)?;
-
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.path(), "/loki/api/v1/index/stats");
-        assert_eq!(req.url.query(), Some("query=up"));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn index_stats_sends_the_window_when_set() -> Result<()> {
-        let (mock, server) = mock_loki(ok_body()).await?;
-        ok(server
-            .index_stats(Parameters(IndexStatsParams {
-                query: "up".to_string(),
-                start: Some("1".to_string()),
-                end: Some("2".to_string()),
-            }))
-            .await)?;
-
-        let req = only_request(&mock).await?;
-        assert_eq!(req.url.query(), Some("query=up&start=1&end=2"));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn upstream_500_maps_to_an_error() -> Result<()> {
-        let (_mock, server) = mock_loki(
-            ResponseTemplate::new(500).set_body_string(r#"{"status":"error","error":"boom"}"#),
-        )
-        .await?;
-
-        let res = server
-            .labels(Parameters(LabelsParams {
-                start: None,
-                end: None,
-            }))
-            .await;
-        assert!(res.is_err(), "a 500 must surface as ErrorData, not a panic");
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn malformed_json_maps_to_an_error() -> Result<()> {
-        let (_mock, server) =
-            mock_loki(ResponseTemplate::new(200).set_body_string("not json at all")).await?;
-
-        let res = server
-            .labels(Parameters(LabelsParams {
-                start: None,
-                end: None,
-            }))
-            .await;
-        assert!(
-            res.is_err(),
-            "a malformed body must surface as ErrorData, not a panic"
-        );
-        Ok(())
-    }
-
-    /// Executable form of AGENTS.md hard rule §1: this server is read-only, so
-    /// every tool must reach Loki with a `GET` and nothing else.
-    #[tokio::test]
-    async fn every_tool_issues_only_get_requests() -> Result<()> {
-        let (mock, server) = mock_loki(ok_body()).await?;
-
-        ok(server
-            .query(Parameters(InstantQueryParams {
-                query: "up".to_string(),
-                time: None,
-                limit: None,
-                direction: None,
-            }))
-            .await)?;
-        ok(server
-            .query_range(Parameters(RangeQueryParams {
-                query: "up".to_string(),
-                start: None,
-                end: None,
-                limit: None,
-                step: None,
-                direction: None,
-            }))
-            .await)?;
-        ok(server
-            .labels(Parameters(LabelsParams {
-                start: None,
-                end: None,
-            }))
-            .await)?;
-        ok(server
-            .label_values(Parameters(LabelValuesParams {
-                label: "job".to_string(),
-                start: None,
-                end: None,
-            }))
-            .await)?;
-        ok(server
-            .series(Parameters(SeriesParams {
-                selectors: vec!["up".to_string()],
-                start: None,
-                end: None,
-            }))
-            .await)?;
-        ok(server
-            .index_stats(Parameters(IndexStatsParams {
-                query: "up".to_string(),
-                start: None,
-                end: None,
-            }))
-            .await)?;
-
-        let requests = mock
-            .received_requests()
-            .await
-            .ok_or_else(|| eyre!("mock server is not recording requests"))?;
-        assert_eq!(requests.len(), 6, "every tool should have issued a request");
-        for req in &requests {
-            assert_eq!(
-                req.method.as_str(),
-                "GET",
-                "{} used a non-GET method",
-                req.url
-            );
-        }
-        Ok(())
     }
 }
