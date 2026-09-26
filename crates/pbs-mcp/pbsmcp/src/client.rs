@@ -6,12 +6,12 @@ use serde_json::Value;
 
 use crate::config::Config;
 
-/// Percent-encode a single URL path segment.
-///
-/// PBS embeds `\xNN` escapes in UPIDs and permits reserved characters in
-/// datastore names; interpolating those raw would change the URL's structure.
-pub(crate) fn seg(s: &str) -> impl std::fmt::Display + '_ {
-    percent_encoding::utf8_percent_encode(s, percent_encoding::NON_ALPHANUMERIC)
+/// Percent-encode one URL path segment, refusing values that would address a
+/// different endpoint (empty, `.`, `..`). See [`mcp_common::path_segment`] for
+/// the failure modes; this only maps the refusal to an MCP `invalid_params`
+/// error so the caller is told which argument was wrong.
+pub(crate) fn seg(s: &str) -> Result<String, rmcp::ErrorData> {
+    mcp_common::path_segment(s).map_err(|e| rmcp::ErrorData::invalid_params(e.to_string(), None))
 }
 
 /// Authenticated client for a single PBS instance.
@@ -129,30 +129,5 @@ impl PbsClient {
         }
 
         serde_json::from_str(&body).wrap_err_with(|| format!("invalid JSON from {url}"))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::seg;
-
-    #[test]
-    fn seg_encodes_upid_escapes() {
-        // Real-world UPID worker-id: PBS escapes `-`/`:` as `\x2d`/`\x3a`; the
-        // raw backslashes must not survive into the URL.
-        assert_eq!(
-            seg(r"backup:r2\x2dstore\x3act-104").to_string(),
-            "backup%3Ar2%5Cx2dstore%5Cx3act%2D104"
-        );
-    }
-
-    #[test]
-    fn seg_encodes_datastore_name() {
-        assert_eq!(seg("r2-store:ct").to_string(), "r2%2Dstore%3Act");
-    }
-
-    #[test]
-    fn seg_passes_alphanumeric_through() {
-        assert_eq!(seg("pbs01").to_string(), "pbs01");
     }
 }
