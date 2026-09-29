@@ -3,7 +3,10 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
+    flake-parts = {
+      url = "github:hercules-ci/flake-parts";
+      inputs.nixpkgs-lib.follows = "nixpkgs";
+    };
     fenix = {
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -11,342 +14,341 @@
     crane.url = "github:ipetkov/crane";
   };
 
-  outputs = {
-    self,
-    nixpkgs,
-    flake-utils,
+  outputs = inputs @ {
+    flake-parts,
     fenix,
-    crane,
+    ...
   }:
-    flake-utils.lib.eachDefaultSystem (system: let
-      pkgs = import nixpkgs {
-        inherit system;
-        config.allowUnfree = true;
-        overlays = [fenix.overlays.default];
-      };
+    flake-parts.lib.mkFlake {inherit inputs;} {
+      systems = ["x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin"];
 
-      # Latest stable Rust, pinned by flake.lock rather than a literal version.
-      toolchain = pkgs.fenix.stable.withComponents [
-        "cargo"
-        "clippy"
-        "rust-src"
-        "rustc"
-        "rustfmt"
-      ];
-
-      craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
-
-      # `craneLib.cleanCargoSource` keeps only Cargo.toml/Cargo.lock/*.rs, which
-      # would drop `clippy.toml` — and without it the workspace's deny-level
-      # `unwrap_used`/`expect_used` lints apply to test code too (the
-      # `allow-*-in-tests` relaxations live in that file), so every test module
-      # would fail clippy. `deny.toml` is kept for the same reason: so the source
-      # a check sees matches the source a developer sees.
-      #
-      # `README.md` is kept because each server `include_str!`s its crate README
-      # and serves it as an MCP doc resource. Filtering it out compiles fine on a
-      # developer's checkout and then fails only under `nix build`, which is the
-      # worst place to discover it — the file is a build input now, not just docs.
-      src = pkgs.lib.cleanSourceWith {
-        src = ./.;
-        filter = path: type:
-          (craneLib.filterCargoSources path type)
-          || (builtins.elem (builtins.baseNameOf path) ["clippy.toml" "deny.toml" "README.md"])
-          # E2E snapshot artifacts (`tests/snapshots/*.snap`) and fixtures: the
-          # test check compares against them, so dropping them here would turn
-          # every snapshot assertion into "new snapshot" — a failure under
-          # INSTA_UPDATE=no, but for the wrong reason.
-          || (pkgs.lib.hasInfix "/tests/" (toString path));
-      };
-
-      commonArgs = {
-        inherit src;
-        pname = "homelab-mcp-servers";
-        version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).workspace.package.version;
-        strictDeps = true;
-        buildInputs =
-          [pkgs.openssl]
-          ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
-            pkgs.darwin.apple_sdk.frameworks.Security
-            pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
-          ];
-        nativeBuildInputs = [pkgs.pkg-config];
-      };
-
-      cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-
-      # Helper to build one server binary from the shared workspace.
-      mkServer = bin:
-        craneLib.buildPackage (commonArgs
-          // {
-            inherit cargoArtifacts;
-            pname = bin;
-            cargoExtraArgs = "--bin ${bin}";
-          });
-
-      # All server binaries in the workspace.
-      serverPkgs = {
-        pbsmcp-server = mkServer "pbsmcp-server";
-        pgmcp-server = mkServer "pgmcp-server";
-        prommcp-server = mkServer "prommcp-server";
-        lokimcp-server = mkServer "lokimcp-server";
-        hamcp-server = mkServer "hamcp-server";
-        wpmcp-server = mkServer "wpmcp-server";
-        alertmanagermcp-server = mkServer "alertmanagermcp-server";
-        tempomcp-server = mkServer "tempomcp-server";
-      };
-
-      # Nix-native lint/test checks, sharing `cargoArtifacts` with the package
-      # builds above.
-      #
-      # WHY THESE EXIST: `just ci` shells out to cargo directly, so every CI run
-      # recompiled all ~1580 dependency crates from scratch — `target/` and
-      # `~/.cargo` live in a container that is destroyed when the step ends, and
-      # nothing outside the Nix store can be served by the Attic cache. Routing
-      # the same checks through crane makes the compiled dependency tree a store
-      # path, so it is cached once and substituted thereafter, leaving only the
-      # ~11 workspace crates to build.
-      #
-      # `cargoArtifacts` invalidates when Cargo.lock changes, so a dependency
-      # bump pays the full cost once — the price of never paying it otherwise.
-      #
-      # NOT INCLUDED: cargo-deny. It fetches the RustSec advisory database over
-      # the network, and Nix builds run in a sandbox with no network access, so
-      # it cannot work here by construction. CI runs it in the dev shell instead.
-      checks = {
-        clippy = craneLib.cargoClippy (commonArgs
-          // {
-            inherit cargoArtifacts;
-            pname = "homelab-mcp-servers-clippy";
-            # Kept byte-identical to `just clippy` so a local run and a CI run
-            # fail on exactly the same lints.
-            cargoClippyExtraArgs = "--all-targets --all-features -- -D warnings -D clippy::pedantic";
-          });
-
-        test = craneLib.cargoTest (commonArgs
-          // {
-            inherit cargoArtifacts;
-            pname = "homelab-mcp-servers-test";
-            cargoTestExtraArgs = "--workspace";
-
-            # `reqwest`'s `rustls` feature loads the SYSTEM root store when
-            # `Client::builder().build()` runs — it is `rustls` (native roots),
-            # not `rustls-tls-webpki-roots` (bundled roots). A Nix build sandbox
-            # has no /etc/ssl/certs, so every `*Client::new()` fails with
-            # `ClientCreationFailed("builder error")` and every test that
-            # constructs a client dies instantly. Only the pure serde tests
-            # survived. Handing it nixpkgs' CA bundle fixes all of them.
-            #
-            # This is a sandbox artefact, not a product bug: the shipped
-            # containers inherit certs from the distroless base.
-            SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-            nativeCheckInputs = [pkgs.cacert pkgs.postgresql];
-
-            # pgmcp's suite runs against a real Postgres, never a skipped one.
-            # The same script `just test` uses brings up a throwaway,
-            # durability-off cluster in the sandbox's TMPDIR (unix socket only,
-            # so no network is involved) and exports PGMCP_TEST_DATABASE_URL.
-            # start/stop rather than `run --`: crane's test command is a shell
-            # function a wrapper script cannot invoke.
-            preCheck = ''
-              eval "$(bash ${./scripts/test-pg.sh} start)"
-            '';
-            postCheck = ''
-              bash ${./scripts/test-pg.sh} stop
-            '';
-
-            # A snapshot mismatch or a missing snapshot fails the check; it must
-            # never be "accepted" inside a build.
-            INSTA_UPDATE = "no";
-          });
-
-        fmt = craneLib.cargoFmt {
-          inherit src;
-          pname = "homelab-mcp-servers-fmt";
+      perSystem = {system, ...}: let
+        pkgs = import inputs.nixpkgs {
+          inherit system;
+          config.allowUnfree = true;
+          overlays = [fenix.overlays.default];
         };
 
-        # actionlint over the GitHub Actions workflows, with the shellcheck and
-        # pyflakes passes it bundles — so the `run:` blocks in those files (awk,
-        # jq, the tag/version guards) are linted, not just the YAML schema.
-        #
-        # WHY THIS IS A CHECK AND NOT A devShells.ci PACKAGE: nixpkgs' actionlint
-        # carries shellcheck and pyflakes, a 236 MiB closure. The CI shell is
-        # deliberately held to what `just ci` invokes, because a lint runner has
-        # to realise that whole closure before it can run anything. As a check
-        # derivation the cost is paid only when this actually runs, and it is
-        # substituted from cache.nixos.org rather than built.
-        #
-        # WHY IT MATTERS HERE: a malformed workflow does not fail loudly on
-        # GitHub — it just never triggers, which is indistinguishable from a
-        # misconfigured repository and cost a release to work out once already.
-        # Nothing else in the tree looks at these files.
-        actionlint = pkgs.runCommand "actionlint" {nativeBuildInputs = [pkgs.actionlint];} ''
-          cp -r ${./.github} .github
-          # Named explicitly rather than letting actionlint discover them: with
-          # no arguments it locates the project by walking up for a `.git`
-          # directory, which a build sandbox does not have.
-          actionlint .github/workflows/*.yml
-          touch $out
-        '';
-
-        # The Containerfile's RUST_TOOLCHAIN must equal this flake's rustc; see
-        # scripts/check-toolchain-pin.sh for why the image cannot just read the
-        # lock. `toolchain` is the same derivation every shell and check uses,
-        # so this compares against what actually builds and lints the code.
-        # Referenced by path because crane's source filter drops both files.
-        toolchain-pin = pkgs.runCommand "toolchain-pin" {nativeBuildInputs = [toolchain pkgs.gawk];} ''
-          bash ${./scripts/check-toolchain-pin.sh} ${./Containerfile}
-          touch $out
-        '';
-      };
-    in {
-      inherit checks;
-
-      # Exposed so CI can build and push it to the binary cache by name.
-      #
-      # `cargoArtifacts` is a build INPUT of the checks, not part of any check's
-      # runtime closure, so pushing the check outputs would not carry it. Without
-      # an explicit handle there is no way to name the one derivation that makes
-      # the whole crane arrangement worthwhile — the compiled dependency tree.
-      legacyPackages.cargo-artifacts = cargoArtifacts;
-
-      packages =
-        serverPkgs
-        // {
-          default = serverPkgs.pbsmcp-server;
-          all = pkgs.linkFarm "all-mcp-servers" (
-            pkgs.lib.mapAttrsToList (name: pkg: {
-              inherit name;
-              path = "${pkg}/bin/${name}";
-            })
-            serverPkgs
-          );
-        };
-
-      # to use other shells, run:
-      # nix develop . --command fish
-      devShells.default = pkgs.mkShell {
-        buildInputs =
-          (with pkgs; [
-            # keep-sorted start
-            act
-            actionlint
-            cargo-audit
-            cargo-deny
-            cargo-edit
-            cargo-insta
-            cargo-watch
-            cargo-workspaces
-            claude-code
-            cocogitto
-            just
-            keep-sorted
-            lazydocker
-            lefthook
-            mold
-            opencode
-            podman
-            podman-compose
-            postgresql
-            sccache
-            sqlx-cli
-            tailwindcss_4
-            toolchain
-            trivy
-            # keep-sorted end
-          ])
-          ++ [
-            # rust-analyzer from the same fenix channel as `toolchain`, so the
-            # editor and the CLI agree on rustc — pedantic clippy and the
-            # analyzer disagreeing about a lint is a miserable way to spend an
-            # afternoon.
-            #
-            # Deliberately NOT a component of `toolchain` itself: devShells.ci
-            # consumes `toolchain`, and rust-analyzer is ~100 MB of closure a
-            # lint runner would realise and never invoke.
-            pkgs.fenix.stable.rust-analyzer
-          ];
-
-        # --- Build-time tuning; see docs/build-performance.md for the numbers --
-        #
-        # sccache caches rustc invocations for the ~300 registry dependencies.
-        # It does nothing for the warm edit-compile loop by design: proc-macros
-        # and anything that invokes the linker are excluded, and workspace
-        # crates carry `-C incremental`, which sccache refuses outright.
-        #
-        # WHAT IT ACTUALLY BUYS, measured: a rebuild after `cargo clean` in the
-        # SAME directory drops 92s -> 52s at a 50% Rust hit rate.
-        #
-        # WHAT IT DOES NOT BUY, also measured: reuse in a DIFFERENT target
-        # directory. A second, freshly created target dir got a 0% Rust hit rate
-        # and ran 19% slower (100s -> 119s) — sccache's cache keys here are
-        # sensitive to the absolute paths cargo passes. So this does not
-        # subsidise rust-analyzer's separate `target/rust-analyzer`, and any
-        # argument for that directory has to stand on lock contention alone.
-        # Do not restore the "reuse across target dirs" claim without
-        # re-measuring; it was believed here once and was wrong.
-        #
-        # Setting this changes every fingerprint in `target/`, so the first
-        # build after adopting it recompiles the world exactly once.
-        RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
-        # Default is 10G; the dependency tree here is large enough, across
-        # enough target dirs and branches, to evict itself at that size.
-        SCCACHE_CACHE_SIZE = "20G";
-
-        # mold instead of GNU ld. Linking is the measured bottleneck of the dev
-        # loop — `cargo test --workspace --no-run` links a dozen test binaries,
-        # and `cargo check` on the same edit is ~100x faster because it links
-        # nothing at all.
-        #
-        # `build.rustflags` (not `target.<triple>.rustflags`, and not a
-        # committed `.cargo/config.toml`) is deliberate: crane's source filter
-        # globs every `*.toml`, so a `.cargo/config.toml` would silently become
-        # a build input of `nix build` and of the cargo-zigbuild container,
-        # neither of which has mold installed. Keeping it an env var of THIS
-        # shell means the flake's derivations and the musl cross-build keep
-        # their stock linker and stay reproducible.
-        #
-        # An explicitly set RUSTFLAGS overrides this, which is the right
-        # precedence for a one-off.
-        CARGO_BUILD_RUSTFLAGS = "-C link-arg=-fuse-ld=mold";
-        # Installing the git hooks is a developer-workstation concern. In CI the
-        # checkout is throwaway and `.git/hooks` is never consulted, so skip it —
-        # it would only add noise (or fail) on a bare clone.
-        shellHook = ''
-          if [ -z "''${CI:-}" ]; then
-            lefthook install
-          fi
-        '';
-      };
-
-      # Minimal shell for CI: exactly what `just ci` (fmt + clippy + deny +
-      # test, the last with its throwaway Postgres) invokes, and nothing else.
-      #
-      # This exists because `devShells.default` carries the whole workstation
-      # toolbox — editors' agents, podman, trivy, sqlx-cli, tailwind. A CI
-      # runner would have to realise that entire closure before it could run a
-      # single lint, and every one of those inputs is a cache miss waiting to
-      # happen on an unrelated version bump. Keeping the CI closure small is
-      # what makes a cold pipeline (empty binary cache) merely slow rather than
-      # unusable.
-      #
-      # `toolchain` is the same fenix derivation the default shell uses, so CI and
-      # the workstation run byte-identical rustc/clippy/rustfmt — which matters
-      # because clippy's pedantic set shifts between toolchain releases.
-      devShells.ci = pkgs.mkShell {
-        buildInputs = [
-          pkgs.cargo-deny
-          pkgs.just
-          # `just test` starts a throwaway cluster for pgmcp's suite.
-          pkgs.postgresql
-          toolchain
+        # Latest stable Rust, pinned by flake.lock rather than a literal version.
+        toolchain = pkgs.fenix.stable.withComponents [
+          "cargo"
+          "clippy"
+          "rust-src"
+          "rustc"
+          "rustfmt"
         ];
+
+        craneLib = (inputs.crane.mkLib pkgs).overrideToolchain toolchain;
+
+        # `craneLib.cleanCargoSource` keeps only Cargo.toml/Cargo.lock/*.rs, which
+        # would drop `clippy.toml` — and without it the workspace's deny-level
+        # `unwrap_used`/`expect_used` lints apply to test code too (the
+        # `allow-*-in-tests` relaxations live in that file), so every test module
+        # would fail clippy. `deny.toml` is kept for the same reason: so the source
+        # a check sees matches the source a developer sees.
+        #
+        # `README.md` is kept because each server `include_str!`s its crate README
+        # and serves it as an MCP doc resource. Filtering it out compiles fine on a
+        # developer's checkout and then fails only under `nix build`, which is the
+        # worst place to discover it — the file is a build input now, not just docs.
+        src = pkgs.lib.cleanSourceWith {
+          src = ./.;
+          filter = path: type:
+            (craneLib.filterCargoSources path type)
+            || (builtins.elem (builtins.baseNameOf path) ["clippy.toml" "deny.toml" "README.md"])
+            # E2E snapshot artifacts (`tests/snapshots/*.snap`) and fixtures: the
+            # test check compares against them, so dropping them here would turn
+            # every snapshot assertion into "new snapshot" — a failure under
+            # INSTA_UPDATE=no, but for the wrong reason.
+            || (pkgs.lib.hasInfix "/tests/" (toString path));
+        };
+
+        commonArgs = {
+          inherit src;
+          pname = "homelab-mcp-servers";
+          version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).workspace.package.version;
+          strictDeps = true;
+          buildInputs =
+            [pkgs.openssl]
+            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+              pkgs.darwin.apple_sdk.frameworks.Security
+              pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
+            ];
+          nativeBuildInputs = [pkgs.pkg-config];
+        };
+
+        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+        # Helper to build one server binary from the shared workspace.
+        mkServer = bin:
+          craneLib.buildPackage (commonArgs
+            // {
+              inherit cargoArtifacts;
+              pname = bin;
+              cargoExtraArgs = "--bin ${bin}";
+            });
+
+        # All server binaries in the workspace.
+        serverPkgs = {
+          pbsmcp-server = mkServer "pbsmcp-server";
+          pgmcp-server = mkServer "pgmcp-server";
+          prommcp-server = mkServer "prommcp-server";
+          lokimcp-server = mkServer "lokimcp-server";
+          hamcp-server = mkServer "hamcp-server";
+          wpmcp-server = mkServer "wpmcp-server";
+          alertmanagermcp-server = mkServer "alertmanagermcp-server";
+          tempomcp-server = mkServer "tempomcp-server";
+        };
+
+        # Nix-native lint/test checks, sharing `cargoArtifacts` with the package
+        # builds above.
+        #
+        # WHY THESE EXIST: `just ci` shells out to cargo directly, so every CI run
+        # recompiled all ~1580 dependency crates from scratch — `target/` and
+        # `~/.cargo` live in a container that is destroyed when the step ends, and
+        # nothing outside the Nix store can be served by the Attic cache. Routing
+        # the same checks through crane makes the compiled dependency tree a store
+        # path, so it is cached once and substituted thereafter, leaving only the
+        # ~11 workspace crates to build.
+        #
+        # `cargoArtifacts` invalidates when Cargo.lock changes, so a dependency
+        # bump pays the full cost once — the price of never paying it otherwise.
+        #
+        # NOT INCLUDED: cargo-deny. It fetches the RustSec advisory database over
+        # the network, and Nix builds run in a sandbox with no network access, so
+        # it cannot work here by construction. CI runs it in the dev shell instead.
+        checks = {
+          clippy = craneLib.cargoClippy (commonArgs
+            // {
+              inherit cargoArtifacts;
+              pname = "homelab-mcp-servers-clippy";
+              # Kept byte-identical to `just clippy` so a local run and a CI run
+              # fail on exactly the same lints.
+              cargoClippyExtraArgs = "--all-targets --all-features -- -D warnings -D clippy::pedantic";
+            });
+
+          test = craneLib.cargoTest (commonArgs
+            // {
+              inherit cargoArtifacts;
+              pname = "homelab-mcp-servers-test";
+              cargoTestExtraArgs = "--workspace";
+
+              # `reqwest`'s `rustls` feature loads the SYSTEM root store when
+              # `Client::builder().build()` runs — it is `rustls` (native roots),
+              # not `rustls-tls-webpki-roots` (bundled roots). A Nix build sandbox
+              # has no /etc/ssl/certs, so every `*Client::new()` fails with
+              # `ClientCreationFailed("builder error")` and every test that
+              # constructs a client dies instantly. Only the pure serde tests
+              # survived. Handing it nixpkgs' CA bundle fixes all of them.
+              #
+              # This is a sandbox artefact, not a product bug: the shipped
+              # containers inherit certs from the distroless base.
+              SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+              nativeCheckInputs = [pkgs.cacert pkgs.postgresql];
+
+              # pgmcp's suite runs against a real Postgres, never a skipped one.
+              # The same script `just test` uses brings up a throwaway,
+              # durability-off cluster in the sandbox's TMPDIR (unix socket only,
+              # so no network is involved) and exports PGMCP_TEST_DATABASE_URL.
+              # start/stop rather than `run --`: crane's test command is a shell
+              # function a wrapper script cannot invoke.
+              preCheck = ''
+                eval "$(bash ${./scripts/test-pg.sh} start)"
+              '';
+              postCheck = ''
+                bash ${./scripts/test-pg.sh} stop
+              '';
+
+              # A snapshot mismatch or a missing snapshot fails the check; it must
+              # never be "accepted" inside a build.
+              INSTA_UPDATE = "no";
+            });
+
+          fmt = craneLib.cargoFmt {
+            inherit src;
+            pname = "homelab-mcp-servers-fmt";
+          };
+
+          # actionlint over the GitHub Actions workflows, with the shellcheck and
+          # pyflakes passes it bundles — so the `run:` blocks in those files (awk,
+          # jq, the tag/version guards) are linted, not just the YAML schema.
+          #
+          # WHY THIS IS A CHECK AND NOT A devShells.ci PACKAGE: nixpkgs' actionlint
+          # carries shellcheck and pyflakes, a 236 MiB closure. The CI shell is
+          # deliberately held to what `just ci` invokes, because a lint runner has
+          # to realise that whole closure before it can run anything. As a check
+          # derivation the cost is paid only when this actually runs, and it is
+          # substituted from cache.nixos.org rather than built.
+          #
+          # WHY IT MATTERS HERE: a malformed workflow does not fail loudly on
+          # GitHub — it just never triggers, which is indistinguishable from a
+          # misconfigured repository and cost a release to work out once already.
+          # Nothing else in the tree looks at these files.
+          actionlint = pkgs.runCommand "actionlint" {nativeBuildInputs = [pkgs.actionlint];} ''
+            cp -r ${./.github} .github
+            # Named explicitly rather than letting actionlint discover them: with
+            # no arguments it locates the project by walking up for a `.git`
+            # directory, which a build sandbox does not have.
+            actionlint .github/workflows/*.yml
+            touch $out
+          '';
+
+          # The Containerfile's RUST_TOOLCHAIN must equal this flake's rustc; see
+          # scripts/check-toolchain-pin.sh for why the image cannot just read the
+          # lock. `toolchain` is the same derivation every shell and check uses,
+          # so this compares against what actually builds and lints the code.
+          # Referenced by path because crane's source filter drops both files.
+          toolchain-pin = pkgs.runCommand "toolchain-pin" {nativeBuildInputs = [toolchain pkgs.gawk];} ''
+            bash ${./scripts/check-toolchain-pin.sh} ${./Containerfile}
+            touch $out
+          '';
+        };
+      in {
+        inherit checks;
+
+        # Exposed so CI can build and push it to the binary cache by name.
+        #
+        # `cargoArtifacts` is a build INPUT of the checks, not part of any check's
+        # runtime closure, so pushing the check outputs would not carry it. Without
+        # an explicit handle there is no way to name the one derivation that makes
+        # the whole crane arrangement worthwhile — the compiled dependency tree.
+        legacyPackages.cargo-artifacts = cargoArtifacts;
+
+        packages =
+          serverPkgs
+          // {
+            default = serverPkgs.pbsmcp-server;
+            all = pkgs.linkFarm "all-mcp-servers" (
+              pkgs.lib.mapAttrsToList (name: pkg: {
+                inherit name;
+                path = "${pkg}/bin/${name}";
+              })
+              serverPkgs
+            );
+          };
+
+        # to use other shells, run:
+        # nix develop . --command fish
+        devShells.default = pkgs.mkShell {
+          buildInputs =
+            (with pkgs; [
+              # keep-sorted start
+              act
+              actionlint
+              cargo-audit
+              cargo-deny
+              cargo-edit
+              cargo-insta
+              cargo-watch
+              cargo-workspaces
+              cocogitto
+              just
+              keep-sorted
+              lazydocker
+              lefthook
+              mold
+              podman
+              podman-compose
+              postgresql
+              sccache
+              sqlx-cli
+              tailwindcss_4
+              toolchain
+              trivy
+              # keep-sorted end
+            ])
+            ++ [
+              # rust-analyzer from the same fenix channel as `toolchain`, so the
+              # editor and the CLI agree on rustc — pedantic clippy and the
+              # analyzer disagreeing about a lint is a miserable way to spend an
+              # afternoon.
+              #
+              # Deliberately NOT a component of `toolchain` itself: devShells.ci
+              # consumes `toolchain`, and rust-analyzer is ~100 MB of closure a
+              # lint runner would realise and never invoke.
+              pkgs.fenix.stable.rust-analyzer
+            ];
+
+          # --- Build-time tuning; see docs/build-performance.md for the numbers --
+          #
+          # sccache caches rustc invocations for the ~300 registry dependencies.
+          # It does nothing for the warm edit-compile loop by design: proc-macros
+          # and anything that invokes the linker are excluded, and workspace
+          # crates carry `-C incremental`, which sccache refuses outright.
+          #
+          # WHAT IT ACTUALLY BUYS, measured: a rebuild after `cargo clean` in the
+          # SAME directory drops 92s -> 52s at a 50% Rust hit rate.
+          #
+          # WHAT IT DOES NOT BUY, also measured: reuse in a DIFFERENT target
+          # directory. A second, freshly created target dir got a 0% Rust hit rate
+          # and ran 19% slower (100s -> 119s) — sccache's cache keys here are
+          # sensitive to the absolute paths cargo passes. So this does not
+          # subsidise rust-analyzer's separate `target/rust-analyzer`, and any
+          # argument for that directory has to stand on lock contention alone.
+          # Do not restore the "reuse across target dirs" claim without
+          # re-measuring; it was believed here once and was wrong.
+          #
+          # Setting this changes every fingerprint in `target/`, so the first
+          # build after adopting it recompiles the world exactly once.
+          RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+          # Default is 10G; the dependency tree here is large enough, across
+          # enough target dirs and branches, to evict itself at that size.
+          SCCACHE_CACHE_SIZE = "20G";
+
+          # mold instead of GNU ld. Linking is the measured bottleneck of the dev
+          # loop — `cargo test --workspace --no-run` links a dozen test binaries,
+          # and `cargo check` on the same edit is ~100x faster because it links
+          # nothing at all.
+          #
+          # `build.rustflags` (not `target.<triple>.rustflags`, and not a
+          # committed `.cargo/config.toml`) is deliberate: crane's source filter
+          # globs every `*.toml`, so a `.cargo/config.toml` would silently become
+          # a build input of `nix build` and of the cargo-zigbuild container,
+          # neither of which has mold installed. Keeping it an env var of THIS
+          # shell means the flake's derivations and the musl cross-build keep
+          # their stock linker and stay reproducible.
+          #
+          # An explicitly set RUSTFLAGS overrides this, which is the right
+          # precedence for a one-off.
+          CARGO_BUILD_RUSTFLAGS = "-C link-arg=-fuse-ld=mold";
+          # Installing the git hooks is a developer-workstation concern. In CI the
+          # checkout is throwaway and `.git/hooks` is never consulted, so skip it —
+          # it would only add noise (or fail) on a bare clone.
+          shellHook = ''
+            if [ -z "''${CI:-}" ]; then
+              lefthook install
+            fi
+          '';
+        };
+
+        # Minimal shell for CI: exactly what `just ci` (fmt + clippy + deny +
+        # test, the last with its throwaway Postgres) invokes, and nothing else.
+        #
+        # This exists because `devShells.default` carries the whole workstation
+        # toolbox — editors' agents, podman, trivy, sqlx-cli, tailwind. A CI
+        # runner would have to realise that entire closure before it could run a
+        # single lint, and every one of those inputs is a cache miss waiting to
+        # happen on an unrelated version bump. Keeping the CI closure small is
+        # what makes a cold pipeline (empty binary cache) merely slow rather than
+        # unusable.
+        #
+        # `toolchain` is the same fenix derivation the default shell uses, so CI and
+        # the workstation run byte-identical rustc/clippy/rustfmt — which matters
+        # because clippy's pedantic set shifts between toolchain releases.
+        devShells.ci = pkgs.mkShell {
+          buildInputs = [
+            pkgs.cargo-deny
+            pkgs.just
+            # `just test` starts a throwaway cluster for pgmcp's suite.
+            pkgs.postgresql
+            toolchain
+          ];
+        };
       };
-    })
-    // {
+
       # Generalized NixOS module for the homelab-mcp-servers workspace.
       # Each server is configured under `services.homelab-mcp.servers.<name>`.
-      nixosModules.default = {
+      flake.nixosModules.default = {
         config,
         lib,
         pkgs,
