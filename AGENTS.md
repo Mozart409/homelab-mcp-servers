@@ -12,7 +12,7 @@ the streamable-HTTP transport (mounted at `/mcp`) so an MCP client can answer
 operational questions without being able to change anything — with one
 deliberate exception (`homeassistant-mcp`; see Hard rules §1).
 
-- **Language/edition:** Rust, edition 2024, toolchain pinned via [`flake.nix`](flake.nix).
+- **Language/edition:** Rust, edition 2024, toolchain pinned via [`nix/default.nix`](nix/default.nix) (fenix, locked by the yggdrasil root `flake.lock`).
 - **Core deps:** [`rmcp`](https://github.com/modelcontextprotocol/rust-sdk) (MCP SDK),
   [`axum`](https://github.com/tokio-rs/axum), `tokio`, `serde`, `color-eyre`,
   `reqwest` (rustls) for REST targets, `sqlx` (rustls) for DB targets.
@@ -173,8 +173,8 @@ select the same units, so one type-check is reused by all three; diverging them
 reintroduces a ~70s penalty every time you alternate between two recipes. The
 reasoning, and the measurements behind it, are in
 [`docs/build-performance.md`](docs/build-performance.md) — read that before
-touching `[profile.*]` in the root `Cargo.toml`, the build-tuning env vars in
-`flake.nix`, or [`rust-analyzer.toml`](rust-analyzer.toml).
+touching `[profile.*]` in the root `Cargo.toml`, the build-tuning env vars of the dev
+shell, or [`rust-analyzer.toml`](rust-analyzer.toml).
 
 ## Conventions
 
@@ -275,8 +275,8 @@ change — read it before accepting (`cargo insta review`, or
 No `#[ignore]`, no skipping when a service is missing. `just test` and
 `just test-pkg` wrap cargo in [`scripts/test-pg.sh`](scripts/test-pg.sh), which
 starts a throwaway PostgreSQL on tmpfs (Unix socket only, fsync off,
-`max_connections=300`) and exports `PGMCP_TEST_DATABASE_URL`; the flake's
-`checks.test` does the same inside the sandbox. pgmcp tests each get their own
+`max_connections=300`) and exports `PGMCP_TEST_DATABASE_URL`; the root flake's
+`legacyPackages.<system>.homelab-mcp-servers.checks.test` does the same inside the sandbox. pgmcp tests each get their own
 database, so they run in parallel.
 
 ## Adding a new server
@@ -293,7 +293,8 @@ database, so they run in parallel.
    would otherwise resolve into a different endpoint).
 3. Register the crate (workspace `members` is `crates/*/*`, so it's automatic),
    add deps to `[workspace.dependencies]` if new. Add the binary to `serverPkgs`
-   and `knownServers` in [`flake.nix`](flake.nix) — `serverPkgs` is what the
+   in [`nix/default.nix`](nix/default.nix) and `knownServers` in
+   [`nix/module.nix`](nix/module.nix) — `serverPkgs` is what the
    release workflow enumerates, so that one line is what gets the image built
    and pushed. See
    [`docs/adr/0002-flake-is-the-server-registry.md`](docs/adr/0002-flake-is-the-server-registry.md)

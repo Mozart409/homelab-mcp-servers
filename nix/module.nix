@@ -1,0 +1,278 @@
+# NixOS module for the homelab-mcp-servers workspace, imported by the root
+# flake (`nixosModules.homelab-mcp` there, and directly by the mcp host).
+# Each server is configured under `services.homelab-mcp.servers.<name>`; the
+# packages come from the root flake's `packages.<system>.<server>`.
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}: let
+  cfg = config.services.homelab-mcp;
+
+  # Known server defaults: name -> { prefix, port, hasToken, tokenVar? }
+  # tokenVar overrides the env var the secret is exported as (defaults
+  # to "<prefix>_TOKEN") for servers whose config reads a different name.
+  knownServers = {
+    pbsmcp-server = {
+      prefix = "PBS";
+      port = 8080;
+      hasToken = true;
+      # pbsmcp reads PBS_API_KEY, not PBS_TOKEN
+      tokenVar = "PBS_API_KEY";
+    };
+    pgmcp-server = {
+      prefix = "PG";
+      port = 8081;
+      # The "token" here is the full connection URL — it embeds the
+      # password, so it must travel via tokenFile/LoadCredential and
+      # never through the world-readable systemd environment.
+      hasToken = true;
+      tokenVar = "PG_DATABASE_URL";
+    };
+    prommcp-server = {
+      prefix = "PROM";
+      port = 8082;
+      hasToken = true;
+    };
+    lokimcp-server = {
+      prefix = "LOKI";
+      port = 8083;
+      hasToken = true;
+    };
+    hamcp-server = {
+      prefix = "HA";
+      port = 8084;
+      hasToken = true;
+    };
+    wpmcp-server = {
+      # WP_, not WOODPECKER_ — the agent injects WOODPECKER_* into every
+      # pipeline step, so the two namespaces are kept disjoint.
+      prefix = "WP";
+      port = 8085;
+      hasToken = true;
+    };
+    alertmanagermcp-server = {
+      # Spelled out rather than AM_: unlike WP_ there is no namespace to
+      # avoid, and AM_ reads as an abbreviation of nothing in particular.
+      prefix = "ALERTMANAGER";
+      port = 8086;
+      hasToken = true;
+    };
+    tempomcp-server = {
+      # 8092, not 8087: the homelab deployment allocated it first.
+      prefix = "TEMPO";
+      port = 8092;
+      hasToken = true;
+    };
+  };
+
+  # Turn a list of strings into a comma-separated string, or null if empty.
+  mkAllowedHosts = hosts:
+    if hosts == [] || hosts == null
+    then null
+    else lib.concatStringsSep "," hosts;
+
+  # Resolve the known-server defaults (prefix, port, token handling) for
+  # an instance, keyed on its `serverType` (which defaults to the
+  # instance name). Keying on serverType — not the instance name — is
+  # what lets you run several instances of the same binary: a second
+  # Postgres MCP named `pg-warehouse` with `serverType = "pgmcp-server"`
+  # picks up the `PG` prefix instead of a nonsensical `PG-WAREHOUSE` one.
+  serverDefaults = type:
+    knownServers.${
+      type
+    } or {
+      prefix = lib.toUpper type;
+      port = 8080;
+      hasToken = true;
+    };
+
+  # Build the environment attrset for one server instance.
+  mkServerEnv = srv: let
+    defaults = serverDefaults srv.serverType;
+    p = defaults.prefix;
+    bind = srv.bind;
+    env =
+      {
+        "${p}_BIND" = bind;
+        "${p}_INSECURE" = lib.boolToString srv.insecure;
+      }
+      // (lib.optionalAttrs (srv.host != null) {"${p}_HOST" = srv.host;})
+      // (lib.optionalAttrs (srv.allowedHosts != []) {
+        "${p}_ALLOWED_HOSTS" = mkAllowedHosts srv.allowedHosts;
+      })
+      // srv.extraEnv;
+  in
+    lib.filterAttrs (_: v: v != null) env;
+
+  # Build the systemd service for one server.
+  mkService = name: srv: let
+    defaults = serverDefaults srv.serverType;
+    env = mkServerEnv srv;
+    hasTokenFile = (defaults.hasToken or true) && srv.tokenFile != null;
+    tokenCredentialName = "${name}-token";
+  in {
+    description = "${name} — MCP server";
+    wantedBy = ["multi-user.target"];
+    after = ["network-online.target"];
+    wants = ["network-online.target"];
+
+    environment = env;
+
+    serviceConfig = {
+      Type = "simple";
+      Restart = "on-failure";
+      RestartSec = 5;
+
+      DynamicUser = true;
+      LoadCredential = lib.optional hasTokenFile "${tokenCredentialName}:${srv.tokenFile}";
+
+      # Security hardening (from hamcp-rs)
+      NoNewPrivileges = true;
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      PrivateTmp = true;
+      PrivateDevices = true;
+      ProtectKernelTunables = true;
+      ProtectKernelModules = true;
+      ProtectControlGroups = true;
+      RestrictSUIDSGID = true;
+      RestrictNamespaces = true;
+      LockPersonality = true;
+      MemoryDenyWriteExecute = true;
+      RestrictRealtime = true;
+    };
+
+    script = let
+      tokenVar = defaults.tokenVar or "${defaults.prefix}_TOKEN";
+      tokenExport =
+        lib.optionalString hasTokenFile
+        ''export ${tokenVar}="$(< "$CREDENTIALS_DIRECTORY/${tokenCredentialName}")"''
+        + "\n";
+    in
+      tokenExport
+      + ''exec ${srv.package}/bin/${srv.serverType}'';
+  };
+
+  # Build firewall ports for enabled servers that request it.
+  firewallPorts = lib.mapAttrsToList (
+    name: srv:
+      if srv.openFirewall
+      then let
+        portStr = lib.last (lib.splitString ":" srv.bind);
+      in
+        lib.toInt portStr
+      else null
+  ) (lib.filterAttrs (_: srv: srv.enable) cfg.servers);
+in {
+  options.services.homelab-mcp = {
+    servers = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.submodule ({name, ...}: {
+        options = {
+          enable = lib.mkEnableOption "this MCP server";
+
+          serverType = lib.mkOption {
+            type = lib.types.str;
+            default = name;
+            description = ''
+              Known-server entry this instance is based on (e.g.
+              `"pgmcp-server"`), used to pick the env-var prefix, default
+              port, and token env var. Defaults to the instance name, so
+              existing configs that already name a known server need not
+              set this.
+
+              Set it when running several instances of the same binary
+              under different names — e.g. a second Postgres MCP named
+              `pg-warehouse` would set `serverType = "pgmcp-server"` so it
+              reads `PG_*` env vars instead of the (wrong) `PG_WAREHOUSE`
+              prefix derived from its name.
+            '';
+          };
+
+          package = lib.mkOption {
+            type = lib.types.package;
+            defaultText = lib.literalExpression "self.packages.\${pkgs.stdenv.hostPlatform.system}.<server>";
+            description = "The package to use for this server.";
+          };
+
+          host = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            example = "https://pbs.lan:8007";
+            description = "Base URL or host of the target service.";
+          };
+
+          tokenFile = lib.mkOption {
+            type = lib.types.nullOr lib.types.path;
+            default = null;
+            example = "/run/secrets/pbs-token";
+            description = ''
+              Path to a file containing the authentication token.
+              Loaded at runtime via systemd LoadCredential so the secret
+              never enters the Nix store.
+            '';
+          };
+
+          insecure = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            description = "Accept invalid / self-signed TLS certificates.";
+          };
+
+          bind = lib.mkOption {
+            type = lib.types.str;
+            default = "127.0.0.1:8080";
+            example = "0.0.0.0:8080";
+            description = "Address to bind the streamable-HTTP MCP server.";
+          };
+
+          allowedHosts = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [];
+            example = ["mcp.example.ts.net" "localhost"];
+            description = ''
+              Comma-separated allowed Host header values.
+              Defaults to loopback only (DNS-rebinding protection).
+              Set when serving on a hostname.
+            '';
+          };
+
+          openFirewall = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            description = "Open the bind port in the NixOS firewall.";
+          };
+
+          extraEnv = lib.mkOption {
+            type = lib.types.attrsOf lib.types.str;
+            default = {};
+            example = {
+              PBS_NODE = "localhost";
+              LOKI_ORG_ID = "tenant-1";
+            };
+            description = ''
+              Extra environment variables specific to this server.
+              These are merged with the standard HOST/TOKEN/BIND/INSECURE
+              variables. Use for server-specific options like PBS_NODE,
+              LOKI_ORG_ID, PG_MAX_CONNECTIONS, etc.
+            '';
+          };
+        };
+      }));
+      default = {};
+      description = "MCP server instances to run.";
+    };
+  };
+
+  config = lib.mkIf (cfg.servers != {}) {
+    systemd.services =
+      lib.mapAttrs (
+        name: srv:
+          lib.mkIf srv.enable (mkService name srv)
+      )
+      cfg.servers;
+
+    networking.firewall.allowedTCPPorts = lib.filter (x: x != null) firewallPorts;
+  };
+}

@@ -167,13 +167,14 @@ ci: lint-ci test
 # access to fetch the advisory DB, and Nix builds are sandboxed. Use `just deny`.
 #
 # Run the checks the pipeline runs (crane: fmt, clippy, test)
+# (They live in the yggdrasil root flake, built from ./nix.)
 ci-nix:
     nix build --no-link --print-build-logs \
-        .#checks.x86_64-linux.fmt \
-        .#checks.x86_64-linux.clippy \
-        .#checks.x86_64-linux.test \
-        .#checks.x86_64-linux.actionlint \
-        .#checks.x86_64-linux.toolchain-pin
+        ../..#legacyPackages.x86_64-linux.homelab-mcp-servers.checks.fmt \
+        ../..#legacyPackages.x86_64-linux.homelab-mcp-servers.checks.clippy \
+        ../..#legacyPackages.x86_64-linux.homelab-mcp-servers.checks.test \
+        ../..#legacyPackages.x86_64-linux.homelab-mcp-servers.checks.actionlint \
+        ../..#legacyPackages.x86_64-linux.homelab-mcp-servers.checks.toolchain-pin
 
 # Run pre-commit hooks manually
 pre-commit:
@@ -239,13 +240,9 @@ down:
 # Nix
 # ------------------------------------------------------------------------------
 
-# Enter the Nix development shell
+# Enter the Nix development shell (the yggdrasil root dev shell)
 dev:
-    nix develop
-
-# Update flake inputs
-update:
-    nix flake update
+    nix develop ../..
 # ------------------------------------------------------------------------------
 # Clean
 # ------------------------------------------------------------------------------
