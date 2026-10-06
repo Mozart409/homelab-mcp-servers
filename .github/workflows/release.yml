@@ -121,12 +121,14 @@ jobs:
       # forgotten (`push_harbor.sh` shipped for two releases without
       # wpmcp-server for that reason).
       #
-      # `default` and `all` are aliases for the same binaries, not servers.
+      # `packages` also holds `homelab-mcp-servers-all` (a link farm of the
+      # binaries) and `toolchain`; neither is a server. Every server binary is
+      # named `<svc>mcp-server`, which is what the filter below selects.
       - name: enumerate servers from the flake
         id: servers
         run: |
           servers="$(nix eval --json .#packages.x86_64-linux --apply builtins.attrNames \
-            | jq -c '[.[] | select(. != "default" and . != "all")]')"
+            | jq -c '[.[] | select(endswith("-server"))]')"
           echo "servers=$servers" >> "$GITHUB_OUTPUT"
           echo "releasing images for: $servers"
 

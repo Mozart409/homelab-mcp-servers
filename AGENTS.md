@@ -13,6 +13,17 @@ operational questions without being able to change anything — with one
 deliberate exception (`homeassistant-mcp`; see Hard rules §1).
 
 - **Language/edition:** Rust, edition 2024, toolchain is yggdrasil's one stable Rust (`rust/toolchain.nix` at the monorepo root: fenix, locked by the root `flake.lock`), passed into [`nix/default.nix`](nix/default.nix).
+- **Two ways into `nix/default.nix`:** the monorepo's root flake imports it
+  directly with the shared toolchain (`just ci-nix` from here uses that). The
+  standalone [`flake.nix`](flake.nix) (flake-parts + fenix + crane) exists for
+  the GitHub export, whose workflows have no root flake: it calls the same
+  `nix/default.nix` with fenix `stable.withComponents` spelling out the `build`
+  list of `rust/toolchain.nix` (keep them equal), and exposes `packages` (the
+  servers, `homelab-mcp-servers-all`, `toolchain`), `checks`,
+  `legacyPackages.<system>.cargo-artifacts` and `devShells.ci` (cargo-deny, for
+  `nix-checks.yml`). Its `flake.lock` is pinned to the root's
+  nixpkgs/fenix/crane/flake-parts revisions (`just lock-mcp` from the repo
+  root; re-run it after a root `nix flake update`).
 - **Core deps:** [`rmcp`](https://github.com/modelcontextprotocol/rust-sdk) (MCP SDK),
   [`axum`](https://github.com/tokio-rs/axum), `tokio`, `serde`, `color-eyre`,
   `reqwest` (rustls) for REST targets, `sqlx` (rustls) for DB targets.
@@ -205,7 +216,12 @@ shell, or [`rust-analyzer.toml`](rust-analyzer.toml).
     re-checks the tag against `[workspace.package] version`, re-runs the flake
     checks, then builds and pushes one image per server to
     `ghcr.io/<owner>/homelab-mcp-servers/<bin>`. The server list is read from
-    `flake.nix`'s `packages`, so a new server joins the release automatically.
+    the standalone `flake.nix`'s `packages` (names ending `-server`; the
+    `toolchain` and `-all` entries are skipped), which come from `serverPkgs` in
+    `nix/default.nix`, so a new server joins the release automatically. Every
+    nix command in `.github/workflows/` resolves against that flake, so a change
+    to its outputs (`checks.*`, `devShells.ci`, `legacyPackages.*.cargo-artifacts`,
+    `packages`) must keep them working.
     Only [`push_harbor.sh`](push_harbor.sh) (internal Harbor) stays manual.
 - **Errors:** `color-eyre`'s `Result` in lib/`run()` code; map into
   `rmcp::ErrorData` (e.g. `ErrorData::internal_error(format!("{e:#}"), None)`)

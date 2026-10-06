@@ -115,13 +115,16 @@ window. Full configuration and the trace format are in the
 
 ## Quick start
 
-This repo ships a [Nix flake](flake.nix) that pins the Rust toolchain (1.96.1)
-and every dev tool. With [Nix](https://nixos.org) + flakes (and optionally
-[direnv](https://direnv.net)):
+This repo ships a [Nix flake](flake.nix) that builds the servers and runs the
+checks with a pinned Rust toolchain (fenix stable, from `flake.lock`), and a
+`ci` dev shell with `cargo-deny`. With [Nix](https://nixos.org) + flakes:
 
 ```sh
-nix develop        # or: just dev   — drops you into the dev shell
+nix build .#pbsmcp-server       # one server; see `nix flake show`
+nix develop .#ci                # toolchain + cargo-deny
 ```
+
+(In the yggdrasil monorepo the dev shell is the root one: `just dev`.)
 
 Without Nix you'll need a Rust 1.96+ toolchain (edition 2024) and the tools
 referenced by the [`justfile`](justfile) (`just`, `cargo`, `podman` / `podman-compose`).
@@ -272,8 +275,9 @@ no hosted runner can reach it.
 
 CI runs on GitHub: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on
 pull requests and pushes to `main`. It runs
-`checks.{fmt,clippy,test,actionlint,toolchain-pin}` from [`flake.nix`](flake.nix),
-so `just ci-nix` reproduces it locally.
+`checks.{fmt,clippy,test,actionlint,toolchain-pin}` from [`flake.nix`](flake.nix)
+(`nix build .#checks.x86_64-linux.clippy`, and so on), plus `cargo deny check`
+in `devShells.ci`. `just ci-nix` reproduces it locally.
 
 ### Multiple instances — several Postgres databases
 
