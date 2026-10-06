@@ -1,7 +1,10 @@
 # Packages and crane checks for the homelab-mcp-servers workspace, called from
 # the root flake (which used to consume this as the `homelab-mcp` flake input):
 #
-#   import ./rust/homelab-mcp-servers/nix {inherit pkgs crane fenix;}
+#   import ./rust/homelab-mcp-servers/nix {inherit pkgs crane toolchain;}
+#
+# `toolchain` is the monorepo's one stable Rust (rust/toolchain.nix `build`),
+# so this file carries no toolchain of its own.
 #
 # Returns `packages` (one per server binary, plus `homelab-mcp-servers-all`),
 # `checks` (fmt/clippy/test/actionlint/toolchain-pin), `cargoArtifacts` and
@@ -11,20 +14,9 @@
 {
   pkgs,
   crane,
-  fenix,
+  toolchain,
 }: let
   inherit (pkgs) lib;
-  inherit (pkgs.stdenv.hostPlatform) system;
-
-  # Latest stable Rust, pinned by the root flake.lock rather than a literal
-  # version.
-  toolchain = fenix.packages.${system}.stable.withComponents [
-    "cargo"
-    "clippy"
-    "rust-src"
-    "rustc"
-    "rustfmt"
-  ];
 
   craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
 

@@ -12,7 +12,7 @@ the streamable-HTTP transport (mounted at `/mcp`) so an MCP client can answer
 operational questions without being able to change anything — with one
 deliberate exception (`homeassistant-mcp`; see Hard rules §1).
 
-- **Language/edition:** Rust, edition 2024, toolchain pinned via [`nix/default.nix`](nix/default.nix) (fenix, locked by the yggdrasil root `flake.lock`).
+- **Language/edition:** Rust, edition 2024, toolchain is yggdrasil's one stable Rust (`rust/toolchain.nix` at the monorepo root: fenix, locked by the root `flake.lock`), passed into [`nix/default.nix`](nix/default.nix).
 - **Core deps:** [`rmcp`](https://github.com/modelcontextprotocol/rust-sdk) (MCP SDK),
   [`axum`](https://github.com/tokio-rs/axum), `tokio`, `serde`, `color-eyre`,
   `reqwest` (rustls) for REST targets, `sqlx` (rustls) for DB targets.
