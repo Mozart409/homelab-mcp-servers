@@ -18,9 +18,8 @@
 # is already on GitHub and you want the images built for it, use the
 # `workflow_dispatch` entry below rather than making a release by hand.
 #
-# WHAT THIS REPLACES: nothing, for the homelab itself — `push_harbor.sh` still
-# pushes the same images to the internal Harbor from a workstation. GHCR is the
-# copy that can be pulled without being on the tailnet.
+# GHCR is the only registry: the internal Harbor (and its `push_harbor.sh`) is
+# decommissioned.
 
 name: release
 
@@ -73,10 +72,10 @@ jobs:
             experimental-features = nix-command flakes
             accept-flake-config = true
 
-      # Same guard `push_harbor.sh` applies before it pushes anything: the tag
-      # and `[workspace.package] version` must agree. They can only disagree if
-      # someone tagged by hand instead of using `cog bump`, and the failure mode
-      # is images labelled with a version their binaries do not report.
+      # The tag and `[workspace.package] version` must agree. They can only
+      # disagree if someone tagged by hand instead of using `cog bump`, and the
+      # failure mode is images labelled with a version their binaries do not
+      # report.
       - name: tag matches the workspace version
         id: version
         run: |
@@ -118,7 +117,7 @@ jobs:
       # `just image-all`. `packages` is the list of servers the workspace
       # actually ships, so adding a server to `flake.nix` adds it to the release
       # with nothing else to remember — which is exactly the step that gets
-      # forgotten (`push_harbor.sh` shipped for two releases without
+      # forgotten (the old Harbor push script shipped for two releases without
       # wpmcp-server for that reason).
       #
       # `packages` also holds `homelab-mcp-servers-all` (a link farm of the

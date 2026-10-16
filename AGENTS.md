@@ -222,7 +222,6 @@ shell, or [`rust-analyzer.toml`](rust-analyzer.toml).
     nix command in `.github/workflows/` resolves against that flake, so a change
     to its outputs (`checks.*`, `devShells.ci`, `legacyPackages.*.cargo-artifacts`,
     `packages`) must keep them working.
-    Only [`push_harbor.sh`](push_harbor.sh) (internal Harbor) stays manual.
 - **Errors:** `color-eyre`'s `Result` in lib/`run()` code; map into
   `rmcp::ErrorData` (e.g. `ErrorData::internal_error(format!("{e:#}"), None)`)
   inside tool methods.

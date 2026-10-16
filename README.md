@@ -245,8 +245,7 @@ just down
 ```
 
 Secrets are decrypted from `.sops.env` at run time and injected via
-`env_file` / `--env-file` — never baked into images. [`push_harbor.sh`](push_harbor.sh) pushes images to the
-internal Harbor registry from a workstation.
+`env_file` / `--env-file` — never baked into images.
 
 ### Releases
 
@@ -270,8 +269,6 @@ just bump patch      # or minor / major / auto
 `just push-all` enumerates `git remote` rather than naming remotes, so it needs
 no setup beyond `git remote add`, and `just sync-remotes` (pull from origin,
 then `push-all`) is the same thing for ordinary work between releases.
-[`push_harbor.sh`](push_harbor.sh) stays manual: Harbor is on the tailnet, where
-no hosted runner can reach it.
 
 CI runs on GitHub: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on
 pull requests and pushes to `main`. It runs
