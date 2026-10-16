@@ -1,6 +1,8 @@
 # 0002 — `flake.nix` is the single registry of server binaries
 
-Status: accepted (2026-09-07)
+Status: accepted (2026-09-07). Updated 2026-10-16: the internal Harbor registry
+is decommissioned and `push_harbor.sh` was deleted, so GHCR via `release.yml`
+is the only image release path and nothing outside this scheme remains.
 
 ## Context
 
@@ -13,8 +15,8 @@ publish.
 That last list is the one that fails silently. Nothing about a missing entry is
 visible at build time or test time; the crate compiles, CI is green, the release
 succeeds, and the only symptom is an image that is not in the registry. This has
-already happened here: `push_harbor.sh` shipped for two releases without
-`wpmcp-server`, because it carried its own hardcoded list.
+already happened here: `push_harbor.sh` (since deleted) shipped for two releases
+without `wpmcp-server`, because it carried its own hardcoded list.
 
 ## Decision
 
@@ -55,8 +57,6 @@ Verified when `alertmanager-mcp` was added:
 - `knownServers` in `flake.nix` — the NixOS module's env prefix and default
   port. Separate from `serverPkgs` because it answers a different question
   (how is this deployed) than "does this binary exist".
-- `push_harbor.sh` — the internal Harbor push, still hand-maintained. This is
-  the one place the original bug can recur.
 
 **A real gap, accepted:** `ci.yml` smoke-builds exactly one container image
 (`pbsmcp-server`), not all of them, because every server shares one
@@ -75,5 +75,5 @@ a server; that is the check this trades away.
   servers. A future non-server entry in `packages` must be added to that filter
   or it will be built as an image — the filter is a denylist, and that is its
   weakness.
-- `push_harbor.sh` remains outside this scheme and should be pointed at the same
-  enumeration if it is touched again.
+- No hand-maintained server list is left: `push_harbor.sh`, the last one, was
+  deleted with the Harbor registry (2026-10-16).
