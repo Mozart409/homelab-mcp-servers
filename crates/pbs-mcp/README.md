@@ -32,6 +32,8 @@ fine (e.g. when an MCP client injects the variables itself).
 | `PBS_API_KEY`       | yes      | —                | API token: `user@realm!tokenname:secret`                              |
 | `PBS_NODE`          | no       | `localhost`      | Node name for `/nodes/{node}/...` endpoints                           |
 | `PBS_INSECURE`      | no       | `false`          | Set `1`/`true` to accept self-signed TLS certificates                 |
+| `PBS_TIMEOUT_SECS` | no | `30` | Seconds before a call to the upstream (connect + response body) fails as timed out; whole seconds, at least 1 |
+| `PBS_CONNECT_TIMEOUT_SECS` | no | `5` | Seconds to establish the upstream connection; whole seconds, at least 1 |
 | `PBS_BIND`          | no       | `127.0.0.1:8080` | Address to bind the streamable-HTTP server (endpoint at `/mcp`)       |
 | `PBS_ALLOWED_HOSTS` | no       | loopback only    | Comma-separated allowed `Host` values; set when serving on a hostname |
 

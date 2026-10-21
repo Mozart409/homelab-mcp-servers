@@ -1237,6 +1237,81 @@ where
     Ok(())
 }
 
+// ---- Hung upstream ----------------------------------------------------------
+
+/// The request timeout [`check_upstream_timeout`] configures: short, so the
+/// check is quick, and far below [`REQUEST_TIMEOUT`], so a server that ignores
+/// it is caught by the bound below rather than by the harness.
+const HUNG_UPSTREAM_TIMEOUT: Duration = Duration::from_millis(500);
+
+/// Prove a server gives up on an upstream that accepts the connection and then
+/// never answers, against a loopback listener that does exactly that.
+///
+/// The failure modes, all of which the six REST servers but hamcp had until
+/// [`crate::http_client_builder`]:
+///
+/// 1. **The call hangs.** No timeout on the HTTP client, so the tool never
+///    returns. Caught by requiring an answer well inside [`REQUEST_TIMEOUT`].
+/// 2. **The timeout fires but is not reported as one.** The tool error must
+///    say "timed out", so the operator knows to look at a slow upstream
+///    rather than a refused connection or a bad query.
+/// 3. **The timeout poisons the session.** A second call on the same session
+///    must answer (with the same error) instead of failing at the MCP layer.
+///
+/// `router` builds the server's production router for a base URL and the
+/// [`crate::HttpTimeouts`] to apply (the check passes a 500 ms request
+/// timeout). `tool` must be one that calls the upstream.
+///
+/// # Errors
+///
+/// Returns an error naming the clause that failed.
+pub async fn check_upstream_timeout<F>(router: F, tool: &str, arguments: Value) -> Result<()>
+where
+    F: Fn(&str, crate::HttpTimeouts) -> Result<Router>,
+{
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .wrap_err("failed to bind the silent upstream")?;
+    let addr = listener
+        .local_addr()
+        .wrap_err("failed to read the silent upstream port")?;
+    let silent = tokio::spawn(async move {
+        // Hold every accepted socket open without reading or writing.
+        let mut held = Vec::new();
+        while let Ok((socket, _)) = listener.accept().await {
+            held.push(socket);
+        }
+    });
+
+    let timeouts = crate::HttpTimeouts {
+        request: HUNG_UPSTREAM_TIMEOUT,
+        ..crate::HttpTimeouts::default()
+    };
+    let server = TestServer::start(router(&format!("http://{addr}"), timeouts)?).await?;
+    let client = server.connect().await?;
+
+    let bound = HUNG_UPSTREAM_TIMEOUT * 10;
+    for attempt in ["first", "second"] {
+        let started = std::time::Instant::now();
+        let result = client.call_tool(tool, arguments.clone()).await?;
+        let elapsed = started.elapsed();
+        let Ok(err) = result.error_message() else {
+            bail!("{tool} succeeded against an upstream that never answers ({attempt} call)");
+        };
+        if !err.contains("timed out") {
+            bail!("{tool} failed against a hung upstream, but not as a timeout: {err}");
+        }
+        if elapsed > bound {
+            bail!(
+                "{tool} took {elapsed:?} to give up on a hung upstream with a \
+                 {HUNG_UPSTREAM_TIMEOUT:?} timeout ({attempt} call)"
+            );
+        }
+    }
+    silent.abort();
+    Ok(())
+}
+
 // ---- Real binaries ----------------------------------------------------------
 
 /// How long a spawned binary gets to answer `/_healthcheck` before the test

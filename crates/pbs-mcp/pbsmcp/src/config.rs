@@ -17,6 +17,10 @@ pub struct Config {
     pub node: String,
     /// Accept self-signed / invalid TLS certificates.
     pub insecure: bool,
+    /// Upstream request / connect timeouts, from `PBS_TIMEOUT_SECS` and
+    /// `PBS_CONNECT_TIMEOUT_SECS` (defaults 30 s / 5 s). Without them a hung
+    /// upstream held the tool call open forever; see [`mcp_common::HttpTimeouts`].
+    pub timeouts: mcp_common::HttpTimeouts,
     /// Address to bind the streamable-HTTP MCP server to (default `127.0.0.1:8080`).
     pub bind: String,
     /// Allowed `Host` header values for inbound requests. `None` keeps rmcp's
@@ -45,6 +49,7 @@ impl Config {
             std::env::var("PBS_INSECURE").as_deref(),
             Ok("1" | "true" | "yes")
         );
+        let timeouts = mcp_common::HttpTimeouts::from_env("PBS")?;
         let bind = std::env::var("PBS_BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
         let allowed_hosts =
             mcp_common::parse_allowed_hosts(std::env::var("PBS_ALLOWED_HOSTS").ok().as_deref());
@@ -54,6 +59,7 @@ impl Config {
             api_key,
             node,
             insecure,
+            timeouts,
             bind,
             allowed_hosts,
         })

@@ -170,14 +170,17 @@ impl HaClient {
             header::HeaderValue::from_str(&auth_value).map_err(|_| ClientError::InvalidToken)?;
         headers.insert(header::AUTHORIZATION, auth_header);
 
-        // rustls has no default provider in this workspace; see
-        // `mcp_common::install_crypto_provider`.
-        mcp_common::install_crypto_provider();
-
-        let client = Client::builder()
+        // The shared builder installs the rustls provider and applies the
+        // insecure flag. hamcp keeps its own, shorter 10 s budget for the whole
+        // request; the connect timeout is set to the same value, so it adds no
+        // bound the request timeout did not already impose.
+        let timeout = Duration::from_secs(DEFAULT_TIMEOUT_SECS);
+        let timeouts = mcp_common::HttpTimeouts {
+            request: timeout,
+            connect: timeout,
+        };
+        let client = mcp_common::http_client_builder(insecure, timeouts)
             .default_headers(headers)
-            .danger_accept_invalid_certs(insecure)
-            .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
             .pool_max_idle_per_host(10)
             .build()
             .map_err(|e| ClientError::ClientCreationFailed(e.to_string()))?;

@@ -46,6 +46,7 @@ fn config(base_url: &str, allow_silence: bool) -> Config {
         base_url: base_url.to_string(),
         token: None,
         insecure: false,
+        timeouts: mcp_common::HttpTimeouts::default(),
         bind: "127.0.0.1:0".to_string(),
         allowed_hosts: None,
         allow_silence,
@@ -364,6 +365,23 @@ async fn insecure_flag_is_applied_both_ways() {
         |base_url, insecure| {
             let mut cfg = config(base_url, false);
             cfg.insecure = insecure;
+            alertmanagermcp::router(&cfg)
+        },
+        "status",
+        json!({}),
+    )
+    .await
+    .unwrap();
+}
+
+/// A Alertmanager that accepts the connection and never answers fails the call as
+/// a timeout, promptly, and leaves the session usable.
+#[tokio::test]
+async fn hung_upstream_times_out() {
+    e2e::check_upstream_timeout(
+        |base_url, timeouts| {
+            let mut cfg = config(base_url, false);
+            cfg.timeouts = timeouts;
             alertmanagermcp::router(&cfg)
         },
         "status",

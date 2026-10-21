@@ -45,6 +45,7 @@ fn config(base_url: &str) -> Config {
         token: Some("otel-query-7f3a".to_string()),
         org_id: Some("homelab".to_string()),
         insecure: false,
+        timeouts: mcp_common::HttpTimeouts::default(),
         bind: "127.0.0.1:0".to_string(),
         allowed_hosts: None,
     }
@@ -498,6 +499,23 @@ async fn insecure_flag_is_applied_both_ways() {
         |base_url, insecure| {
             let mut cfg = config(base_url);
             cfg.insecure = insecure;
+            tempomcp::router(&cfg)
+        },
+        "search_tags",
+        json!({}),
+    )
+    .await
+    .unwrap();
+}
+
+/// A Tempo that accepts the connection and never answers fails the call as
+/// a timeout, promptly, and leaves the session usable.
+#[tokio::test]
+async fn hung_upstream_times_out() {
+    e2e::check_upstream_timeout(
+        |base_url, timeouts| {
+            let mut cfg = config(base_url);
+            cfg.timeouts = timeouts;
             tempomcp::router(&cfg)
         },
         "search_tags",

@@ -13,6 +13,10 @@ pub struct Config {
     pub token: Option<String>,
     /// Accept self-signed / invalid TLS certificates.
     pub insecure: bool,
+    /// Upstream request / connect timeouts, from `ALERTMANAGER_TIMEOUT_SECS` and
+    /// `ALERTMANAGER_CONNECT_TIMEOUT_SECS` (defaults 30 s / 5 s). Without them a hung
+    /// upstream held the tool call open forever; see [`mcp_common::HttpTimeouts`].
+    pub timeouts: mcp_common::HttpTimeouts,
     /// Address to bind the streamable-HTTP MCP server to (default `127.0.0.1:8086`).
     pub bind: String,
     /// Allowed `Host` header values for inbound requests. `None` keeps rmcp's
@@ -55,6 +59,7 @@ impl Config {
             .ok()
             .filter(|s| !s.is_empty());
         let insecure = is_truthy(std::env::var("ALERTMANAGER_INSECURE").as_deref().ok());
+        let timeouts = mcp_common::HttpTimeouts::from_env("ALERTMANAGER")?;
         let bind =
             std::env::var("ALERTMANAGER_BIND").unwrap_or_else(|_| "127.0.0.1:8086".to_string());
         let allowed_hosts = mcp_common::parse_allowed_hosts(
@@ -66,6 +71,7 @@ impl Config {
             base_url: mcp_common::normalize_base_url(&host, 9093),
             token,
             insecure,
+            timeouts,
             bind,
             allowed_hosts,
             allow_silence,

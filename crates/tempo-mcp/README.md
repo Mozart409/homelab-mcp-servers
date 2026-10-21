@@ -40,6 +40,8 @@ fine (e.g. when an MCP client injects the variables itself).
 | `TEMPO_TOKEN`         | no       | none             | Bearer token, sent as `Authorization: Bearer <token>` (use behind an auth proxy) |
 | `TEMPO_ORG_ID`        | no       | none             | Tenant ID, sent as `X-Scope-OrgID` (required in multi-tenant mode)    |
 | `TEMPO_INSECURE`      | no       | `false`          | Set `1`/`true` to accept self-signed TLS certificates                 |
+| `TEMPO_TIMEOUT_SECS` | no | `30` | Seconds before a call to the upstream (connect + response body) fails as timed out; whole seconds, at least 1 |
+| `TEMPO_CONNECT_TIMEOUT_SECS` | no | `5` | Seconds to establish the upstream connection; whole seconds, at least 1 |
 | `TEMPO_BIND`          | no       | `127.0.0.1:8092` | Address to bind the streamable-HTTP server (endpoint at `/mcp`)       |
 | `TEMPO_ALLOWED_HOSTS` | no       | loopback only    | Comma-separated allowed `Host` values; set when serving on a hostname |
 

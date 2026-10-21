@@ -60,7 +60,10 @@ and `run_healthcheck(bind)`, the client-side probe behind every binary's
 container healthcheck is the binary probing itself; that is why the probe must
 work without config or dotenv. It also has `mcp_router()` (the `/mcp`
 service plus `health_router()`, with the loopback host allow-list applied),
-`serve()`, `path_segment()` and `error_chain()`. A new server builds its router
+`serve()`, `path_segment()`, `error_chain()`, and for REST servers
+`http_client_builder()` plus `HttpTimeouts::from_env("<SVC>")` (reads
+`<SVC>_TIMEOUT_SECS` / `<SVC>_CONNECT_TIMEOUT_SECS`, defaults 30 s / 5 s; hamcp
+keeps a fixed 10 s). A new server builds its router
 with `mcp_router()` and wires the `--healthcheck` flag in `main` — don't
 reimplement any of these.
 
@@ -118,9 +121,13 @@ Within a library crate the module split is consistent:
    also selects the aws-lc-rs provider, whose `aws-lc-sys` C build was the
    single most expensive crate in the workspace. Because no provider is selected
    by the feature, **something must install one before the first
-   `reqwest::Client` is built** — that is `mcp_common::install_crypto_provider()`,
-   and every client constructor calls it. A new REST server must do the same, or
-   it will fail at runtime with `ClientCreationFailed` and no other clue.
+   `reqwest::Client` is built** — that is `mcp_common::install_crypto_provider()`.
+   Every REST client gets it by starting from
+   `mcp_common::http_client_builder(insecure, timeouts)`, which also applies the
+   `*_INSECURE` flag and the request/connect timeouts. A new REST server must
+   build its client the same way, or it will fail at runtime with
+   `ClientCreationFailed` and no other clue (and, without the timeouts, a hung
+   upstream holds its tool calls open forever).
 
    What this does *not* change is which certificates are trusted:
    `rustls-platform-verifier` is enabled by both features, so the system trust
@@ -271,7 +278,8 @@ feature, dev-dependency only):
   resources, rendered prompts), `method_surface` (the HTTP methods each tool
   sends — the read-only rule, proven), `check_host_allow_list` (DNS
   rebinding), `unknown_arguments` (every tool and prompt refuses a misspelt
-  argument before anything goes upstream), `check_insecure_flag` (a self-signed TLS proxy, both ways), and
+  argument before anything goes upstream), `check_insecure_flag` (a self-signed TLS proxy, both ways),
+  `check_upstream_timeout` (an upstream that accepts and never answers), and
   `check_doc_resource`. On top of those, at least one multi-tool `Scenario`
   that answers a real operator question, plus the failure shapes (upstream
   errors, garbage bodies, dead hosts, `..` in path arguments) with the session

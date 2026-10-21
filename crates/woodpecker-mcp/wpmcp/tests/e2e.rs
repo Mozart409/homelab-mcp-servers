@@ -37,6 +37,7 @@ fn config(base_url: &str) -> Config {
         base_url: base_url.to_string(),
         token: TOKEN.to_string(),
         insecure: false,
+        timeouts: mcp_common::HttpTimeouts::default(),
         bind: "127.0.0.1:0".to_string(),
         allowed_hosts: None,
         max_log_lines: 5,
@@ -374,6 +375,23 @@ async fn insecure_flag_is_applied_both_ways() {
         |base_url, insecure| {
             let mut cfg = config(base_url);
             cfg.insecure = insecure;
+            wpmcp::router(&cfg)
+        },
+        "version",
+        json!({}),
+    )
+    .await
+    .unwrap();
+}
+
+/// A Woodpecker that accepts the connection and never answers fails the call as
+/// a timeout, promptly, and leaves the session usable.
+#[tokio::test]
+async fn hung_upstream_times_out() {
+    e2e::check_upstream_timeout(
+        |base_url, timeouts| {
+            let mut cfg = config(base_url);
+            cfg.timeouts = timeouts;
             wpmcp::router(&cfg)
         },
         "version",
