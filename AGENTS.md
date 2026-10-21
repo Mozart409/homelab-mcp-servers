@@ -22,7 +22,7 @@ deliberate exception (`homeassistant-mcp`; see Hard rules §1).
   servers, `homelab-mcp-servers-all`, `toolchain`), `checks`,
   `legacyPackages.<system>.cargo-artifacts` and `devShells.ci` (cargo-deny, for
   `nix-checks.yml`). Its `flake.lock` is pinned to the root's
-  nixpkgs/fenix/crane/flake-parts revisions (`just lock-mcp` from the repo
+  nixpkgs/fenix/crane/flake-parts revisions (`just lock-subs` from the repo
   root; re-run it after a root `nix flake update`).
 - **Core deps:** [`rmcp`](https://github.com/modelcontextprotocol/rust-sdk) (MCP SDK),
   [`axum`](https://github.com/tokio-rs/axum), `tokio`, `serde`, `color-eyre`,
