@@ -32,6 +32,8 @@ fine (e.g. when an MCP client injects the variables itself).
 | `LOKI_TOKEN`         | no       | none             | Bearer token, sent as `Authorization: Bearer <token>` (use behind an auth proxy) |
 | `LOKI_ORG_ID`        | no       | none             | Tenant ID, sent as `X-Scope-OrgID` (required in multi-tenant mode)    |
 | `LOKI_INSECURE`      | no       | `false`          | Set `1`/`true` to accept self-signed TLS certificates                 |
+| `LOKI_TIMEOUT_SECS` | no | `30` | Seconds before a call to the upstream (connect + response body) fails as timed out; whole seconds, at least 1 |
+| `LOKI_CONNECT_TIMEOUT_SECS` | no | `5` | Seconds to establish the upstream connection; whole seconds, at least 1 |
 | `LOKI_BIND`          | no       | `127.0.0.1:8083` | Address to bind the streamable-HTTP server (endpoint at `/mcp`)       |
 | `LOKI_ALLOWED_HOSTS` | no       | loopback only    | Comma-separated allowed `Host` values; set when serving on a hostname |
 

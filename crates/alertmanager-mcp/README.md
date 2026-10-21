@@ -23,6 +23,8 @@ from a plain `.env` loaded by `dotenvy` if one exists.
 | `ALERTMANAGER_HOST` | yes | — | Host or full URL. Scheme defaults to `http`, port to `9093`. |
 | `ALERTMANAGER_TOKEN` | no | none | Sent as `Authorization: Bearer <token>`. |
 | `ALERTMANAGER_INSECURE` | no | `false` | Accept invalid/self-signed TLS certificates. |
+| `ALERTMANAGER_TIMEOUT_SECS` | no | `30` | Seconds before a call to the upstream (connect + response body) fails as timed out; whole seconds, at least 1 |
+| `ALERTMANAGER_CONNECT_TIMEOUT_SECS` | no | `5` | Seconds to establish the upstream connection; whole seconds, at least 1 |
 | `ALERTMANAGER_BIND` | no | `127.0.0.1:8086` | Bind address. Must be `0.0.0.0:8086` inside a container. |
 | `ALERTMANAGER_ALLOWED_HOSTS` | no | loopback only | Comma-separated `Host` allow-list. |
 | `ALERTMANAGER_ALLOW_SILENCE` | no | `false` | Register the two silence-write tools. |

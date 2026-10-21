@@ -46,6 +46,8 @@ an MCP client injects the variables itself).
 | `WP_HOST`          | yes      | —                | `https://ci.homelab.local`, `ci.homelab.local:8000`, or `ci.homelab.local`   |
 | `WP_TOKEN`         | yes      | —                | Personal access token, sent as `Authorization: Bearer <token>`              |
 | `WP_INSECURE`      | no       | `false`          | Set `1`/`true` to accept untrusted TLS certificates — see below              |
+| `WP_TIMEOUT_SECS` | no | `30` | Seconds before a call to the upstream (connect + response body) fails as timed out; whole seconds, at least 1 |
+| `WP_CONNECT_TIMEOUT_SECS` | no | `5` | Seconds to establish the upstream connection; whole seconds, at least 1 |
 | `WP_BIND`          | no       | `127.0.0.1:8085` | Address to bind the streamable-HTTP server (endpoint at `/mcp`)             |
 | `WP_ALLOWED_HOSTS` | no       | loopback only    | Comma-separated allowed `Host` values; set when serving on a hostname       |
 | `WP_MAX_LOG_LINES` | no       | `500`            | Cap on log entries returned by `step_logs` (`0` falls back to the default)  |

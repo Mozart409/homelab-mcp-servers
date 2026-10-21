@@ -44,13 +44,10 @@ impl AlertmanagerClient {
             headers.insert(AUTHORIZATION, auth_val);
         }
 
-        // rustls has no default provider in this workspace; see
-        // `mcp_common::install_crypto_provider`.
-        mcp_common::install_crypto_provider();
-
-        let http = reqwest::Client::builder()
+        // Installs the rustls provider, applies the `*_INSECURE` flag and the
+        // request/connect timeouts; see `mcp_common::http_client_builder`.
+        let http = mcp_common::http_client_builder(config.insecure, config.timeouts)
             .default_headers(headers)
-            .danger_accept_invalid_certs(config.insecure)
             .user_agent(concat!("alertmanagermcp/", env!("CARGO_PKG_VERSION")))
             .build()
             .wrap_err("failed to build HTTP client")?;

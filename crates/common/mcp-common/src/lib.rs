@@ -52,6 +52,94 @@ pub fn install_crypto_provider() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 }
 
+// ---- Upstream HTTP client ---------------------------------------------------
+
+/// Default bound on one whole upstream request: connect, send, and read the
+/// full body. Generous enough for a heavy `query_range` or a long task log,
+/// short enough that an MCP client is told something before it gives up.
+pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Default bound on establishing the TCP (and TLS) connection alone. A host
+/// that is down but whose packets are dropped rather than refused would
+/// otherwise eat the whole request budget before saying so.
+pub const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// How long a server waits on its upstream before failing the tool call.
+///
+/// `reqwest` has **no** default timeout. Before this existed, six of the seven
+/// REST servers built their client without one, so an upstream that accepted
+/// the connection and then said nothing (a wedged Prometheus, a PBS mid-GC, a
+/// reverse proxy holding the socket) held the MCP request open forever: the
+/// tool never returned, and the session's client hung with it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HttpTimeouts {
+    /// Total time for one request, body included (`reqwest`'s `timeout`).
+    pub request: Duration,
+    /// Time to establish the connection (`reqwest`'s `connect_timeout`).
+    pub connect: Duration,
+}
+
+impl Default for HttpTimeouts {
+    fn default() -> Self {
+        Self {
+            request: DEFAULT_REQUEST_TIMEOUT,
+            connect: DEFAULT_CONNECT_TIMEOUT,
+        }
+    }
+}
+
+impl HttpTimeouts {
+    /// Read `{prefix}_TIMEOUT_SECS` and `{prefix}_CONNECT_TIMEOUT_SECS`,
+    /// falling back to [`DEFAULT_REQUEST_TIMEOUT`] / [`DEFAULT_CONNECT_TIMEOUT`]
+    /// when unset or empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error naming the variable when a value is not a positive
+    /// whole number of seconds. `0` is refused rather than read as "no
+    /// timeout": that would quietly restore the hang this exists to prevent.
+    pub fn from_env(prefix: &str) -> Result<Self> {
+        Self::from_lookup(prefix, |key| std::env::var(key).ok())
+    }
+
+    /// [`from_env`](Self::from_env) over an arbitrary lookup, so the parsing
+    /// can be tested without mutating the process environment.
+    fn from_lookup(prefix: &str, lookup: impl Fn(&str) -> Option<String>) -> Result<Self> {
+        let read = |suffix: &str, default: Duration| -> Result<Duration> {
+            let key = format!("{prefix}_{suffix}");
+            match lookup(&key).as_deref().map(str::trim) {
+                None | Some("") => Ok(default),
+                Some(raw) => match raw.parse::<u64>() {
+                    Ok(0) => bail!("{key} must be at least 1 (seconds), got 0"),
+                    Ok(secs) => Ok(Duration::from_secs(secs)),
+                    Err(e) => bail!("{key} must be a whole number of seconds, got {raw:?}: {e}"),
+                },
+            }
+        };
+        Ok(Self {
+            request: read("TIMEOUT_SECS", DEFAULT_REQUEST_TIMEOUT)?,
+            connect: read("CONNECT_TIMEOUT_SECS", DEFAULT_CONNECT_TIMEOUT)?,
+        })
+    }
+}
+
+/// The `reqwest::ClientBuilder` every REST server starts from: the rustls
+/// provider installed ([`install_crypto_provider`]), certificate verification
+/// off only when `insecure` (the server's `*_INSECURE` flag) says so, and both
+/// [`HttpTimeouts`] applied. Callers add their own headers and user agent, then
+/// `build()`.
+///
+/// A timed-out request surfaces as a `reqwest::Error` with `is_timeout()` set,
+/// which the servers' `{e:#}` / [`error_chain`] rendering reports as "operation
+/// timed out" in the tool error, never as a panic or a hung call.
+pub fn http_client_builder(insecure: bool, timeouts: HttpTimeouts) -> reqwest::ClientBuilder {
+    install_crypto_provider();
+    reqwest::Client::builder()
+        .danger_accept_invalid_certs(insecure)
+        .timeout(timeouts.request)
+        .connect_timeout(timeouts.connect)
+}
+
 // ---- Config helpers ---------------------------------------------------------
 
 /// Turn a user-supplied host into a full base URL, defaulting the scheme to
@@ -554,5 +642,121 @@ mod tests {
                 "c.lan".to_string()
             ])
         );
+    }
+
+    // ---- Upstream HTTP client ----
+    //
+    // Failure modes, written before the code:
+    // - the builder forgets the timeout, so a silent upstream hangs the call
+    //   (the bug this exists for); proven against a socket that accepts and
+    //   never answers;
+    // - the timeout fires but surfaces as something other than a timeout
+    //   error, so the operator is told "request failed" with no reason;
+    // - `*_TIMEOUT_SECS=0` reads as "no timeout" and restores the hang;
+    // - a malformed value is silently replaced by the default, or the error
+    //   does not name the variable;
+    // - an empty value (a template that expanded to nothing) refuses to start.
+
+    /// A loopback listener that accepts every connection and then says
+    /// nothing, holding each socket open until the test process exits.
+    async fn silent_upstream() -> Result<std::net::SocketAddr> {
+        let listener = TcpListener::bind("127.0.0.1:0").await?;
+        let addr = listener.local_addr()?;
+        tokio::spawn(async move {
+            let mut held = Vec::new();
+            while let Ok((socket, _)) = listener.accept().await {
+                held.push(socket);
+            }
+        });
+        Ok(addr)
+    }
+
+    #[tokio::test]
+    async fn http_client_builder_times_out_a_silent_upstream() {
+        let addr = silent_upstream().await.unwrap();
+        let timeouts = HttpTimeouts {
+            request: Duration::from_millis(300),
+            connect: Duration::from_secs(5),
+        };
+        let client = http_client_builder(false, timeouts).build().unwrap();
+
+        let started = std::time::Instant::now();
+        // The outer bound turns a missing timeout into a test failure rather
+        // than a wedged test run.
+        let res = tokio::time::timeout(
+            Duration::from_secs(10),
+            client.get(format!("http://{addr}/")).send(),
+        )
+        .await
+        .expect("request hung: the builder applied no timeout");
+        let err = res.expect_err("a silent upstream cannot answer");
+        assert!(err.is_timeout(), "not a timeout error: {err:?}");
+        assert!(
+            error_chain(&err).contains("timed out"),
+            "the rendered error does not say it timed out: {}",
+            error_chain(&err)
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "took {:?}, so the 300 ms request timeout was not the one that fired",
+            started.elapsed()
+        );
+    }
+
+    fn lookup(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
+        let pairs: Vec<(String, String)> = pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+            .collect();
+        move |key| pairs.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone())
+    }
+
+    #[test]
+    fn http_timeouts_default_when_unset_or_empty() {
+        assert_eq!(
+            HttpTimeouts::from_lookup("X", lookup(&[])).unwrap(),
+            HttpTimeouts::default()
+        );
+        assert_eq!(
+            HttpTimeouts::from_lookup(
+                "X",
+                lookup(&[("X_TIMEOUT_SECS", " "), ("X_CONNECT_TIMEOUT_SECS", "")])
+            )
+            .unwrap(),
+            HttpTimeouts::default()
+        );
+        assert_eq!(HttpTimeouts::default().request, Duration::from_secs(30));
+        assert_eq!(HttpTimeouts::default().connect, Duration::from_secs(5));
+    }
+
+    #[test]
+    fn http_timeouts_read_both_overrides_under_the_prefix() {
+        let t = HttpTimeouts::from_lookup(
+            "PROM",
+            lookup(&[
+                ("PROM_TIMEOUT_SECS", "120"),
+                ("PROM_CONNECT_TIMEOUT_SECS", " 2 "),
+                // Another server's knob must not leak in.
+                ("LOKI_TIMEOUT_SECS", "7"),
+            ]),
+        )
+        .unwrap();
+        assert_eq!(t.request, Duration::from_secs(120));
+        assert_eq!(t.connect, Duration::from_secs(2));
+    }
+
+    #[test]
+    fn http_timeouts_refuse_zero_and_garbage_naming_the_variable() {
+        for (key, value) in [
+            ("X_TIMEOUT_SECS", "0"),
+            ("X_TIMEOUT_SECS", "30s"),
+            ("X_TIMEOUT_SECS", "-1"),
+            ("X_CONNECT_TIMEOUT_SECS", "0"),
+            ("X_CONNECT_TIMEOUT_SECS", "1.5"),
+        ] {
+            let err = HttpTimeouts::from_lookup("X", lookup(&[(key, value)]))
+                .expect_err(&format!("{key}={value} was accepted"));
+            assert!(err.to_string().contains(key), "{key}={value}: {err}");
+        }
     }
 }

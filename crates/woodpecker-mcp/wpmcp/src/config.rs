@@ -18,6 +18,10 @@ pub struct Config {
     pub token: String,
     /// Accept self-signed / invalid TLS certificates.
     pub insecure: bool,
+    /// Upstream request / connect timeouts, from `WP_TIMEOUT_SECS` and
+    /// `WP_CONNECT_TIMEOUT_SECS` (defaults 30 s / 5 s). Without them a hung
+    /// upstream held the tool call open forever; see [`mcp_common::HttpTimeouts`].
+    pub timeouts: mcp_common::HttpTimeouts,
     /// Address to bind the streamable-HTTP MCP server to (default `127.0.0.1:8085`).
     pub bind: String,
     /// Allowed `Host` header values for inbound requests. `None` keeps rmcp's
@@ -56,6 +60,7 @@ impl Config {
             std::env::var("WP_INSECURE").as_deref(),
             Ok("1" | "true" | "yes")
         );
+        let timeouts = mcp_common::HttpTimeouts::from_env("WP")?;
         let bind = std::env::var("WP_BIND").unwrap_or_else(|_| "127.0.0.1:8085".to_string());
         let allowed_hosts =
             mcp_common::parse_allowed_hosts(std::env::var("WP_ALLOWED_HOSTS").ok().as_deref());
@@ -69,6 +74,7 @@ impl Config {
             base_url: normalize_base_url(&host),
             token,
             insecure,
+            timeouts,
             bind,
             allowed_hosts,
             max_log_lines,

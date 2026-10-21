@@ -636,7 +636,8 @@ async fn unreachable_database_fails_calls_promptly_but_the_server_runs() {
         max_rows: 100,
     };
     let (_server, client) = serve(&cfg).await.unwrap();
-    assert!(!client.list_tools().await.unwrap().is_empty());
+    let tools = client.list_tools().await.unwrap();
+    assert_ne!(tools.len(), 0, "the server listed no tools");
 
     let started = Instant::now();
     let res = client.call_tool("list_schemas", json!({})).await.unwrap();
