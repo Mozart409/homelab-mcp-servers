@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.13.1 - 2026-10-21
+#### Bug Fixes
+- (**mcp**) match the containerfile rust pin to the flake's 1.99.1 - (7fd3813) - Amadeus Mader
+- (**mcp**) bump rustls, rustls-webpki and webpki roots for RUSTSEC-2026-0346..0349 and 0381..0383 - (cbbb3d7) - Amadeus Mader
+
+- - -
+
 ## 0.13.0 - 2026-10-21
 #### Features
 - (**rust**) share one toolchain, wire axon, dashboard and surrealkit - (e467835) - Amadeus Mader
