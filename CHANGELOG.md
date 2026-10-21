@@ -2,6 +2,25 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.13.0 - 2026-10-21
+#### Features
+- (**rust**) share one toolchain, wire axon, dashboard and surrealkit - (e467835) - Amadeus Mader
+#### Bug Fixes
+- (**mcp**) add request and connect timeouts to the REST clients - (150f048) - Amadeus Mader
+- (**mcp**) restore a standalone flake for the github release - (55e6900) - Amadeus Mader
+#### Documentation
+- (**rust**) drop harbor from the agents guide and adr records - (c4a24e2) - Amadeus Mader
+#### Tests
+- (**mcp**) satisfy clippy assert_is_empty in the pgmcp e2e suite - (c7bd373) - Amadeus Mader
+#### Refactoring
+- (**mcp**) build homelab-mcp-servers from rust/ instead of a flake input - (a5b1999) - Amadeus Mader
+#### Miscellaneous Chores
+- (**deps**) pin subflake locks to the root flake.lock revisions - (6fda5e0) - Amadeus Mader
+- (**repo**) pin subflake locks to the root lock with one lock-sub recipe and a drift guard - (31137cf) - Amadeus Mader
+- (**rust**) remove the harbor push scripts - (3459692) - Amadeus Mader
+
+- - -
+
 ## 0.12.0 - 2026-09-26
 #### Features
 - (**deps**) upgrade rmcp 3.4 and utoipa 6, adopt ServerConfig - (3871a67) - Amadeus Mader
