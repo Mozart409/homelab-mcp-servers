@@ -36,7 +36,7 @@ fine (e.g. when an MCP client injects the variables itself).
 
 | Variable              | Required | Default          | Description                                                            |
 | --------------------- | -------- | ---------------- | --------------------------------------------------------------------- |
-| `TEMPO_HOST`          | yes      | —                | `https://tempo.homelab.local`, `tempo.lan:3200`, or `tempo.lan`        |
+| `TEMPO_HOST`          | yes      | —                | `https://tempo.homelab.internal`, `tempo.lan:3200`, or `tempo.lan`        |
 | `TEMPO_TOKEN`         | no       | none             | Bearer token, sent as `Authorization: Bearer <token>` (use behind an auth proxy) |
 | `TEMPO_ORG_ID`        | no       | none             | Tenant ID, sent as `X-Scope-OrgID` (required in multi-tenant mode)    |
 | `TEMPO_INSECURE`      | no       | `false`          | Set `1`/`true` to accept self-signed TLS certificates                 |

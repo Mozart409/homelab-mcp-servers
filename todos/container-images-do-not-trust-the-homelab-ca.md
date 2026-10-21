@@ -37,7 +37,7 @@ installed. Only the container is missing it.
 step-ca issued:
 
 - `PBS_HOST=https://pbs.lan:8007`
-- `WP_HOST=https://ci.homelab.local`
+- `WP_HOST=https://ci.homelab.internal`
 
 Any server whose target uses the internal CA is affected the moment it runs from
 a container rather than the host. This is a pre-existing gap that adding

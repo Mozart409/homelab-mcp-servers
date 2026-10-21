@@ -178,7 +178,7 @@ homelab-mcp-core = { path = "../homelab-mcp-core" }
 ### Option B: Separate Repos
 
 - One repo per server, each with its own `Cargo.toml`, `Cargo.lock`, Nix flake
-- Shared code via `homelab-mcp-core` published to a private crate registry (or vendored via git dependency: `homelab-mcp-core = { git = "https://forgejo.homelab.local/amadeus/homelab-mcp-core" }`)
+- Shared code via `homelab-mcp-core` published to a private crate registry (or vendored via git dependency: `homelab-mcp-core = { git = "https://forgejo.homelab.internal/amadeus/homelab-mcp-core" }`)
 - More git repos to manage, more CI configs, more Nix flakes to update
 
 ### Option C: Hybrid — Workspace for future, hamcp-rs stays separate

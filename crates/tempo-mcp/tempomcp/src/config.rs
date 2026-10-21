@@ -9,7 +9,7 @@ pub struct Config {
     pub base_url: String,
     /// Optional bearer token, sent as `Authorization: Bearer <token>` — set this
     /// when Tempo sits behind an authenticating reverse proxy (the homelab's
-    /// Caddy in front of `tempo.homelab.local`). `None` sends no auth header.
+    /// Caddy in front of `tempo.homelab.internal`). `None` sends no auth header.
     pub token: Option<String>,
     /// Optional tenant ID, sent as the `X-Scope-OrgID` header. Required when
     /// Tempo runs with `multitenancy_enabled`; `None` omits the header
@@ -131,14 +131,14 @@ mod tests {
     fn from_env_reads_every_override() {
         let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
         clear_env();
-        set_env("TEMPO_HOST", "https://tempo.homelab.local/");
+        set_env("TEMPO_HOST", "https://tempo.homelab.internal/");
         set_env("TEMPO_TOKEN", "secret");
         set_env("TEMPO_ORG_ID", "tenant-7");
         set_env("TEMPO_INSECURE", "true");
         set_env("TEMPO_BIND", "0.0.0.0:9999");
 
         let cfg = Config::from_env().unwrap();
-        assert_eq!(cfg.base_url, "https://tempo.homelab.local");
+        assert_eq!(cfg.base_url, "https://tempo.homelab.internal");
         assert_eq!(cfg.token.as_deref(), Some("secret"));
         assert_eq!(cfg.org_id.as_deref(), Some("tenant-7"));
         assert!(cfg.insecure);

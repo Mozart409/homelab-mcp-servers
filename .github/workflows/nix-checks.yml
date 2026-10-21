@@ -18,7 +18,7 @@
 # a green `just ci-nix` means locally.
 #
 # WHY NOT THE ATTIC CACHE: the homelab binary cache at
-# https://cache.homelab.local/homelab resolves only inside the homelab.
+# https://cache.homelab.internal/homelab resolves only inside the homelab.
 # GitHub runners cannot reach it — pointing at it here would cost a connect
 # timeout per query and never hit — so the Nix store is carried between runs in
 # the GitHub Actions cache instead.

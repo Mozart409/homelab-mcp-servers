@@ -844,7 +844,7 @@ where
     F: Fn(Option<Vec<String>>) -> Result<Router>,
 {
     const EVIL: &str = "attacker.example";
-    const NAMED: &str = "mcp.homelab.local";
+    const NAMED: &str = "mcp.homelab.internal";
 
     let server = TestServer::start(router(None)?).await?;
     let port = server.addr().port();

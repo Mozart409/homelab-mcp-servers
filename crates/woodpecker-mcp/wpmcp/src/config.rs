@@ -10,8 +10,8 @@ use color_eyre::eyre::{Result, WrapErr};
 /// pipeline's injected token during `just ci`.
 #[derive(Clone, Debug)]
 pub struct Config {
-    /// Base URL including scheme and optional port, e.g. `https://ci.homelab.local`
-    /// or `https://ci.homelab.local:8000`.
+    /// Base URL including scheme and optional port, e.g. `https://ci.homelab.internal`
+    /// or `https://ci.homelab.internal:8000`.
     pub base_url: String,
     /// Personal access token for the Woodpecker API, sent as `Authorization: Bearer <token>`.
     /// Required and must be non-empty — every endpoint requires it.
@@ -46,7 +46,7 @@ impl Config {
     /// Returns an error if `WP_HOST` is unset, or if `WP_TOKEN` is unset or empty.
     pub fn from_env() -> Result<Self> {
         let host = std::env::var("WP_HOST")
-            .wrap_err("WP_HOST must be set (e.g. https://ci.homelab.local or ci.homelab.local)")?;
+            .wrap_err("WP_HOST must be set (e.g. https://ci.homelab.internal or ci.homelab.internal)")?;
         let token = std::env::var("WP_TOKEN")
             .wrap_err("WP_TOKEN must be set (personal access token from Woodpecker CI)")?;
 
@@ -136,7 +136,7 @@ mod tests {
     fn from_env_requires_token() {
         let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
         clear_env();
-        set_env("WP_HOST", "ci.homelab.local");
+        set_env("WP_HOST", "ci.homelab.internal");
         assert!(Config::from_env().is_err());
         clear_env();
     }
@@ -145,7 +145,7 @@ mod tests {
     fn from_env_rejects_empty_token() {
         let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
         clear_env();
-        set_env("WP_HOST", "ci.homelab.local");
+        set_env("WP_HOST", "ci.homelab.internal");
         set_env("WP_TOKEN", "");
         assert!(Config::from_env().is_err());
         clear_env();
@@ -155,11 +155,11 @@ mod tests {
     fn from_env_applies_defaults() {
         let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
         clear_env();
-        set_env("WP_HOST", "ci.homelab.local");
+        set_env("WP_HOST", "ci.homelab.internal");
         set_env("WP_TOKEN", "test-token");
 
         let cfg = Config::from_env().unwrap();
-        assert_eq!(cfg.base_url, "https://ci.homelab.local");
+        assert_eq!(cfg.base_url, "https://ci.homelab.internal");
         assert_eq!(cfg.token, "test-token");
         assert_eq!(cfg.bind, "127.0.0.1:8085");
         assert!(!cfg.insecure);
@@ -193,7 +193,7 @@ mod tests {
     fn insecure_is_true_only_for_1_true_yes() {
         let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
         clear_env();
-        set_env("WP_HOST", "ci.homelab.local");
+        set_env("WP_HOST", "ci.homelab.internal");
         set_env("WP_TOKEN", "token");
 
         for truthy in ["1", "true", "yes"] {
@@ -219,14 +219,14 @@ mod tests {
     fn allowed_hosts_splits_trims_and_drops_empty_items() {
         let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
         clear_env();
-        set_env("WP_HOST", "ci.homelab.local");
+        set_env("WP_HOST", "ci.homelab.internal");
         set_env("WP_TOKEN", "token");
-        set_env("WP_ALLOWED_HOSTS", " ci.homelab.local , localhost ,, ");
+        set_env("WP_ALLOWED_HOSTS", " ci.homelab.internal , localhost ,, ");
 
         let cfg = Config::from_env().unwrap();
         assert_eq!(
             cfg.allowed_hosts.unwrap(),
-            vec!["ci.homelab.local".to_string(), "localhost".to_string()]
+            vec!["ci.homelab.internal".to_string(), "localhost".to_string()]
         );
 
         // Regression: a value that trims to nothing collapses to `None`, not
@@ -249,7 +249,7 @@ mod tests {
     fn max_log_lines_defaults_to_500() {
         let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
         clear_env();
-        set_env("WP_HOST", "ci.homelab.local");
+        set_env("WP_HOST", "ci.homelab.internal");
         set_env("WP_TOKEN", "token");
 
         let cfg = Config::from_env().unwrap();
@@ -262,7 +262,7 @@ mod tests {
     fn max_log_lines_zero_falls_back_to_default() {
         let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
         clear_env();
-        set_env("WP_HOST", "ci.homelab.local");
+        set_env("WP_HOST", "ci.homelab.internal");
         set_env("WP_TOKEN", "token");
         set_env("WP_MAX_LOG_LINES", "0");
 
@@ -276,7 +276,7 @@ mod tests {
     fn max_log_lines_parses_valid_values() {
         let _g = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
         clear_env();
-        set_env("WP_HOST", "ci.homelab.local");
+        set_env("WP_HOST", "ci.homelab.internal");
         set_env("WP_TOKEN", "token");
 
         for lines in [1, 100, 500, 1000, 5000] {
@@ -291,12 +291,12 @@ mod tests {
     #[test]
     fn normalize_base_url_defaults_to_https() {
         assert_eq!(
-            normalize_base_url("ci.homelab.local"),
-            "https://ci.homelab.local"
+            normalize_base_url("ci.homelab.internal"),
+            "https://ci.homelab.internal"
         );
         assert_eq!(
-            normalize_base_url("ci.homelab.local:8000"),
-            "https://ci.homelab.local:8000"
+            normalize_base_url("ci.homelab.internal:8000"),
+            "https://ci.homelab.internal:8000"
         );
     }
 
@@ -312,12 +312,12 @@ mod tests {
     #[test]
     fn normalize_base_url_trims_trailing_slash() {
         assert_eq!(
-            normalize_base_url("https://ci.homelab.local/"),
-            "https://ci.homelab.local"
+            normalize_base_url("https://ci.homelab.internal/"),
+            "https://ci.homelab.internal"
         );
         assert_eq!(
-            normalize_base_url("   ci.homelab.local   "),
-            "https://ci.homelab.local"
+            normalize_base_url("   ci.homelab.internal   "),
+            "https://ci.homelab.internal"
         );
     }
 }

@@ -43,7 +43,7 @@ an MCP client injects the variables itself).
 
 | Variable           | Required | Default          | Description                                                                 |
 | ------------------ | -------- | ---------------- | --------------------------------------------------------------------------- |
-| `WP_HOST`          | yes      | —                | `https://ci.homelab.local`, `ci.homelab.local:8000`, or `ci.homelab.local`   |
+| `WP_HOST`          | yes      | —                | `https://ci.homelab.internal`, `ci.homelab.internal:8000`, or `ci.homelab.internal`   |
 | `WP_TOKEN`         | yes      | —                | Personal access token, sent as `Authorization: Bearer <token>`              |
 | `WP_INSECURE`      | no       | `false`          | Set `1`/`true` to accept untrusted TLS certificates — see below              |
 | `WP_TIMEOUT_SECS` | no | `30` | Seconds before a call to the upstream (connect + response body) fails as timed out; whole seconds, at least 1 |
@@ -87,7 +87,7 @@ variables during `just ci`. `WP_` keeps the two namespaces disjoint.
 
 ### Obtaining a personal access token
 
-1. Log in to your Woodpecker instance (e.g. `https://ci.homelab.local`).
+1. Log in to your Woodpecker instance (e.g. `https://ci.homelab.internal`).
 2. Open your user settings page (avatar menu → **Settings**).
 3. Copy the personal access token shown there, or create a new one.
 4. Paste it into `.sops.env` as `WP_TOKEN` (`sops .sops.env`).
@@ -339,7 +339,7 @@ Some `GET`s are excluded even though read-only:
 ```sh
 just watch-pkg wpmcp-server                    # secrets from .sops.env
 cargo run -p wpmcp-server                      # reads a plain .env if present
-WP_HOST=https://ci.homelab.local WP_TOKEN=… cargo run -p wpmcp-server
+WP_HOST=https://ci.homelab.internal WP_TOKEN=… cargo run -p wpmcp-server
 RUST_LOG=debug cargo run -p wpmcp-server       # verbose tracing
 ```
 
