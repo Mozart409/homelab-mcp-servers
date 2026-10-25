@@ -1,0 +1,69 @@
+# Prune old release images from GHCR: one package per MCP server
+# (ghcr.io/<owner>/homelab-mcp-servers/<bin>, see release.yml), each keeping
+# its newest releases.
+
+name: cleanup-ghcr
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # daily, 3am UTC
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Log what would be deleted without deleting"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+
+      # Nix is here only to read the server list out of the flake, exactly as
+      # release.yml's `verify` job does; this job builds nothing.
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      # Same list release.yml publishes, so a new server is cleaned up with
+      # nothing else to remember. Packages are repository-scoped, so their
+      # names carry the repo prefix. Listing them from the registry instead
+      # would need `expand-packages` and a PAT; the injected token is enough
+      # when the names are spelled out.
+      - name: enumerate packages from the flake
+        id: packages
+        env:
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          packages="$(nix eval --json .#packages.x86_64-linux --apply builtins.attrNames \
+            | jq -r --arg repo "${REPO,,}" '[.[] | select(endswith("-server")) | "\($repo)/\(.)"] | join(",")')"
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          echo "cleaning up: $packages"
+
+      # Images are single-platform with provenance off (see release.yml), so
+      # each release is one plain manifest. Do NOT switch this to
+      # actions/delete-package-versions all the same: if the images ever go
+      # multi-arch, its untagged cleanup deletes the per-arch children of
+      # tagged lists. dataaxiom/ghcr-cleanup-action walks the manifest tree.
+      #
+      # Keep the 5 newest releases per server. One release is one tagged image:
+      # its version tag, the MAJOR.MINOR tag on the newest patch, and `latest`
+      # on the newest release all sit on the same manifest.
+      - name: Keep the newest releases and delete untagged images
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
+        with:
+          packages: ${{ steps.packages.outputs.packages }}
+          exclude-tags: latest
+          keep-n-tagged: 5
+          delete-untagged: true
+          validate: true
+          dry-run: ${{ inputs.dry-run || false }}
