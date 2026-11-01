@@ -45,8 +45,9 @@ impl Config {
     ///
     /// Returns an error if `WP_HOST` is unset, or if `WP_TOKEN` is unset or empty.
     pub fn from_env() -> Result<Self> {
-        let host = std::env::var("WP_HOST")
-            .wrap_err("WP_HOST must be set (e.g. https://ci.homelab.internal or ci.homelab.internal)")?;
+        let host = std::env::var("WP_HOST").wrap_err(
+            "WP_HOST must be set (e.g. https://ci.homelab.internal or ci.homelab.internal)",
+        )?;
         let token = std::env::var("WP_TOKEN")
             .wrap_err("WP_TOKEN must be set (personal access token from Woodpecker CI)")?;
 
