@@ -335,6 +335,88 @@ async fn introspection_walkthrough() {
     db.drop_db().await.unwrap();
 }
 
+/// `list_foreign_keys` pairs columns by position and matches tables by oid.
+/// Each case failed with the old `information_schema` name join: a two-column
+/// FK came back n×m, equal constraint names on two tables bled into each
+/// other, and an FK into another schema returned nothing.
+#[tokio::test]
+async fn list_foreign_keys_pairs_columns_exactly() {
+    let db = TestDb::create().await.unwrap();
+    sqlx::raw_sql(
+        r"
+        CREATE SCHEMA s2;
+        CREATE TABLE forge.parent (x int, y int, PRIMARY KEY (x, y));
+        CREATE TABLE forge.child (
+            a int, b int,
+            CONSTRAINT fk_pair FOREIGN KEY (a, b) REFERENCES forge.parent (x, y)
+        );
+        -- Same FK name on two tables of one schema (legal: FK names are
+        -- unique per table only).
+        CREATE TABLE forge.d1 (p int,
+            CONSTRAINT fk_dup FOREIGN KEY (p) REFERENCES forge.users (id));
+        CREATE TABLE forge.d2 (q int,
+            CONSTRAINT fk_dup FOREIGN KEY (q) REFERENCES forge.repos (id));
+        -- An FK named like another table's primary key.
+        CREATE TABLE forge.pkholder (id int, CONSTRAINT shared_name PRIMARY KEY (id));
+        CREATE TABLE forge.fkuser (r int,
+            CONSTRAINT shared_name FOREIGN KEY (r) REFERENCES forge.users (id));
+        -- Into another schema.
+        CREATE TABLE s2.target (z int PRIMARY KEY);
+        CREATE TABLE forge.xchild (c int,
+            CONSTRAINT fk_cross FOREIGN KEY (c) REFERENCES s2.target (z));
+        ",
+    )
+    .execute(&db.admin)
+    .await
+    .unwrap();
+    let (_server, client) = serve(&db.config()).await.unwrap();
+
+    let fks = |table: &'static str| {
+        let client = &client;
+        async move {
+            let rows = client
+                .call_tool(
+                    "list_foreign_keys",
+                    json!({ "schema": "forge", "table": table }),
+                )
+                .await
+                .unwrap()
+                .json()
+                .unwrap();
+            rows.as_array()
+                .unwrap()
+                .iter()
+                .map(|r| {
+                    let f = |k: &str| r[k].as_str().unwrap().to_owned();
+                    format!(
+                        "{}: {} -> {}.{}.{}",
+                        f("constraint_name"),
+                        f("column_name"),
+                        f("foreign_table_schema"),
+                        f("foreign_table_name"),
+                        f("foreign_column_name")
+                    )
+                })
+                .collect::<Vec<_>>()
+        }
+    };
+
+    assert_eq!(
+        fks("child").await,
+        [
+            "fk_pair: a -> forge.parent.x",
+            "fk_pair: b -> forge.parent.y"
+        ]
+    );
+    assert_eq!(fks("d1").await, ["fk_dup: p -> forge.users.id"]);
+    assert_eq!(fks("d2").await, ["fk_dup: q -> forge.repos.id"]);
+    assert_eq!(fks("fkuser").await, ["shared_name: r -> forge.users.id"]);
+    assert_eq!(fks("pkholder").await, Vec::<String>::new());
+    assert_eq!(fks("xchild").await, ["fk_cross: c -> s2.target.z"]);
+
+    db.drop_db().await.unwrap();
+}
+
 /// Introspection arguments are bound, never interpolated: a table "name"
 /// carrying SQL finds nothing and executes nothing.
 #[tokio::test]

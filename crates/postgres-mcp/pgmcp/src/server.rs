@@ -158,20 +158,33 @@ const SQL_LIST_INDEXES: &str = "SELECT indexname, indexdef \
      WHERE schemaname = $1 AND tablename = $2 \
      ORDER BY indexname";
 
-const SQL_LIST_FOREIGN_KEYS: &str = "SELECT tc.constraint_name, kcu.column_name, \
-            ccu.table_schema AS foreign_table_schema, \
-            ccu.table_name   AS foreign_table_name, \
-            ccu.column_name  AS foreign_column_name \
-     FROM information_schema.table_constraints tc \
-     JOIN information_schema.key_column_usage kcu \
-       ON tc.constraint_name = kcu.constraint_name \
-      AND tc.table_schema = kcu.table_schema \
-     JOIN information_schema.constraint_column_usage ccu \
-       ON ccu.constraint_name = tc.constraint_name \
-      AND ccu.table_schema = tc.table_schema \
-     WHERE tc.constraint_type = 'FOREIGN KEY' \
-       AND tc.table_schema = $1 AND tc.table_name = $2 \
-     ORDER BY tc.constraint_name, kcu.column_name";
+/// One row per (local column → referenced column) pair, straight from the
+/// catalog. `information_schema` cannot do this: `key_column_usage` and
+/// `constraint_column_usage` only join on constraint *name*, which Postgres
+/// requires to be unique per table (not per schema) for FKs, and
+/// `constraint_column_usage` carries no column order. Joined by name that
+/// multiplies a multi-column FK n×m, pairs the wrong columns, mixes in other
+/// tables' constraints, and drops FKs into another schema.
+///
+/// `unnest(conkey, confkey) WITH ORDINALITY` pairs columns by position, and
+/// both tables are matched by oid. The `::text` casts keep the column types
+/// (`name` in the catalog) the same as before.
+const SQL_LIST_FOREIGN_KEYS: &str = "SELECT c.conname::text AS constraint_name, \
+            la.attname::text AS column_name, \
+            fn.nspname::text AS foreign_table_schema, \
+            fc.relname::text AS foreign_table_name, \
+            fa.attname::text AS foreign_column_name \
+     FROM pg_constraint c \
+     JOIN pg_class lc ON lc.oid = c.conrelid \
+     JOIN pg_namespace ln ON ln.oid = lc.relnamespace \
+     JOIN pg_class fc ON fc.oid = c.confrelid \
+     JOIN pg_namespace fn ON fn.oid = fc.relnamespace \
+     CROSS JOIN LATERAL unnest(c.conkey, c.confkey) WITH ORDINALITY AS k(lk, fk, ord) \
+     JOIN pg_attribute la ON la.attrelid = c.conrelid AND la.attnum = k.lk \
+     JOIN pg_attribute fa ON fa.attrelid = c.confrelid AND fa.attnum = k.fk \
+     WHERE c.contype = 'f' \
+       AND ln.nspname = $1 AND lc.relname = $2 \
+     ORDER BY c.conname, k.ord";
 
 const SQL_TABLE_STATS: &str = "SELECT schemaname, relname AS table_name, n_live_tup AS estimated_rows, \
             n_dead_tup AS dead_rows, seq_scan, idx_scan, \
