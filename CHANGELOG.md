@@ -2,6 +2,26 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.13.2 - 2026-11-07
+#### Features
+- (**deps**) upgrade flake - (e725892) - Amadeus Mader
+- (**deps**) upgrade flake - (f316a73) - Amadeus Mader
+- (**deps**) upgrade flake - (822dafb) - Amadeus Mader
+- (**deps**) upgrade flake - (4422822) - Amadeus Mader
+- (**deps**) upgrade flake - (bbc9309) - Amadeus Mader
+- (**deps**) upgrade flake - (6827a80) - Amadeus Mader
+- (**deps**) upgrade flake - (d46ea63) - Amadeus Mader
+#### Bug Fixes
+- (**mcp**) skip per-partition FK copies in list_foreign_keys (#3) - (c752eef) - heimdall
+- (**mcp**) pair list_foreign_keys columns by position via pg_constraint (#3) - (9f87477) - heimdall
+- (**mcp**) bump ctutils and tokio for rustsec advisories - (40dedeb) - Amadeus Mader
+- (**mcp**) use homelab.internal in config examples, tests and docs - (4da7512) - Amadeus Mader
+#### Continuous Integration
+- (**mcp**) keep the 5 newest releases per server on ghcr - (3f1ff24) - Amadeus Mader
+#### Style
+- (**mcp**) rustfmt woodpecker-mcp config - (10e470d) - Amadeus Mader
+
+- - -
 ## 0.13.1 - 2026-10-21
 #### Bug Fixes
 - (**mcp**) match the containerfile rust pin to the flake's 1.99.1 - (7fd3813) - Amadeus Mader
