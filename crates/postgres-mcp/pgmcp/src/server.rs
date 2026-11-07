@@ -161,14 +161,21 @@ const SQL_LIST_INDEXES: &str = "SELECT indexname, indexdef \
 /// One row per (local column → referenced column) pair, straight from the
 /// catalog. `information_schema` cannot do this: `key_column_usage` and
 /// `constraint_column_usage` only join on constraint *name*, which Postgres
-/// requires to be unique per table (not per schema) for FKs, and
-/// `constraint_column_usage` carries no column order. Joined by name that
+/// requires to be unique per table (not per schema) for FKs and CHECKs; only
+/// PK and UNIQUE names are schema-unique, as their index is a schema relation.
+/// `constraint_column_usage` also carries no column order. Joined by name that
 /// multiplies a multi-column FK n×m, pairs the wrong columns, mixes in other
 /// tables' constraints, and drops FKs into another schema.
 ///
 /// `unnest(conkey, confkey) WITH ORDINALITY` pairs columns by position, and
 /// both tables are matched by oid. The `::text` casts keep the column types
 /// (`name` in the catalog) the same as before.
+///
+/// A FK that references a partitioned table gets one internal copy per
+/// partition on the same table, each pointing back at the real constraint via
+/// `conparentid`. The `NOT EXISTS` drops those copies. A partition of a
+/// partitioned *referencing* table keeps its inherited FK: its parent
+/// constraint sits on another table.
 const SQL_LIST_FOREIGN_KEYS: &str = "SELECT c.conname::text AS constraint_name, \
             la.attname::text AS column_name, \
             fn.nspname::text AS foreign_table_schema, \
@@ -183,6 +190,8 @@ const SQL_LIST_FOREIGN_KEYS: &str = "SELECT c.conname::text AS constraint_name, 
      JOIN pg_attribute la ON la.attrelid = c.conrelid AND la.attnum = k.lk \
      JOIN pg_attribute fa ON fa.attrelid = c.confrelid AND fa.attnum = k.fk \
      WHERE c.contype = 'f' \
+       AND NOT EXISTS (SELECT 1 FROM pg_constraint p \
+                       WHERE p.oid = c.conparentid AND p.conrelid = c.conrelid) \
        AND ln.nspname = $1 AND lc.relname = $2 \
      ORDER BY c.conname, k.ord";
 

@@ -364,6 +364,17 @@ async fn list_foreign_keys_pairs_columns_exactly() {
         CREATE TABLE s2.target (z int PRIMARY KEY);
         CREATE TABLE forge.xchild (c int,
             CONSTRAINT fk_cross FOREIGN KEY (c) REFERENCES s2.target (z));
+        -- Into a partitioned table (Postgres adds one internal FK copy per
+        -- partition), and from one (each partition inherits the FK).
+        CREATE TABLE forge.pt (id int PRIMARY KEY) PARTITION BY RANGE (id);
+        CREATE TABLE forge.pt_1 PARTITION OF forge.pt FOR VALUES FROM (0) TO (10);
+        CREATE TABLE forge.pt_2 PARTITION OF forge.pt FOR VALUES FROM (10) TO (20);
+        CREATE TABLE forge.ref (r int,
+            CONSTRAINT fk_pt FOREIGN KEY (r) REFERENCES forge.pt (id));
+        CREATE TABLE forge.pref (r int) PARTITION BY RANGE (r);
+        CREATE TABLE forge.pref_1 PARTITION OF forge.pref FOR VALUES FROM (0) TO (10);
+        ALTER TABLE forge.pref
+            ADD CONSTRAINT fk_pref FOREIGN KEY (r) REFERENCES forge.pt (id);
         ",
     )
     .execute(&db.admin)
@@ -413,6 +424,9 @@ async fn list_foreign_keys_pairs_columns_exactly() {
     assert_eq!(fks("fkuser").await, ["shared_name: r -> forge.users.id"]);
     assert_eq!(fks("pkholder").await, Vec::<String>::new());
     assert_eq!(fks("xchild").await, ["fk_cross: c -> s2.target.z"]);
+    assert_eq!(fks("ref").await, ["fk_pt: r -> forge.pt.id"]);
+    assert_eq!(fks("pref").await, ["fk_pref: r -> forge.pt.id"]);
+    assert_eq!(fks("pref_1").await, ["fk_pref: r -> forge.pt.id"]);
 
     db.drop_db().await.unwrap();
 }
