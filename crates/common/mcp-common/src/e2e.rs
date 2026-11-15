@@ -604,13 +604,12 @@ impl ToolResult {
             .get("result")
             .and_then(|r| r.get("content"))
             .and_then(Value::as_array)
-            .map(|items| {
+            .map_or_default(|items| {
                 items
                     .iter()
                     .filter_map(|c| c.get("text").and_then(Value::as_str).map(str::to_string))
                     .collect()
             })
-            .unwrap_or_default()
     }
 }
 
@@ -719,8 +718,7 @@ impl<'a> Scenario<'a> {
         let all = upstream_requests(self.mock).await?;
         let upstream: Vec<Value> = all
             .as_array()
-            .map(|a| a.iter().skip(self.seen).cloned().collect())
-            .unwrap_or_default();
+            .map_or_default(|a| a.iter().skip(self.seen).cloned().collect());
         self.seen += upstream.len();
         let step = json!({
             "call": { "tool": tool, "arguments": arguments },
@@ -767,8 +765,7 @@ pub async fn contract(client: &McpClient) -> Result<Value> {
         let args: Vec<&Value> = prompt
             .get("arguments")
             .and_then(Value::as_array)
-            .map(|a| a.iter().collect())
-            .unwrap_or_default();
+            .map_or_default(|a| a.iter().collect());
         let fill = |only_required: bool| -> Value {
             let mut m = Map::new();
             for a in &args {

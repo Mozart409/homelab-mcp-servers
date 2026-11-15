@@ -681,10 +681,7 @@ impl WpServer {
     async fn ci_health_triage(&self, params: Parameters<CiHealthTriageArgs>) -> Vec<PromptMessage> {
         let CiHealthTriageArgs { repo } = params.0;
 
-        let repo_filter = repo
-            .as_ref()
-            .map(|r| format!(" in repo `{r}`"))
-            .unwrap_or_default();
+        let repo_filter = repo.as_ref().map_or_default(|r| format!(" in repo `{r}`"));
 
         vec![PromptMessage::new_text(
             Role::User,
