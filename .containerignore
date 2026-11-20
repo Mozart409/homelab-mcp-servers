@@ -7,3 +7,6 @@ result
 result-*
 .env
 *.log
+# The monorepo-shared toolchain file must not reach the build dir: rustup
+# would let it override ARG RUST_TOOLCHAIN, which the build installs itself.
+rust-toolchain.toml
